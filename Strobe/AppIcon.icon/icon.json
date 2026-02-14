@@ -1,22 +1,52 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.20481,0.08571,0.22350,1.00000"
+    "automatic-gradient" : "display-p3:1.00000,0.98140,0.93606,1.00000"
   },
   "groups" : [
     {
-      "blend-mode" : "screen",
+      "blend-mode" : "normal",
       "blur-material" : 1,
       "hidden" : false,
       "layers" : [
         {
-          "blend-mode" : "normal",
           "hidden" : false,
-          "image-name" : "a5086201e6cc25c3c9cf180c6a44deffbda96743.jpeg",
-          "name" : "a5086201e6cc25c3c9cf180c6a44deffbda96743",
+          "image-name" : "Untitled.png",
+          "name" : "Untitled",
+          "opacity-specializations" : [
+            {
+              "value" : 0
+            },
+            {
+              "appearance" : "dark",
+              "value" : 1
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 1
+            }
+          ],
           "position" : {
-            "scale" : 1,
+            "scale" : 0.77,
             "translation-in-points" : [
-              -31.415458052400254,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Untitled2.png",
+          "name" : "Untitled2",
+          "opacity-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : 0
+            }
+          ],
+          "position" : {
+            "scale" : 0.77,
+            "translation-in-points" : [
+              5.684341886080802e-14,
               0
             ]
           }
@@ -29,13 +59,24 @@
           0
         ]
       },
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
-      },
+      "shadow-specializations" : [
+        {
+          "value" : {
+            "kind" : "layer-color",
+            "opacity" : 1
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "kind" : "neutral",
+            "opacity" : 0.5
+          }
+        }
+      ],
       "specular" : true,
       "translucency" : {
-        "enabled" : false,
+        "enabled" : true,
         "value" : 0.5
       }
     }
