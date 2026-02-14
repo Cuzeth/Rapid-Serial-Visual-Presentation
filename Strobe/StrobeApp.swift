@@ -62,17 +62,9 @@ struct StrobeApp: App {
             append("Persistent init failed: \(describe(error: error))")
         }
 
-        do {
-            logger.notice("Trying in-memory ModelContainer fallback.")
-            let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            let container = try ModelContainer(for: schema, configurations: [fallbackConfiguration])
-            return BootstrapResult(container: container, diagnostics: diagnostics.joined(separator: "\n"))
-        } catch {
-            append("In-memory fallback failed: \(describe(error: error))")
-            let summary = diagnostics.joined(separator: "\n")
-            UserDefaults.standard.set(summary, forKey: diagnosticsKey)
-            return BootstrapResult(container: nil, diagnostics: summary)
-        }
+        let summary = diagnostics.joined(separator: "\n")
+        UserDefaults.standard.set(summary, forKey: diagnosticsKey)
+        return BootstrapResult(container: nil, diagnostics: summary)
     }
 
     private static func makePersistentContainer(schema: Schema) throws -> ModelContainer {
@@ -108,7 +100,7 @@ private struct StartupFailureView: View {
                 Text("Startup Error")
                     .font(.title2.weight(.semibold))
 
-                Text("SwiftData failed to initialize, including in-memory fallback.")
+                Text("SwiftData failed to initialize. The app is blocked to prevent data loss.")
                     .font(.body)
                     .foregroundStyle(.secondary)
 

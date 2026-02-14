@@ -44,6 +44,9 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .onAppear {
+                compactLegacyWordStorageIfNeeded()
+            }
             .fileImporter(
                 isPresented: $isImporting,
                 allowedContentTypes: DocumentImportPipeline.supportedContentTypes,
@@ -56,7 +59,7 @@ struct ContentView: View {
                     importOverlay
                 }
             }
-            .alert("Import Error", isPresented: .init(
+            .alert("Error", isPresented: .init(
                 get: { importError != nil },
                 set: { if !$0 { importError = nil } }
             )) {
@@ -166,6 +169,11 @@ struct ContentView: View {
                     wordsPerMinute: defaultWPM
                 )
                 modelContext.insert(document)
+                do {
+                    try modelContext.save()
+                } catch {
+                    importError = "Unable to save imported document: \(error.localizedDescription)"
+                }
             } catch {
                 if let localizedError = error as? LocalizedError,
                    let message = localizedError.errorDescription {
@@ -182,6 +190,26 @@ struct ContentView: View {
     private func deleteDocuments(at offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(documents[index])
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            importError = "Unable to delete document(s): \(error.localizedDescription)"
+        }
+    }
+
+    private func compactLegacyWordStorageIfNeeded() {
+        var didCompact = false
+        for document in documents where document.wordsBlob == nil && !document.words.isEmpty {
+            document.compactWordStorageIfNeeded()
+            didCompact = true
+        }
+
+        guard didCompact else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            importError = "Unable to optimize stored documents: \(error.localizedDescription)"
         }
     }
 

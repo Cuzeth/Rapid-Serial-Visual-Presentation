@@ -20,6 +20,7 @@ struct ReaderView: View {
     @State private var isAdjustingWPM = false
     @State private var isBarScrubbing = false
     @State private var showCompletion = false
+    @State private var persistenceError: String?
 
     private let startingWordIndex: Int?
 
@@ -27,9 +28,10 @@ struct ReaderView: View {
         self.document = document
         self.startingWordIndex = startingWordIndex
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
+        let words = document.readingWords
         let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
         self._engine = State(initialValue: RSVPEngine(
-            words: document.words,
+            words: words,
             currentIndex: effectiveIndex,
             wordsPerMinute: document.wordsPerMinute,
             smartTimingEnabled: usesSmartTiming
@@ -92,6 +94,14 @@ struct ReaderView: View {
         }
         .onChange(of: smartTimingEnabled) { _, newValue in
             engine.smartTimingEnabled = newValue
+        }
+        .alert("Save Error", isPresented: .init(
+            get: { persistenceError != nil },
+            set: { if !$0 { persistenceError = nil } }
+        )) {
+            Button("OK") { persistenceError = nil }
+        } message: {
+            Text(persistenceError ?? "")
         }
     }
 
@@ -346,7 +356,11 @@ struct ReaderView: View {
         if touchLastReadDate {
             document.lastReadDate = Date()
         }
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            persistenceError = "Could not save reading progress: \(error.localizedDescription)"
+        }
     }
 
     private func applyWPM(_ value: Int, withHaptic: Bool) {
