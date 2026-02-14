@@ -4,6 +4,7 @@
 <dict>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Fraunces-Variable.ttf</string>
 		<string>Inter-Regular.ttf</string>
 		<string>Inter-Bold.ttf</string>
 		<string>JetBrainsMono-Regular.ttf</string>
@@ -11,6 +12,7 @@
 		<string>PTSans.ttc</string>
 		<string>PTSerif.ttc</string>
 		<string>PTMono.ttc</string>
+		<string>SpaceGrotesk-Variable.ttf</string>
 	</array>
 </dict>
 </plist>

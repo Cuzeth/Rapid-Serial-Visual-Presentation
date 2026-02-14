@@ -110,7 +110,7 @@ struct SettingsView: View {
                     Text("Font")
                         .font(readerFont.regularFont(size: 12))
                 } footer: {
-                    Text("Available: Inter, PT Sans, PT Serif, PT Mono, JetBrains Mono.")
+                    Text("Available: Fraunces, Inter, Space Grotesk, PT Sans, PT Serif, PT Mono, JetBrains Mono.")
                         .font(readerFont.regularFont(size: 11))
                 }
 

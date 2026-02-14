@@ -5,7 +5,9 @@ enum ReaderFont: String, CaseIterable, Identifiable {
     static let storageKey = "readerFontSelection"
     static let defaultValue: ReaderFont = .jetBrainsMono
 
+    case fraunces
     case inter
+    case spaceGrotesk
     case ptSans
     case ptSerif
     case ptMono
@@ -19,7 +21,9 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
+        case .fraunces: "Fraunces"
         case .inter: "Inter"
+        case .spaceGrotesk: "Space Grotesk"
         case .ptSans: "PT Sans"
         case .ptSerif: "PT Serif"
         case .ptMono: "PT Mono"
@@ -29,7 +33,9 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
     var regularPostScriptName: String {
         switch self {
+        case .fraunces: "Fraunces-Regular"
         case .inter: "Inter-Regular"
+        case .spaceGrotesk: "SpaceGrotesk-Light_Regular"
         case .ptSans: "PTSans-Regular"
         case .ptSerif: "PTSerif-Regular"
         case .ptMono: "PTMono-Regular"
@@ -39,7 +45,9 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
     var boldPostScriptName: String {
         switch self {
+        case .fraunces: "Fraunces-Bold"
         case .inter: "Inter-Bold"
+        case .spaceGrotesk: "SpaceGrotesk-Light_Bold"
         case .ptSans: "PTSans-Bold"
         case .ptSerif: "PTSerif-Bold"
         case .ptMono: "PTMono-Bold"
