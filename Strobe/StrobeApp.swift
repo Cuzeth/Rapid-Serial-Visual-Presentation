@@ -62,11 +62,7 @@ struct StrobeApp: App {
 
         do {
             logger.notice("Trying in-memory ModelContainer fallback.")
-            let fallbackConfiguration = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: true,
-                cloudKitDatabase: .none
-            )
+            let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let container = try ModelContainer(for: schema, configurations: [fallbackConfiguration])
             return BootstrapResult(container: container, diagnostics: diagnostics.joined(separator: "\n"))
         } catch {
@@ -78,11 +74,7 @@ struct StrobeApp: App {
     }
 
     private static func makePersistentContainer(schema: Schema) throws -> ModelContainer {
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            cloudKitDatabase: .none
-        )
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         return try ModelContainer(for: schema, configurations: [modelConfiguration])
     }
 
