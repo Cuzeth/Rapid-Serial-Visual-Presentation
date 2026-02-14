@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct ReaderView: View {
+    private let navFadeDuration: Double = 0.3
+
+    @Environment(\.dismiss) private var dismiss
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -43,16 +46,18 @@ struct ReaderView: View {
 
                     Spacer()
                     bottomBar
-                        .opacity(engine.isPlaying ? 0.4 : 1.0)
+                        .opacity(engine.isPlaying ? 0.0 : 1.0)
+                        .allowsHitTesting(!engine.isPlaying)
                         .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
                 }
                 .allowsHitTesting(true)
                 .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(engine.isPlaying ? "" : document.title)
-        .navigationBarBackButtonHidden(engine.isPlaying)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            navHeader
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
         }
@@ -121,6 +126,40 @@ struct ReaderView: View {
 
     // MARK: - Top bar
 
+    private var navHeader: some View {
+        HStack(spacing: 12) {
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .padding(10)
+                    .background(Color.secondary.opacity(0.2))
+                    .clipShape(Circle())
+            }
+            .opacity(engine.isPlaying ? 0 : 1)
+            .allowsHitTesting(!engine.isPlaying)
+            .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
+
+            Spacer(minLength: 0)
+
+            Text(document.title)
+                .font(.custom("JetBrainsMono-Regular", size: 20))
+                .lineLimit(1)
+                .opacity(engine.isPlaying ? 0 : 1)
+                .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
+
+            Spacer(minLength: 0)
+
+            Circle()
+                .fill(Color.clear)
+                .frame(width: 37, height: 37)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+        .background(Color.clear)
+    }
+
     private var topBar: some View {
         VStack(spacing: 6) {
             HStack {
@@ -148,7 +187,6 @@ struct ReaderView: View {
         .padding(.horizontal)
         .padding(.top, 8)
         .opacity(engine.isPlaying ? 0.0 : 1.0)
-        .offset(y: engine.isPlaying ? -6 : 0)
         .allowsHitTesting(!engine.isPlaying)
         .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
     }
