@@ -36,11 +36,11 @@ enum PDFTextExtractor {
         return result
     }
 
-    private static let compoundJoiners: Set<String> = [
+    nonisolated private static let compoundJoiners: Set<String> = [
         "a", "an", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"
     ]
 
-    private static func appendTokenizedText(
+    nonisolated private static func appendTokenizedText(
         _ text: String,
         into output: inout [String],
         carry: inout String?
@@ -69,7 +69,7 @@ enum PDFTextExtractor {
         appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
     }
 
-    private static func appendBufferedToken(
+    nonisolated private static func appendBufferedToken(
         _ token: String,
         into output: inout [String],
         carry: inout String?
@@ -100,7 +100,7 @@ enum PDFTextExtractor {
         }
     }
 
-    private static func shouldMerge(pending: String, with nextToken: String) -> Bool {
+    nonisolated private static func shouldMerge(pending: String, with nextToken: String) -> Bool {
         guard pending.hasSuffix("-"),
               let nextFirst = nextToken.first,
               nextFirst.isLowercase else {
@@ -109,7 +109,7 @@ enum PDFTextExtractor {
         return true
     }
 
-    private static func merge(pending: String, with nextToken: String) -> String {
+    nonisolated private static func merge(pending: String, with nextToken: String) -> String {
         let stem = String(pending.dropLast())
         if shouldPreserveHyphen(stem: stem) {
             return stem + "-" + nextToken
@@ -117,7 +117,7 @@ enum PDFTextExtractor {
         return stem + nextToken
     }
 
-    private static func shouldPreserveHyphen(stem: String) -> Bool {
+    nonisolated private static func shouldPreserveHyphen(stem: String) -> Bool {
         guard stem.contains("-") else { return false }
 
         let segments = stem.split(separator: "-")
@@ -135,7 +135,7 @@ enum PDFTextExtractor {
         return false
     }
 
-    private static func normalizeToken(_ token: String) -> String {
+    nonisolated private static func normalizeToken(_ token: String) -> String {
         token
             .replacingOccurrences(of: "\u{00AD}", with: "")
             .replacingOccurrences(of: "\u{2011}", with: "-")
