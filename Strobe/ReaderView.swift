@@ -17,6 +17,7 @@ struct ReaderView: View {
     @State private var touchMode: TouchMode = .undecided
     @State private var pendingPlayWorkItem: DispatchWorkItem?
     @State private var wpmSliderValue: Double
+    @State private var isAdjustingWPM = false
     @State private var isBarScrubbing = false
     @State private var showCompletion = false
 
@@ -87,14 +88,6 @@ struct ReaderView: View {
                         showCompletion = true
                     }
                 }
-            }
-        }
-        .onChange(of: wpmSliderValue) { _, newValue in
-            let snapped = Int(newValue)
-            if snapped != engine.wordsPerMinute {
-                engine.wordsPerMinute = snapped
-                document.wordsPerMinute = snapped
-                HapticManager.shared.wpmChanged()
             }
         }
         .onChange(of: smartTimingEnabled) { _, newValue in
@@ -222,7 +215,7 @@ struct ReaderView: View {
     private var topBar: some View {
         VStack(spacing: 6) {
             HStack {
-                Text("\(engine.wordsPerMinute) WPM")
+                Text("\(displayedWPM) WPM")
                     .font(.custom("JetBrainsMono-Regular", size: 14))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -236,11 +229,12 @@ struct ReaderView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Slider(
-                value: $wpmSliderValue,
-                in: 100...1000,
-                step: 10
-            )
+            Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
+                isAdjustingWPM = editing
+                if !editing {
+                    applyWPM(Int(wpmSliderValue), withHaptic: true)
+                }
+            }
             .tint(.red)
         }
         .padding(.horizontal)
@@ -332,9 +326,17 @@ struct ReaderView: View {
         return "Hold to read"
     }
 
+    private var displayedWPM: Int {
+        isAdjustingWPM ? Int(wpmSliderValue) : engine.wordsPerMinute
+    }
+
     // MARK: - Persistence
 
     private func persistState(pauseEngine: Bool, touchLastReadDate: Bool) {
+        if isAdjustingWPM {
+            isAdjustingWPM = false
+            applyWPM(Int(wpmSliderValue), withHaptic: false)
+        }
         if pauseEngine {
             cancelPlayIntent()
             engine.pause()
@@ -345,5 +347,14 @@ struct ReaderView: View {
             document.lastReadDate = Date()
         }
         try? modelContext.save()
+    }
+
+    private func applyWPM(_ value: Int, withHaptic: Bool) {
+        guard value != engine.wordsPerMinute else { return }
+        engine.wordsPerMinute = value
+        document.wordsPerMinute = value
+        if withHaptic {
+            HapticManager.shared.wpmChanged()
+        }
     }
 }
