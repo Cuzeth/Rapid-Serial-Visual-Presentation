@@ -18,7 +18,7 @@ struct ContentView: View {
                     documentList
                 }
             }
-            .navigationTitle("pulsereader")
+            .navigationTitle("Strobe")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {

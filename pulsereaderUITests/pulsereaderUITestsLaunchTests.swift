@@ -1,13 +1,13 @@
 //
-//  pulsereaderUITestsLaunchTests.swift
-//  pulsereaderUITests
+//  strobeUITestsLaunchTests.swift
+//  strobeUITests
 //
 //  Created by CZTH on 2/13/26.
 //
 
 import XCTest
 
-final class pulsereaderUITestsLaunchTests: XCTestCase {
+final class strobeUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

@@ -1,13 +1,13 @@
 //
-//  pulsereaderUITests.swift
-//  pulsereaderUITests
+//  strobeUITests.swift
+//  strobeUITests
 //
 //  Created by CZTH on 2/13/26.
 //
 
 import XCTest
 
-final class pulsereaderUITests: XCTestCase {
+final class strobeUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

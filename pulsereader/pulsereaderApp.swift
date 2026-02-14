@@ -1,6 +1,6 @@
 //
-//  pulsereaderApp.swift
-//  pulsereader
+//  strobeApp.swift
+//  strobe
 //
 //  Created by CZTH on 2/13/26.
 //
@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct pulsereaderApp: App {
+struct strobeApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Document.self,

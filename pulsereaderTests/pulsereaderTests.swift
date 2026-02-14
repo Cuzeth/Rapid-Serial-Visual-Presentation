@@ -1,14 +1,14 @@
 //
-//  pulsereaderTests.swift
-//  pulsereaderTests
+//  strobeTests.swift
+//  strobeTests
 //
 //  Created by CZTH on 2/13/26.
 //
 
 import Testing
-@testable import pulsereader
+@testable import strobe
 
-struct pulsereaderTests {
+struct strobeTests {
 
     @Test func tokenizesSimpleLineBreakHyphenation() {
         let words = PDFTextExtractor.tokenize("infor-\nmation and recov-\nery")
