@@ -50,30 +50,50 @@ struct WordView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Subtle vertical guide line at the anchor position
-            Rectangle()
-                .fill(Color.red.opacity(0.12))
-                .frame(width: 1.5, height: fontSize * 1.6)
+        GeometryReader { geo in
+            let displayFontSize = fittedFontSize(for: geo.size.width * 0.8)
 
-            // Word with ORP-anchored red letter
-            HStack(spacing: 0) {
-                Text(before)
-                    .foregroundStyle(.primary)
+            ZStack {
+                ZStack {
+                    // Subtle vertical guide line at the anchor position
+                    Rectangle()
+                        .fill(Color.red.opacity(0.12))
+                        .frame(width: 1.5, height: displayFontSize * 1.6)
 
-                Text(anchor)
-                    .foregroundStyle(.red)
-                    .fontWeight(.bold)
-                    .alignmentGuide(.orpAnchor) { d in
-                        d[HorizontalAlignment.center]
+                    // Word with ORP-anchored red letter
+                    HStack(spacing: 0) {
+                        Text(before)
+                            .foregroundStyle(.primary)
+
+                        Text(anchor)
+                            .foregroundStyle(.red)
+                            .fontWeight(.bold)
+                            .alignmentGuide(.orpAnchor) { d in
+                                d[HorizontalAlignment.center]
+                            }
+
+                        Text(after)
+                            .foregroundStyle(.primary)
                     }
-
-                Text(after)
-                    .foregroundStyle(.primary)
+                    .font(.custom("JetBrainsMono-Regular", size: displayFontSize))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.58)
+                    .padding(.horizontal, 6)
+                }
+                .frame(maxWidth: .infinity, alignment: Alignment(horizontal: .orpAnchor, vertical: .center))
             }
-            .font(.custom("JetBrainsMono-Regular", size: fontSize))
-            .fixedSize()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, alignment: Alignment(horizontal: .orpAnchor, vertical: .center))
+        .frame(height: max(120, fontSize * 2.3))
+    }
+
+    private func fittedFontSize(for availableWidth: CGFloat) -> CGFloat {
+        guard availableWidth > 0 else { return fontSize }
+        let estimatedCharacterWidth = fontSize * 0.62
+        let estimatedWordWidth = CGFloat(max(word.count, 1)) * estimatedCharacterWidth
+        guard estimatedWordWidth > availableWidth else { return fontSize }
+
+        let scaled = fontSize * (availableWidth / estimatedWordWidth)
+        return max(fontSize * 0.58, scaled)
     }
 }

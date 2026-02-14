@@ -34,18 +34,25 @@ struct ReaderView: View {
                         completionView
                             .transition(.opacity)
                     } else {
-                        WordView(word: engine.currentWord, fontSize: 40)
+                        WordView(
+                            word: engine.currentWord,
+                            fontSize: 40
+                        )
                             .transition(.opacity)
                     }
 
                     Spacer()
                     bottomBar
+                        .opacity(engine.isPlaying ? 0.4 : 1.0)
+                        .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
                 }
                 .allowsHitTesting(true)
+                .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(document.title)
+        .navigationTitle(engine.isPlaying ? "" : document.title)
+        .navigationBarBackButtonHidden(engine.isPlaying)
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
         }
@@ -140,6 +147,10 @@ struct ReaderView: View {
         }
         .padding(.horizontal)
         .padding(.top, 8)
+        .opacity(engine.isPlaying ? 0.0 : 1.0)
+        .offset(y: engine.isPlaying ? -6 : 0)
+        .allowsHitTesting(!engine.isPlaying)
+        .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
     }
 
     // MARK: - Bottom bar
