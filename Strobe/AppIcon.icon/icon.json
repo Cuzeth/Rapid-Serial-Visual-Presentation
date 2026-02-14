@@ -1,29 +1,41 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.07189,0.04761,0.05803,1.00000"
+    "automatic-gradient" : "display-p3:0.20481,0.08571,0.22350,1.00000"
   },
   "groups" : [
     {
+      "blend-mode" : "screen",
+      "blur-material" : 1,
+      "hidden" : false,
       "layers" : [
         {
-          "blend-mode" : "screen",
-          "image-name" : "Untitled.png",
-          "name" : "Untitled",
+          "blend-mode" : "normal",
+          "hidden" : false,
+          "image-name" : "a5086201e6cc25c3c9cf180c6a44deffbda96743.jpeg",
+          "name" : "a5086201e6cc25c3c9cf180c6a44deffbda96743",
           "position" : {
-            "scale" : 1.62,
+            "scale" : 1,
             "translation-in-points" : [
-              -4.622857847660043,
-              1.6200000000000045
+              -31.415458052400254,
+              0
             ]
           }
         }
       ],
+      "position" : {
+        "scale" : 2,
+        "translation-in-points" : [
+          0,
+          0
+        ]
+      },
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
+      "specular" : true,
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }
