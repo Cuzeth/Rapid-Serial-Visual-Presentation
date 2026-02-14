@@ -6,10 +6,13 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
+    @AppStorage("defaultWPM") private var defaultWPM: Int = 300
+
     @State private var isImporting = false
     @State private var isProcessingImport = false
     @State private var importFileName = ""
     @State private var importError: String?
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -22,6 +25,13 @@ struct ContentView: View {
             }
             .navigationTitle("Strobe")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         isImporting = true
@@ -30,6 +40,9 @@ struct ContentView: View {
                     }
                     .disabled(isProcessingImport)
                 }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
             }
             .fileImporter(
                 isPresented: $isImporting,
@@ -139,7 +152,8 @@ struct ContentView: View {
                     title: title,
                     fileName: url.lastPathComponent,
                     bookmarkData: bookmarkData,
-                    words: words
+                    words: words,
+                    wordsPerMinute: defaultWPM
                 )
                 modelContext.insert(document)
             } catch {

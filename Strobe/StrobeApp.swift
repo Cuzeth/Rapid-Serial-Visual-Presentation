@@ -17,13 +17,24 @@ struct StrobeApp: App {
     )
     private static let diagnosticsKey = "last_model_container_bootstrap_diagnostics"
 
+    @AppStorage("appearance") private var appearance: Int = 0
+
     private let bootstrapResult = Self.bootstrapModelContainer()
+
+    private var colorScheme: ColorScheme? {
+        switch appearance {
+        case 1: .light
+        case 2: .dark
+        default: nil
+        }
+    }
 
     var body: some Scene {
         WindowGroup {
             if let container = bootstrapResult.container {
                 ContentView()
                     .modelContainer(container)
+                    .preferredColorScheme(colorScheme)
             } else {
                 StartupFailureView(diagnostics: bootstrapResult.diagnostics)
             }
