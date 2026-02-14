@@ -27,35 +27,32 @@ struct ReaderView: View {
     }
 
     var body: some View {
-        GeometryReader { _ in
-            ZStack {
-                Color.black.opacity(0.001)
-                    .gesture(unifiedGesture)
+        ZStack {
+            Color.black.opacity(0.001)
+                .gesture(unifiedGesture)
 
-                VStack {
-                    topBar
-                    Spacer()
+            VStack {
+                topBar
+                Spacer()
 
-                    if showCompletion {
-                        completionView
-                            .transition(.opacity)
-                    } else {
-                        WordView(
-                            word: engine.currentWord,
-                            fontSize: 40
-                        )
-                            .transition(.opacity)
-                    }
-
-                    Spacer()
-                    bottomBar
-                        .opacity(engine.isPlaying ? 0.0 : 1.0)
-                        .allowsHitTesting(!engine.isPlaying)
-                        .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                if showCompletion {
+                    completionView
+                        .transition(.opacity)
+                } else {
+                    WordView(
+                        word: engine.currentWord,
+                        fontSize: 40
+                    )
+                    .transition(.opacity)
                 }
-                .allowsHitTesting(true)
-                .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+
+                Spacer()
+                bottomBar
+                    .opacity(engine.isPlaying ? 0.0 : 1.0)
+                    .allowsHitTesting(!engine.isPlaying)
+                    .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
             }
+            .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             navHeader
@@ -65,11 +62,6 @@ struct ReaderView: View {
             if engine.isAtEnd { showCompletion = true }
         }
         .onDisappear(perform: saveState)
-        .onChange(of: engine.currentIndex) { _, newIndex in
-            if newIndex % 10 == 0 {
-                document.currentWordIndex = newIndex
-            }
-        }
         .onChange(of: engine.isPlaying) { wasPlaying, isNowPlaying in
             if wasPlaying && !isNowPlaying && engine.isAtEnd {
                 HapticManager.shared.completedReading()
@@ -141,7 +133,7 @@ struct ReaderView: View {
             .onEnded { _ in
                 isTouching = false
                 cancelPlayIntent()
-                if touchMode == .reading, engine.isPlaying {
+                if engine.isPlaying {
                     engine.pause()
                     HapticManager.shared.playPause()
                 }

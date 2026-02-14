@@ -74,12 +74,11 @@ enum PDFTextExtractor {
         into output: inout [String],
         carry: inout String?
     ) {
-        let normalizedToken = normalizeToken(token)
-        guard !normalizedToken.isEmpty else { return }
+        guard !token.isEmpty else { return }
 
         if var pending = carry {
-            if shouldMerge(pending: pending, with: normalizedToken) {
-                pending = merge(pending: pending, with: normalizedToken)
+            if shouldMerge(pending: pending, with: token) {
+                pending = merge(pending: pending, with: token)
                 if pending.hasSuffix("-") {
                     carry = pending
                 } else {
@@ -93,10 +92,10 @@ enum PDFTextExtractor {
             carry = nil
         }
 
-        if normalizedToken.hasSuffix("-") {
-            carry = normalizedToken
+        if token.hasSuffix("-") {
+            carry = token
         } else {
-            output.append(normalizedToken)
+            output.append(token)
         }
     }
 
@@ -133,11 +132,5 @@ enum PDFTextExtractor {
         }
 
         return false
-    }
-
-    nonisolated private static func normalizeToken(_ token: String) -> String {
-        token
-            .replacingOccurrences(of: "\u{00AD}", with: "")
-            .replacingOccurrences(of: "\u{2011}", with: "-")
     }
 }

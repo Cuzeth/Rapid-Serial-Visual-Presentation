@@ -13,11 +13,13 @@ final class Document {
     var currentWordIndex: Int
     var wordsPerMinute: Int
 
-    var wordCount: Int { words.count }
+    /// Stored separately so the list view can display word count
+    /// without deserializing the entire words array.
+    var wordCount: Int
 
     var progress: Double {
-        guard wordCount > 0 else { return 0 }
-        return Double(currentWordIndex) / Double(wordCount)
+        guard wordCount > 1 else { return currentWordIndex > 0 ? 1 : 0 }
+        return Double(currentWordIndex) / Double(wordCount - 1)
     }
 
     init(
@@ -33,6 +35,7 @@ final class Document {
         self.fileName = fileName
         self.bookmarkData = bookmarkData
         self.words = words
+        self.wordCount = words.count
         self.currentWordIndex = currentWordIndex
         self.wordsPerMinute = wordsPerMinute
         self.dateAdded = Date()
