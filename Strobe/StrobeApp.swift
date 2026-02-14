@@ -63,15 +63,6 @@ struct StrobeApp: App {
         }
 
         do {
-            try resetDefaultSwiftDataStore()
-            logger.notice("Reset default SwiftData store after init failure; retrying persistent container.")
-            let container = try makePersistentContainer(schema: schema)
-            return BootstrapResult(container: container, diagnostics: "")
-        } catch {
-            append("Persistent retry after reset failed: \(describe(error: error))")
-        }
-
-        do {
             logger.notice("Trying in-memory ModelContainer fallback.")
             let fallbackConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             let container = try ModelContainer(for: schema, configurations: [fallbackConfiguration])
@@ -87,27 +78,6 @@ struct StrobeApp: App {
     private static func makePersistentContainer(schema: Schema) throws -> ModelContainer {
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         return try ModelContainer(for: schema, configurations: [modelConfiguration])
-    }
-
-    private static func resetDefaultSwiftDataStore() throws {
-        let fileManager = FileManager.default
-        let appSupportURL = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-
-        let storeURL = appSupportURL.appendingPathComponent("default.store", isDirectory: false)
-        let relatedFiles = [
-            storeURL,
-            URL(fileURLWithPath: storeURL.path + "-wal"),
-            URL(fileURLWithPath: storeURL.path + "-shm")
-        ]
-
-        for fileURL in relatedFiles where fileManager.fileExists(atPath: fileURL.path) {
-            try fileManager.removeItem(at: fileURL)
-        }
     }
 
     private static func describe(error: Error) -> String {

@@ -319,6 +319,7 @@ struct ReaderView: View {
     // MARK: - Persistence
 
     private func saveState() {
+        cancelPlayIntent()
         engine.pause()
         document.currentWordIndex = engine.currentIndex
         document.wordsPerMinute = engine.wordsPerMinute

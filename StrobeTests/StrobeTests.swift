@@ -45,13 +45,26 @@ struct StrobeTests {
 
     @Test func epubExtractionIsStubbed() {
         do {
-            _ = try DocumentImportPipeline.extractWords(
+            _ = try DocumentImportPipeline.extractWordsAndChapters(
                 from: URL(fileURLWithPath: "/tmp/book.epub"),
                 detectedContentType: .epub
             )
             Issue.record("Expected EPUB extraction to throw a not-implemented error.")
         } catch let error as DocumentImportError {
             #expect(error == .epubParsingNotImplemented)
+        } catch {
+            Issue.record("Unexpected error type: \(error)")
+        }
+    }
+
+    @Test func unknownExtractionTypeThrowsUnsupportedTypeError() {
+        do {
+            _ = try DocumentImportPipeline.extractWordsAndChapters(
+                from: URL(fileURLWithPath: "/tmp/book.txt")
+            )
+            Issue.record("Expected unknown type to throw unsupported-file-type error.")
+        } catch let error as DocumentImportError {
+            #expect(error == .unsupportedFileType)
         } catch {
             Issue.record("Unexpected error type: \(error)")
         }
