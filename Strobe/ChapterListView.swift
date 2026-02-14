@@ -3,6 +3,11 @@ import SwiftData
 
 struct ChapterListView: View {
     @Bindable var document: Document
+    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+
+    private var readerFont: ReaderFont {
+        ReaderFont.resolve(readerFontSelection)
+    }
 
     var body: some View {
         List {
@@ -20,7 +25,7 @@ struct ChapterListView: View {
                 }
             } header: {
                 Text("\(document.chapters.count) chapters")
-                    .font(.custom("JetBrainsMono-Regular", size: 12))
+                    .font(readerFont.regularFont(size: 12))
             }
         }
         .navigationTitle(document.title)
@@ -32,14 +37,14 @@ struct ChapterListView: View {
     private var fullDocumentRow: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Full Document")
-                .font(.custom("JetBrainsMono-Regular", size: 16))
+                .font(readerFont.regularFont(size: 16))
 
             HStack(spacing: 6) {
                 Text("\(document.wordCount) words")
                 Text("\u{00B7}")
                 Text("\(Int(document.progress * 100))%")
             }
-            .font(.custom("JetBrainsMono-Regular", size: 12))
+            .font(readerFont.regularFont(size: 12))
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
@@ -54,7 +59,7 @@ struct ChapterListView: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(chapter.title)
-                    .font(.custom("JetBrainsMono-Regular", size: 16))
+                    .font(readerFont.regularFont(size: 16))
                     .lineLimit(2)
 
                 Spacer()
@@ -74,7 +79,7 @@ struct ChapterListView: View {
             }
 
             Text("\(wordCount) words")
-                .font(.custom("JetBrainsMono-Regular", size: 12))
+                .font(readerFont.regularFont(size: 12))
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)

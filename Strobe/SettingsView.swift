@@ -5,10 +5,15 @@ struct SettingsView: View {
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("appearance") private var appearance: Int = 0
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
+    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
 
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
+
+    private var readerFont: ReaderFont {
+        ReaderFont.resolve(readerFontSelection)
+    }
 
     var body: some View {
         NavigationStack {
@@ -16,7 +21,7 @@ struct SettingsView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("\(defaultWPM) WPM")
-                            .font(.custom("JetBrainsMono-Regular", size: 14))
+                            .font(readerFont.regularFont(size: 14))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color.secondary.opacity(0.2))
@@ -39,16 +44,16 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 } header: {
                     Text("Default WPM")
-                        .font(.custom("JetBrainsMono-Regular", size: 12))
+                        .font(readerFont.regularFont(size: 12))
                 } footer: {
                     Text("Applied to newly imported documents.")
-                        .font(.custom("JetBrainsMono-Regular", size: 11))
+                        .font(readerFont.regularFont(size: 11))
                 }
 
                 Section {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("\(fontSize) pt")
-                            .font(.custom("JetBrainsMono-Regular", size: 14))
+                            .font(readerFont.regularFont(size: 14))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color.secondary.opacity(0.2))
@@ -71,10 +76,10 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 } header: {
                     Text("Text Size")
-                        .font(.custom("JetBrainsMono-Regular", size: 12))
+                        .font(readerFont.regularFont(size: 12))
                 } footer: {
                     Text("Size of words during reading.")
-                        .font(.custom("JetBrainsMono-Regular", size: 11))
+                        .font(readerFont.regularFont(size: 11))
                 }
 
                 Section {
@@ -84,28 +89,45 @@ struct SettingsView: View {
                         Text("Dark").tag(2)
                     } label: {
                         Text("Theme")
-                            .font(.custom("JetBrainsMono-Regular", size: 16))
+                            .font(readerFont.regularFont(size: 16))
                     }
                     .pickerStyle(.menu)
                 } header: {
                     Text("Appearance")
-                        .font(.custom("JetBrainsMono-Regular", size: 12))
+                        .font(readerFont.regularFont(size: 12))
+                }
+
+                Section {
+                    Picker("Reading Font", selection: $readerFontSelection) {
+                        ForEach(ReaderFont.allCases) { fontOption in
+                            Text(fontOption.displayName)
+                                .font(fontOption.regularFont(size: 16))
+                                .tag(fontOption.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                } header: {
+                    Text("Font")
+                        .font(readerFont.regularFont(size: 12))
+                } footer: {
+                    Text("Available: Inter, PT Sans, PT Serif, PT Mono, JetBrains Mono.")
+                        .font(readerFont.regularFont(size: 11))
                 }
 
                 Section {
                     Toggle(isOn: $smartTimingEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Smart Time Adjustments")
-                                .font(.custom("JetBrainsMono-Regular", size: 16))
+                                .font(readerFont.regularFont(size: 16))
                             Text("Longer words stay on screen slightly longer.")
-                                .font(.custom("JetBrainsMono-Regular", size: 11))
+                                .font(readerFont.regularFont(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .tint(.red)
                 } header: {
                     Text("Reading")
-                        .font(.custom("JetBrainsMono-Regular", size: 12))
+                        .font(readerFont.regularFont(size: 12))
                 }
             }
             .navigationTitle("Settings")

@@ -7,12 +7,17 @@ struct ContentView: View {
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
+    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
 
     @State private var isImporting = false
     @State private var isProcessingImport = false
     @State private var importFileName = ""
     @State private var importError: String?
     @State private var showSettings = false
+
+    private var readerFont: ReaderFont {
+        ReaderFont.resolve(readerFontSelection)
+    }
 
     var body: some View {
         NavigationStack {
@@ -78,10 +83,10 @@ struct ContentView: View {
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
             Text("No documents yet")
-                .font(.custom("JetBrainsMono-Regular", size: 18))
+                .font(readerFont.regularFont(size: 18))
                 .foregroundStyle(.secondary)
             Text("Tap + to import a PDF or EPUB")
-                .font(.custom("JetBrainsMono-Regular", size: 14))
+                .font(readerFont.regularFont(size: 14))
                 .foregroundStyle(.secondary.opacity(0.7))
         }
     }
@@ -223,7 +228,7 @@ struct ContentView: View {
                     .controlSize(.large)
 
                 Text("Importing \(importFileName)")
-                    .font(.custom("JetBrainsMono-Regular", size: 14))
+                    .font(readerFont.regularFont(size: 14))
                     .lineLimit(1)
             }
             .padding(20)

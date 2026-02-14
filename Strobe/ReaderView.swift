@@ -10,6 +10,7 @@ struct ReaderView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
+    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -23,6 +24,10 @@ struct ReaderView: View {
     @State private var persistenceError: String?
 
     private let startingWordIndex: Int?
+
+    private var readerFont: ReaderFont {
+        ReaderFont.resolve(readerFontSelection)
+    }
 
     init(document: Document, startingWordIndex: Int? = nil) {
         self.document = document
@@ -206,7 +211,7 @@ struct ReaderView: View {
             Spacer(minLength: 0)
 
             Text(document.title)
-                .font(.custom("JetBrainsMono-Regular", size: 20))
+                .font(readerFont.regularFont(size: 20))
                 .lineLimit(1)
                 .opacity(engine.isPlaying ? 0 : 1)
                 .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
@@ -226,7 +231,7 @@ struct ReaderView: View {
         VStack(spacing: 6) {
             HStack {
                 Text("\(displayedWPM) WPM")
-                    .font(.custom("JetBrainsMono-Regular", size: 14))
+                    .font(readerFont.regularFont(size: 14))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.2))
@@ -235,7 +240,7 @@ struct ReaderView: View {
                 Spacer()
 
                 Text("\(engine.currentIndex + 1) / \(engine.words.count)")
-                    .font(.custom("JetBrainsMono-Regular", size: 14))
+                    .font(readerFont.regularFont(size: 14))
                     .foregroundStyle(.secondary)
             }
 
@@ -288,7 +293,7 @@ struct ReaderView: View {
             .clipShape(RoundedRectangle(cornerRadius: 1.5))
 
             Text(hintText)
-                .font(.custom("JetBrainsMono-Regular", size: 12))
+                .font(readerFont.regularFont(size: 12))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal)
@@ -304,10 +309,10 @@ struct ReaderView: View {
                 .foregroundStyle(.green)
 
             Text("Finished!")
-                .font(.custom("JetBrainsMono-Bold", size: 28))
+                .font(readerFont.boldFont(size: 28))
 
             Text("\(engine.words.count) words read")
-                .font(.custom("JetBrainsMono-Regular", size: 16))
+                .font(readerFont.regularFont(size: 16))
                 .foregroundStyle(.secondary)
 
             Button {
@@ -317,7 +322,7 @@ struct ReaderView: View {
                 engine.restart()
             } label: {
                 Text("Read Again")
-                    .font(.custom("JetBrainsMono-Regular", size: 16))
+                    .font(readerFont.regularFont(size: 16))
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                     .background(Color.red)

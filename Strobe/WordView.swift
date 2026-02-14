@@ -6,6 +6,11 @@ import UIKit
 struct WordView: View {
     let word: String
     let fontSize: CGFloat
+    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+
+    private var readerFont: ReaderFont {
+        ReaderFont.resolve(readerFontSelection)
+    }
 
     private var redIndex: Int {
         // Collect indices of letter characters only (skip punctuation like apostrophes)
@@ -61,7 +66,7 @@ struct WordView: View {
                         Text(after)
                             .foregroundStyle(.primary)
                     }
-                    .font(.custom("JetBrainsMono-Regular", size: displayFontSize))
+                    .font(readerFont.regularFont(size: displayFontSize))
                     // Shift the entire word so the red ORP letter sits exactly on center.
                     .offset(x: orpAnchorOffset(fontSize: displayFontSize))
                     .lineLimit(1)
@@ -93,8 +98,7 @@ struct WordView: View {
     private func textWidth(_ text: String, fontSize: CGFloat) -> CGFloat {
         guard !text.isEmpty else { return 0 }
 
-        let font = UIFont(name: "JetBrainsMono-Regular", size: fontSize)
-            ?? .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let font = readerFont.uiFont(size: fontSize)
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         return ceil((text as NSString).size(withAttributes: attributes).width)
     }

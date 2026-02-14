@@ -4,8 +4,13 @@
 <dict>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Inter-Regular.ttf</string>
+		<string>Inter-Bold.ttf</string>
 		<string>JetBrainsMono-Regular.ttf</string>
 		<string>JetBrainsMono-Bold.ttf</string>
+		<string>PTSans.ttc</string>
+		<string>PTSerif.ttc</string>
+		<string>PTMono.ttc</string>
 	</array>
 </dict>
 </plist>
