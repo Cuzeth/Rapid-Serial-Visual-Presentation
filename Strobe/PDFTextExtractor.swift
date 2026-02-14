@@ -2,7 +2,7 @@ import PDFKit
 
 enum PDFTextExtractor {
 
-    static func extractWords(from url: URL) -> [String] {
+    nonisolated static func extractWords(from url: URL) -> [String] {
         guard let document = PDFDocument(url: url) else { return [] }
 
         var result: [String] = []
@@ -10,15 +10,11 @@ enum PDFTextExtractor {
 
         var carry: String?
         for i in 0..<document.pageCount {
-            guard let page = document.page(at: i),
-                  let text = page.string else { continue }
-
-            let rawTokens = text
-                .split(whereSeparator: \.isWhitespace)
-                .map { normalizeToken(String($0)) }
-                .filter { !$0.isEmpty }
-
-            appendTokenized(rawTokens, into: &result, carry: &carry)
+            autoreleasepool {
+                guard let page = document.page(at: i),
+                      let text = page.string else { return }
+                appendTokenizedText(text, into: &result, carry: &carry)
+            }
         }
 
         if let carry, !carry.isEmpty {
@@ -28,16 +24,11 @@ enum PDFTextExtractor {
         return result
     }
 
-    static func tokenize(_ text: String) -> [String] {
+    nonisolated static func tokenize(_ text: String) -> [String] {
         var result: [String] = []
         var carry: String?
 
-        let rawTokens = text
-            .split(whereSeparator: \.isWhitespace)
-            .map { normalizeToken(String($0)) }
-            .filter { !$0.isEmpty }
-
-        appendTokenized(rawTokens, into: &result, carry: &carry)
+        appendTokenizedText(text, into: &result, carry: &carry)
         if let carry, !carry.isEmpty {
             result.append(carry)
         }
@@ -49,33 +40,63 @@ enum PDFTextExtractor {
         "a", "an", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"
     ]
 
-    private static func appendTokenized(
-        _ rawTokens: [String],
+    private static func appendTokenizedText(
+        _ text: String,
         into output: inout [String],
         carry: inout String?
     ) {
-        for token in rawTokens {
-            if var pending = carry {
-                if shouldMerge(pending: pending, with: token) {
-                    pending = merge(pending: pending, with: token)
-                    if pending.hasSuffix("-") {
-                        carry = pending
-                    } else {
-                        output.append(pending)
-                        carry = nil
-                    }
-                    continue
-                }
+        var tokenBuffer = String()
+        tokenBuffer.reserveCapacity(32)
 
-                output.append(pending)
-                carry = nil
+        for scalar in text.unicodeScalars {
+            if scalar.properties.isWhitespace {
+                appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
+                tokenBuffer.removeAll(keepingCapacity: true)
+                continue
             }
 
-            if token.hasSuffix("-") {
-                carry = token
+            if scalar.value == 0x00AD {
+                continue
+            }
+
+            if scalar.value == 0x2011 {
+                tokenBuffer.append("-")
             } else {
-                output.append(token)
+                tokenBuffer.unicodeScalars.append(scalar)
             }
+        }
+
+        appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
+    }
+
+    private static func appendBufferedToken(
+        _ token: String,
+        into output: inout [String],
+        carry: inout String?
+    ) {
+        let normalizedToken = normalizeToken(token)
+        guard !normalizedToken.isEmpty else { return }
+
+        if var pending = carry {
+            if shouldMerge(pending: pending, with: normalizedToken) {
+                pending = merge(pending: pending, with: normalizedToken)
+                if pending.hasSuffix("-") {
+                    carry = pending
+                } else {
+                    output.append(pending)
+                    carry = nil
+                }
+                return
+            }
+
+            output.append(pending)
+            carry = nil
+        }
+
+        if normalizedToken.hasSuffix("-") {
+            carry = normalizedToken
+        } else {
+            output.append(normalizedToken)
         }
     }
 

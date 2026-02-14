@@ -7,6 +7,8 @@ struct ContentView: View {
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
     @State private var isImporting = false
+    @State private var isProcessingImport = false
+    @State private var importFileName = ""
     @State private var importError: String?
 
     var body: some View {
@@ -26,14 +28,20 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .disabled(isProcessingImport)
                 }
             }
             .fileImporter(
                 isPresented: $isImporting,
-                allowedContentTypes: [.pdf],
+                allowedContentTypes: DocumentImportPipeline.supportedContentTypes,
                 allowsMultipleSelection: false
             ) { result in
                 handleImport(result)
+            }
+            .overlay {
+                if isProcessingImport {
+                    importOverlay
+                }
             }
             .alert("Import Error", isPresented: .init(
                 get: { importError != nil },
@@ -56,7 +64,7 @@ struct ContentView: View {
             Text("No documents yet")
                 .font(.custom("JetBrainsMono-Regular", size: 18))
                 .foregroundStyle(.secondary)
-            Text("Tap + to import a PDF")
+            Text("Tap + to import a PDF or EPUB")
                 .font(.custom("JetBrainsMono-Regular", size: 14))
                 .foregroundStyle(.secondary.opacity(0.7))
         }
@@ -81,42 +89,68 @@ struct ContentView: View {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
-            importPDF(from: url)
+            importDocument(from: url)
         case .failure(let error):
             importError = error.localizedDescription
         }
     }
 
-    private func importPDF(from url: URL) {
+    private func importDocument(from url: URL) {
+        guard !isProcessingImport else { return }
+
         guard url.startAccessingSecurityScopedResource() else {
             importError = "Cannot access this file."
             return
         }
-        defer { url.stopAccessingSecurityScopedResource() }
 
         guard let bookmarkData = try? url.bookmarkData(
             options: .minimalBookmark,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         ) else {
+            url.stopAccessingSecurityScopedResource()
             importError = "Could not save a reference to this file."
             return
         }
 
-        let words = PDFTextExtractor.extractWords(from: url)
-        guard !words.isEmpty else {
-            importError = "Could not extract text from this PDF. It may be image-only."
-            return
-        }
+        isProcessingImport = true
+        importFileName = url.lastPathComponent
 
         let title = url.deletingPathExtension().lastPathComponent
-        let document = Document(
-            title: title,
-            fileName: url.lastPathComponent,
-            bookmarkData: bookmarkData,
-            words: words
-        )
-        modelContext.insert(document)
+
+        Task(priority: .userInitiated) {
+            defer {
+                url.stopAccessingSecurityScopedResource()
+                isProcessingImport = false
+                importFileName = ""
+            }
+
+            do {
+                let words = try await Task.detached(priority: .userInitiated) {
+                    let detectedType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType
+                    return try DocumentImportPipeline.extractWords(from: url, detectedContentType: detectedType)
+                }.value
+
+                guard !words.isEmpty else {
+                    throw DocumentImportError.noReadableText
+                }
+
+                let document = Document(
+                    title: title,
+                    fileName: url.lastPathComponent,
+                    bookmarkData: bookmarkData,
+                    words: words
+                )
+                modelContext.insert(document)
+            } catch {
+                if let localizedError = error as? LocalizedError,
+                   let message = localizedError.errorDescription {
+                    importError = message
+                } else {
+                    importError = error.localizedDescription
+                }
+            }
+        }
     }
 
     // MARK: - Delete
@@ -124,6 +158,26 @@ struct ContentView: View {
     private func deleteDocuments(at offsets: IndexSet) {
         for index in offsets {
             modelContext.delete(documents[index])
+        }
+    }
+
+    private var importOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.large)
+
+                Text("Importing \(importFileName)")
+                    .font(.custom("JetBrainsMono-Regular", size: 14))
+                    .lineLimit(1)
+            }
+            .padding(20)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding()
         }
     }
 }
