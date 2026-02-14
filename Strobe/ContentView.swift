@@ -88,11 +88,20 @@ struct ContentView: View {
     private var documentList: some View {
         List {
             ForEach(documents) { document in
-                NavigationLink(destination: ReaderView(document: document)) {
+                NavigationLink(destination: destination(for: document)) {
                     DocumentRow(document: document)
                 }
             }
             .onDelete(perform: deleteDocuments)
+        }
+    }
+
+    @ViewBuilder
+    private func destination(for document: Document) -> some View {
+        if document.chapters.isEmpty {
+            ReaderView(document: document)
+        } else {
+            ChapterListView(document: document)
         }
     }
 
@@ -139,12 +148,12 @@ struct ContentView: View {
             }
 
             do {
-                let words = try await Task.detached(priority: .userInitiated) {
+                let importResult = try await Task.detached(priority: .userInitiated) {
                     let detectedType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType
-                    return try DocumentImportPipeline.extractWords(from: url, detectedContentType: detectedType)
+                    return try DocumentImportPipeline.extractWordsAndChapters(from: url, detectedContentType: detectedType)
                 }.value
 
-                guard !words.isEmpty else {
+                guard !importResult.words.isEmpty else {
                     throw DocumentImportError.noReadableText
                 }
 
@@ -152,7 +161,8 @@ struct ContentView: View {
                     title: title,
                     fileName: url.lastPathComponent,
                     bookmarkData: bookmarkData,
-                    words: words,
+                    words: importResult.words,
+                    chapters: importResult.chapters,
                     wordsPerMinute: defaultWPM
                 )
                 modelContext.insert(document)

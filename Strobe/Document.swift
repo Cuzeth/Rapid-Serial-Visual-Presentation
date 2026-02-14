@@ -10,6 +10,7 @@ final class Document {
     var lastReadDate: Date?
     var bookmarkData: Data
     var words: [String]
+    var chapters: [Chapter]
     var currentWordIndex: Int
     var wordsPerMinute: Int
 
@@ -27,6 +28,7 @@ final class Document {
         fileName: String,
         bookmarkData: Data,
         words: [String],
+        chapters: [Chapter] = [],
         currentWordIndex: Int = 0,
         wordsPerMinute: Int = 300
     ) {
@@ -35,6 +37,7 @@ final class Document {
         self.fileName = fileName
         self.bookmarkData = bookmarkData
         self.words = words
+        self.chapters = chapters
         self.wordCount = words.count
         self.currentWordIndex = currentWordIndex
         self.wordsPerMinute = wordsPerMinute

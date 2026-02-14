@@ -6,6 +6,7 @@ struct ReaderView: View {
     private let playIntentDelay: TimeInterval = 0.12
 
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("fontSize") private var fontSize: Int = 40
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -16,11 +17,15 @@ struct ReaderView: View {
     @State private var isBarScrubbing = false
     @State private var showCompletion = false
 
-    init(document: Document) {
+    private let startingWordIndex: Int?
+
+    init(document: Document, startingWordIndex: Int? = nil) {
         self.document = document
+        self.startingWordIndex = startingWordIndex
+        let effectiveIndex = startingWordIndex ?? document.currentWordIndex
         self._engine = State(initialValue: RSVPEngine(
             words: document.words,
-            currentIndex: document.currentWordIndex,
+            currentIndex: effectiveIndex,
             wordsPerMinute: document.wordsPerMinute
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
@@ -41,7 +46,7 @@ struct ReaderView: View {
                 } else {
                     WordView(
                         word: engine.currentWord,
-                        fontSize: 40
+                        fontSize: CGFloat(fontSize)
                     )
                     .transition(.opacity)
                 }

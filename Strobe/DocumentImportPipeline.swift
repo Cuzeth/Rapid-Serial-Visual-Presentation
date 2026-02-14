@@ -1,10 +1,16 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
-enum DocumentSourceType: Equatable {
+enum DocumentSourceType: String, Equatable {
     case pdf
     case epub
     case unknown
+}
+
+struct ImportResult {
+    let words: [String]
+    let chapters: [Chapter]
+    let sourceType: DocumentSourceType
 }
 
 enum DocumentImportPipeline {
@@ -27,12 +33,18 @@ enum DocumentImportPipeline {
         }
     }
 
-    nonisolated static func extractWords(from url: URL, detectedContentType: UTType? = nil) throws -> [String] {
-        switch resolveSourceType(for: url, detectedContentType: detectedContentType) {
+    nonisolated static func extractWordsAndChapters(
+        from url: URL,
+        detectedContentType: UTType? = nil
+    ) throws -> ImportResult {
+        let type = resolveSourceType(for: url, detectedContentType: detectedContentType)
+        switch type {
         case .pdf:
-            return PDFTextExtractor.extractWords(from: url)
+            let result = PDFTextExtractor.extractWordsAndChapters(from: url)
+            return ImportResult(words: result.words, chapters: result.chapters, sourceType: .pdf)
         case .epub:
-            return try EPUBTextExtractor.extractWords(from: url)
+            let words = try EPUBTextExtractor.extractWords(from: url)
+            return ImportResult(words: words, chapters: [], sourceType: .epub)
         case .unknown:
             throw DocumentImportError.unsupportedFileType
         }
