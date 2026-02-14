@@ -6,6 +6,8 @@ struct ReaderView: View {
     private let playIntentDelay: TimeInterval = 0.12
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @Bindable var document: Document
@@ -69,7 +71,14 @@ struct ReaderView: View {
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
         }
-        .onDisappear(perform: saveState)
+        .onDisappear {
+            persistState(pauseEngine: true, touchLastReadDate: true)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .inactive || newPhase == .background {
+                persistState(pauseEngine: false, touchLastReadDate: false)
+            }
+        }
         .onChange(of: engine.isPlaying) { wasPlaying, isNowPlaying in
             if wasPlaying && !isNowPlaying && engine.isAtEnd {
                 HapticManager.shared.completedReading()
@@ -84,6 +93,7 @@ struct ReaderView: View {
             let snapped = Int(newValue)
             if snapped != engine.wordsPerMinute {
                 engine.wordsPerMinute = snapped
+                document.wordsPerMinute = snapped
                 HapticManager.shared.wpmChanged()
             }
         }
@@ -324,11 +334,16 @@ struct ReaderView: View {
 
     // MARK: - Persistence
 
-    private func saveState() {
-        cancelPlayIntent()
-        engine.pause()
+    private func persistState(pauseEngine: Bool, touchLastReadDate: Bool) {
+        if pauseEngine {
+            cancelPlayIntent()
+            engine.pause()
+        }
         document.currentWordIndex = engine.currentIndex
         document.wordsPerMinute = engine.wordsPerMinute
-        document.lastReadDate = Date()
+        if touchLastReadDate {
+            document.lastReadDate = Date()
+        }
+        try? modelContext.save()
     }
 }
