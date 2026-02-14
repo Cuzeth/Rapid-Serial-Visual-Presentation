@@ -3,7 +3,7 @@ import UIKit
 
 enum ReaderFont: String, CaseIterable, Identifiable {
     static let storageKey = "readerFontSelection"
-    static let defaultValue: ReaderFont = .inter
+    static let defaultValue: ReaderFont = .jetBrainsMono
 
     case inter
     case ptSans
