@@ -3,12 +3,15 @@ import SwiftData
 
 struct ReaderView: View {
     private let navFadeDuration: Double = 0.3
+    private let playIntentDelay: TimeInterval = 0.12
 
     @Environment(\.dismiss) private var dismiss
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
     @State private var scrubAccumulator: CGFloat = 0
+    @State private var touchMode: TouchMode = .undecided
+    @State private var pendingPlayWorkItem: DispatchWorkItem?
     @State private var wpmSliderValue: Double
     @State private var isBarScrubbing = false
     @State private var showCompletion = false
@@ -86,6 +89,12 @@ struct ReaderView: View {
         }
     }
 
+    private enum TouchMode {
+        case undecided
+        case reading
+        case scrubbing
+    }
+
     // MARK: - Unified gesture
 
     private var unifiedGesture: some Gesture {
@@ -96,12 +105,25 @@ struct ReaderView: View {
 
                 if !isTouching {
                     isTouching = true
-                    engine.play()
-                    HapticManager.shared.playPause()
+                    touchMode = .undecided
+                    scrubAccumulator = 0
+                    schedulePlayIntent()
                 }
 
-                if horizontal > 20 {
-                    if engine.isPlaying { engine.pause() }
+                if touchMode == .undecided {
+                    if horizontal > 20 {
+                        touchMode = .scrubbing
+                        cancelPlayIntent()
+                        if engine.isPlaying {
+                            engine.pause()
+                            HapticManager.shared.playPause()
+                        }
+                    }
+                }
+
+                if touchMode == .scrubbing {
+                    // Scrubbing is a paused-only interaction.
+                    guard !engine.isPlaying else { return }
 
                     let threshold: CGFloat = 30
                     let newAccumulator = value.translation.width
@@ -118,10 +140,34 @@ struct ReaderView: View {
             }
             .onEnded { _ in
                 isTouching = false
-                engine.pause()
-                HapticManager.shared.playPause()
+                cancelPlayIntent()
+                if touchMode == .reading, engine.isPlaying {
+                    engine.pause()
+                    HapticManager.shared.playPause()
+                }
                 scrubAccumulator = 0
+                touchMode = .undecided
             }
+    }
+
+    private func schedulePlayIntent() {
+        cancelPlayIntent()
+
+        let workItem = DispatchWorkItem {
+            guard isTouching, touchMode == .undecided, !showCompletion else { return }
+            touchMode = .reading
+            if !engine.isPlaying {
+                engine.play()
+                HapticManager.shared.playPause()
+            }
+        }
+        pendingPlayWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + playIntentDelay, execute: workItem)
+    }
+
+    private func cancelPlayIntent() {
+        pendingPlayWorkItem?.cancel()
+        pendingPlayWorkItem = nil
     }
 
     // MARK: - Top bar
