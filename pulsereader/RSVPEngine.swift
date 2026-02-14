@@ -20,11 +20,11 @@ final class RSVPEngine {
         return words[currentIndex]
     }
 
-    var isAtEnd: Bool { currentIndex >= words.count }
+    var isAtEnd: Bool { currentIndex >= words.count - 1 }
 
     var progress: Double {
-        guard !words.isEmpty else { return 0 }
-        return Double(currentIndex) / Double(words.count)
+        guard words.count > 1 else { return isAtEnd ? 1 : 0 }
+        return Double(currentIndex) / Double(words.count - 1)
     }
 
     private var timer: Timer?
@@ -54,8 +54,15 @@ final class RSVPEngine {
         currentIndex = max(0, min(index, words.count - 1))
     }
 
-    func scrub(by delta: Int) {
-        seek(to: currentIndex + delta)
+    @discardableResult
+    func scrub(by delta: Int) -> Bool {
+        let target = currentIndex + delta
+        seek(to: target)
+        return currentIndex != target
+    }
+
+    func restart() {
+        seek(to: 0)
     }
 
     private func startTimer() {
