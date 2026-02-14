@@ -1,16 +1,5 @@
 import SwiftUI
-
-// MARK: - Custom alignment for ORP anchor
-
-extension HorizontalAlignment {
-    private enum ORPAnchor: AlignmentID {
-        static func defaultValue(in context: ViewDimensions) -> CGFloat {
-            context[HorizontalAlignment.center]
-        }
-    }
-
-    static let orpAnchor = HorizontalAlignment(ORPAnchor.self)
-}
+import UIKit
 
 // MARK: - Word view
 
@@ -68,19 +57,17 @@ struct WordView: View {
                         Text(anchor)
                             .foregroundStyle(.red)
                             .fontWeight(.bold)
-                            .alignmentGuide(.orpAnchor) { d in
-                                d[HorizontalAlignment.center]
-                            }
 
                         Text(after)
                             .foregroundStyle(.primary)
                     }
                     .font(.custom("JetBrainsMono-Regular", size: displayFontSize))
+                    // Shift the entire word so the red ORP letter sits exactly on center.
+                    .offset(x: orpAnchorOffset(fontSize: displayFontSize))
                     .lineLimit(1)
                     .minimumScaleFactor(0.58)
                     .padding(.horizontal, 6)
                 }
-                .frame(maxWidth: .infinity, alignment: Alignment(horizontal: .orpAnchor, vertical: .center))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -95,5 +82,20 @@ struct WordView: View {
 
         let scaled = fontSize * (availableWidth / estimatedWordWidth)
         return max(fontSize * 0.58, scaled)
+    }
+
+    private func orpAnchorOffset(fontSize: CGFloat) -> CGFloat {
+        let beforeWidth = textWidth(before, fontSize: fontSize)
+        let afterWidth = textWidth(after, fontSize: fontSize)
+        return (afterWidth - beforeWidth) / 2
+    }
+
+    private func textWidth(_ text: String, fontSize: CGFloat) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+
+        let font = UIFont(name: "JetBrainsMono-Regular", size: fontSize)
+            ?? .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        return ceil((text as NSString).size(withAttributes: attributes).width)
     }
 }
