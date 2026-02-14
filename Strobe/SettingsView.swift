@@ -4,6 +4,7 @@ struct SettingsView: View {
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("appearance") private var appearance: Int = 0
+    @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var wpmSliderValue: Double = 300
@@ -88,6 +89,22 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                 } header: {
                     Text("Appearance")
+                        .font(.custom("JetBrainsMono-Regular", size: 12))
+                }
+
+                Section {
+                    Toggle(isOn: $smartTimingEnabled) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Smart Time Adjustments")
+                                .font(.custom("JetBrainsMono-Regular", size: 16))
+                            Text("Longer words stay on screen slightly longer.")
+                                .font(.custom("JetBrainsMono-Regular", size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(.red)
+                } header: {
+                    Text("Reading")
                         .font(.custom("JetBrainsMono-Regular", size: 12))
                 }
             }

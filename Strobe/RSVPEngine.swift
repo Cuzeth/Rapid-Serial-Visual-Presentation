@@ -10,8 +10,14 @@ final class RSVPEngine {
     var wordsPerMinute: Int {
         didSet {
             guard isPlaying else { return }
-            stopTimer()
-            startTimer()
+            restartTimer()
+        }
+    }
+
+    var smartTimingEnabled: Bool {
+        didSet {
+            guard isPlaying else { return }
+            restartTimer()
         }
     }
 
@@ -29,14 +35,20 @@ final class RSVPEngine {
 
     private var timer: Timer?
 
-    private var interval: TimeInterval {
+    private var baseInterval: TimeInterval {
         60.0 / Double(wordsPerMinute)
     }
 
-    init(words: [String], currentIndex: Int = 0, wordsPerMinute: Int = 300) {
+    init(
+        words: [String],
+        currentIndex: Int = 0,
+        wordsPerMinute: Int = 300,
+        smartTimingEnabled: Bool = false
+    ) {
         self.words = words
         self.currentIndex = currentIndex
         self.wordsPerMinute = wordsPerMinute
+        self.smartTimingEnabled = smartTimingEnabled
     }
 
     func play() {
@@ -66,7 +78,9 @@ final class RSVPEngine {
     }
 
     private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        guard isPlaying else { return }
+        let delay = nextInterval()
+        timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.advance()
         }
     }
@@ -79,9 +93,51 @@ final class RSVPEngine {
     private func advance() {
         if currentIndex < words.count - 1 {
             currentIndex += 1
+            if isPlaying {
+                startTimer()
+            }
         } else {
             pause()
         }
+    }
+
+    private func restartTimer() {
+        stopTimer()
+        startTimer()
+    }
+
+    private func nextInterval() -> TimeInterval {
+        guard smartTimingEnabled else { return baseInterval }
+        return baseInterval * Self.smartTimingMultiplier(for: currentWord)
+    }
+
+    nonisolated static func smartTimingMultiplier(for word: String) -> Double {
+        let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
+        let letterCount = trimmed.count
+
+        var multiplier: Double = 1.0
+
+        switch letterCount {
+        case 0...6:
+            multiplier = 1.0
+        case 7...9:
+            multiplier = 1.3
+        case 10...12:
+            multiplier = 1.4
+        default:
+            multiplier = 1.5
+        }
+
+        if hasTrailingPunctuation(word) {
+            multiplier += 0.2
+        }
+
+        return min(multiplier, 1.7)
+    }
+
+    nonisolated private static func hasTrailingPunctuation(_ word: String) -> Bool {
+        guard let last = word.unicodeScalars.last else { return false }
+        return CharacterSet.punctuationCharacters.contains(last)
     }
 
     deinit {

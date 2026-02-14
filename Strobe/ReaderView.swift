@@ -7,6 +7,7 @@ struct ReaderView: View {
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage("fontSize") private var fontSize: Int = 40
+    @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -23,10 +24,12 @@ struct ReaderView: View {
         self.document = document
         self.startingWordIndex = startingWordIndex
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
+        let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
         self._engine = State(initialValue: RSVPEngine(
             words: document.words,
             currentIndex: effectiveIndex,
-            wordsPerMinute: document.wordsPerMinute
+            wordsPerMinute: document.wordsPerMinute,
+            smartTimingEnabled: usesSmartTiming
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
     }
@@ -83,6 +86,9 @@ struct ReaderView: View {
                 engine.wordsPerMinute = snapped
                 HapticManager.shared.wpmChanged()
             }
+        }
+        .onChange(of: smartTimingEnabled) { _, newValue in
+            engine.smartTimingEnabled = newValue
         }
     }
 

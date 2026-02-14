@@ -70,4 +70,16 @@ struct StrobeTests {
         }
     }
 
+    @Test func smartTimingMultiplierIncreasesForLongWords() {
+        let short = RSVPEngine.smartTimingMultiplier(for: "cat")
+        let long = RSVPEngine.smartTimingMultiplier(for: "characteristically")
+        #expect(long > short)
+    }
+
+    @Test func smartTimingMultiplierAccountsForTerminalPunctuation() {
+        let plain = RSVPEngine.smartTimingMultiplier(for: "reading")
+        let punctuated = RSVPEngine.smartTimingMultiplier(for: "reading.")
+        #expect(punctuated > plain)
+    }
+
 }
