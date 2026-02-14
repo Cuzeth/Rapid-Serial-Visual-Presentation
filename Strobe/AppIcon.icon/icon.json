@@ -1,14 +1,36 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "automatic-gradient" : "display-p3:0.07189,0.04761,0.05803,1.00000"
   },
   "groups" : [
-
+    {
+      "layers" : [
+        {
+          "blend-mode" : "screen",
+          "image-name" : "Untitled.png",
+          "name" : "Untitled",
+          "position" : {
+            "scale" : 1.62,
+            "translation-in-points" : [
+              -4.622857847660043,
+              1.6200000000000045
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
   ],
   "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
-    "squares" : "shared"
+    "squares" : [
+      "iOS"
+    ]
   }
 }
