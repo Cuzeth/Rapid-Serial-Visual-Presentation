@@ -19,8 +19,19 @@ struct WordView: View {
     let fontSize: CGFloat
 
     private var redIndex: Int {
-        if word.count <= 1 { return 0 }
-        return max(1, word.count / 2)
+        // Collect indices of letter characters only (skip punctuation like apostrophes)
+        let letterIndices = word.enumerated().compactMap { offset, char in
+            char.isLetter ? offset : nil
+        }
+
+        guard !letterIndices.isEmpty else {
+            // Pure punctuation fallback
+            return word.count / 2
+        }
+
+        let letterCount = letterIndices.count
+        let letterPos = letterCount <= 1 ? 0 : max(1, letterCount / 2)
+        return letterIndices[letterPos]
     }
 
     private var before: String {
