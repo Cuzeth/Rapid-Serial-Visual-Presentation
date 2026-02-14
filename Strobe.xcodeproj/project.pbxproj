@@ -24,18 +24,18 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		E44F01FB2F4047FB00D04D31 /* strobe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = strobe.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E44F020C2F4047FC00D04D31 /* strobeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = strobeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E44F02162F4047FC00D04D31 /* strobeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = strobeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E44F01FB2F4047FB00D04D31 /* Strobe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Strobe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StrobeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E44F02162F4047FC00D04D31 /* StrobeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StrobeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E44F021E2F4047FC00D04D31 /* Exceptions for "strobe" folder in "strobe" target */ = {
+		E44F021E2F4047FC00D04D31 /* Exceptions for "strobe" folder in "Strobe" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = E44F01FA2F4047FB00D04D31 /* strobe */;
+			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -43,7 +43,7 @@
 		E44F01FD2F4047FB00D04D31 /* strobe */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				E44F021E2F4047FC00D04D31 /* Exceptions for "strobe" folder in "strobe" target */,
+				E44F021E2F4047FC00D04D31 /* Exceptions for "strobe" folder in "Strobe" target */,
 			);
 			path = strobe;
 			sourceTree = "<group>";
@@ -98,9 +98,9 @@
 		E44F01FC2F4047FB00D04D31 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E44F01FB2F4047FB00D04D31 /* strobe.app */,
-				E44F020C2F4047FC00D04D31 /* strobeTests.xctest */,
-				E44F02162F4047FC00D04D31 /* strobeUITests.xctest */,
+				E44F01FB2F4047FB00D04D31 /* Strobe.app */,
+				E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */,
+				E44F02162F4047FC00D04D31 /* StrobeUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -108,9 +108,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		E44F01FA2F4047FB00D04D31 /* strobe */ = {
+		E44F01FA2F4047FB00D04D31 /* Strobe */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E44F021F2F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "strobe" */;
+			buildConfigurationList = E44F021F2F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "Strobe" */;
 			buildPhases = (
 				E44F01F72F4047FB00D04D31 /* Sources */,
 				E44F01F82F4047FB00D04D31 /* Frameworks */,
@@ -123,16 +123,16 @@
 			fileSystemSynchronizedGroups = (
 				E44F01FD2F4047FB00D04D31 /* strobe */,
 			);
-			name = strobe;
+			name = Strobe;
 			packageProductDependencies = (
 			);
 			productName = strobe;
-			productReference = E44F01FB2F4047FB00D04D31 /* strobe.app */;
+			productReference = E44F01FB2F4047FB00D04D31 /* Strobe.app */;
 			productType = "com.apple.product-type.application";
 		};
-		E44F020B2F4047FC00D04D31 /* strobeTests */ = {
+		E44F020B2F4047FC00D04D31 /* StrobeTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E44F02242F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "strobeTests" */;
+			buildConfigurationList = E44F02242F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "StrobeTests" */;
 			buildPhases = (
 				E44F02082F4047FC00D04D31 /* Sources */,
 				E44F02092F4047FC00D04D31 /* Frameworks */,
@@ -146,16 +146,16 @@
 			fileSystemSynchronizedGroups = (
 				E44F020F2F4047FC00D04D31 /* strobeTests */,
 			);
-			name = strobeTests;
+			name = StrobeTests;
 			packageProductDependencies = (
 			);
 			productName = strobeTests;
-			productReference = E44F020C2F4047FC00D04D31 /* strobeTests.xctest */;
+			productReference = E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		E44F02152F4047FC00D04D31 /* strobeUITests */ = {
+		E44F02152F4047FC00D04D31 /* StrobeUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E44F02272F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "strobeUITests" */;
+			buildConfigurationList = E44F02272F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "StrobeUITests" */;
 			buildPhases = (
 				E44F02122F4047FC00D04D31 /* Sources */,
 				E44F02132F4047FC00D04D31 /* Frameworks */,
@@ -169,11 +169,11 @@
 			fileSystemSynchronizedGroups = (
 				E44F02192F4047FC00D04D31 /* strobeUITests */,
 			);
-			name = strobeUITests;
+			name = StrobeUITests;
 			packageProductDependencies = (
 			);
 			productName = strobeUITests;
-			productReference = E44F02162F4047FC00D04D31 /* strobeUITests.xctest */;
+			productReference = E44F02162F4047FC00D04D31 /* StrobeUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -199,7 +199,7 @@
 					};
 				};
 			};
-			buildConfigurationList = E44F01F62F4047FB00D04D31 /* Build configuration list for PBXProject "strobe" */;
+			buildConfigurationList = E44F01F62F4047FB00D04D31 /* Build configuration list for PBXProject "Strobe" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -213,9 +213,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E44F01FA2F4047FB00D04D31 /* strobe */,
-				E44F020B2F4047FC00D04D31 /* strobeTests */,
-				E44F02152F4047FC00D04D31 /* strobeUITests */,
+				E44F01FA2F4047FB00D04D31 /* Strobe */,
+				E44F020B2F4047FC00D04D31 /* StrobeTests */,
+				E44F02152F4047FC00D04D31 /* StrobeUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -271,12 +271,12 @@
 /* Begin PBXTargetDependency section */
 		E44F020E2F4047FC00D04D31 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = E44F01FA2F4047FB00D04D31 /* strobe */;
+			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
 			targetProxy = E44F020D2F4047FC00D04D31 /* PBXContainerItemProxy */;
 		};
 		E44F02182F4047FC00D04D31 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = E44F01FA2F4047FB00D04D31 /* strobe */;
+			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
 			targetProxy = E44F02172F4047FC00D04D31 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -491,7 +491,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/strobe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/strobe";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Strobe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Strobe";
 			};
 			name = Debug;
 		};
@@ -513,7 +513,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/strobe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/strobe";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Strobe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Strobe";
 			};
 			name = Release;
 		};
@@ -560,7 +560,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		E44F01F62F4047FB00D04D31 /* Build configuration list for PBXProject "strobe" */ = {
+		E44F01F62F4047FB00D04D31 /* Build configuration list for PBXProject "Strobe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E44F02222F4047FC00D04D31 /* Debug */,
@@ -569,7 +569,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E44F021F2F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "strobe" */ = {
+		E44F021F2F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "Strobe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E44F02202F4047FC00D04D31 /* Debug */,
@@ -578,7 +578,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E44F02242F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "strobeTests" */ = {
+		E44F02242F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "StrobeTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E44F02252F4047FC00D04D31 /* Debug */,
@@ -587,7 +587,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E44F02272F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "strobeUITests" */ = {
+		E44F02272F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "StrobeUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E44F02282F4047FC00D04D31 /* Debug */,
