@@ -1,13 +1,13 @@
 //
-//  strobeUITestsLaunchTests.swift
-//  strobeUITests
+//  StrobeUITestsLaunchTests.swift
+//  StrobeUITests
 //
 //  Created by CZTH on 2/13/26.
 //
 
 import XCTest
 
-final class strobeUITestsLaunchTests: XCTestCase {
+final class StrobeUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

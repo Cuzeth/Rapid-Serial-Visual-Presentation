@@ -1,6 +1,6 @@
 //
-//  strobeApp.swift
-//  strobe
+//  StrobeApp.swift
+//  Strobe
 //
 //  Created by CZTH on 2/13/26.
 //
@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct strobeApp: App {
+struct StrobeApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Document.self,
