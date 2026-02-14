@@ -30,7 +30,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E44F021E2F4047FC00D04D31 /* Exceptions for "strobe" folder in "Strobe" target */ = {
+		E44F021E2F4047FC00D04D31 /* Exceptions for "Strobe" folder in "Strobe" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -40,22 +40,22 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		E44F01FD2F4047FB00D04D31 /* strobe */ = {
+		E44F01FD2F4047FB00D04D31 /* Strobe */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				E44F021E2F4047FC00D04D31 /* Exceptions for "strobe" folder in "Strobe" target */,
+				E44F021E2F4047FC00D04D31 /* Exceptions for "Strobe" folder in "Strobe" target */,
 			);
-			path = strobe;
+			path = Strobe;
 			sourceTree = "<group>";
 		};
-		E44F020F2F4047FC00D04D31 /* strobeTests */ = {
+		E44F020F2F4047FC00D04D31 /* StrobeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = strobeTests;
+			path = StrobeTests;
 			sourceTree = "<group>";
 		};
-		E44F02192F4047FC00D04D31 /* strobeUITests */ = {
+		E44F02192F4047FC00D04D31 /* StrobeUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = strobeUITests;
+			path = StrobeUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -88,9 +88,9 @@
 		E44F01F22F4047FB00D04D31 = {
 			isa = PBXGroup;
 			children = (
-				E44F01FD2F4047FB00D04D31 /* strobe */,
-				E44F020F2F4047FC00D04D31 /* strobeTests */,
-				E44F02192F4047FC00D04D31 /* strobeUITests */,
+				E44F01FD2F4047FB00D04D31 /* Strobe */,
+				E44F020F2F4047FC00D04D31 /* StrobeTests */,
+				E44F02192F4047FC00D04D31 /* StrobeUITests */,
 				E44F01FC2F4047FB00D04D31 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,7 +121,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				E44F01FD2F4047FB00D04D31 /* strobe */,
+				E44F01FD2F4047FB00D04D31 /* Strobe */,
 			);
 			name = Strobe;
 			packageProductDependencies = (
@@ -144,7 +144,7 @@
 				E44F020E2F4047FC00D04D31 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				E44F020F2F4047FC00D04D31 /* strobeTests */,
+				E44F020F2F4047FC00D04D31 /* StrobeTests */,
 			);
 			name = StrobeTests;
 			packageProductDependencies = (
@@ -167,7 +167,7 @@
 				E44F02182F4047FC00D04D31 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				E44F02192F4047FC00D04D31 /* strobeUITests */,
+				E44F02192F4047FC00D04D31 /* StrobeUITests */,
 			);
 			name = StrobeUITests;
 			packageProductDependencies = (
