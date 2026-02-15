@@ -76,15 +76,16 @@ enum DocumentImportPipeline {
 
     nonisolated static func extractWordsAndChapters(
         from url: URL,
-        detectedContentType: UTType? = nil
+        detectedContentType: UTType? = nil,
+        cleaningLevel: TextCleaningLevel = .standard
     ) throws -> ImportResult {
         let type = resolveSourceType(for: url, detectedContentType: detectedContentType)
         switch type {
         case .pdf:
-            let result = PDFTextExtractor.extractWordsAndChapters(from: url)
+            let result = PDFTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
             return ImportResult(words: result.words, chapters: result.chapters, sourceType: .pdf, title: result.title)
         case .epub:
-            let result = try EPUBTextExtractor.extractWordsAndChapters(from: url)
+            let result = try EPUBTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
             return ImportResult(words: result.words, chapters: result.chapters, sourceType: .epub, title: result.title)
         case .unknown:
             throw DocumentImportError.unsupportedFileType

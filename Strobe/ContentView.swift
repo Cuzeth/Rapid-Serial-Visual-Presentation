@@ -8,6 +8,7 @@ struct ContentView: View {
 
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+    @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
 
     @State private var isImporting = false
     @State private var isProcessingImport = false
@@ -146,6 +147,7 @@ struct ContentView: View {
         isProcessingImport = true
         importFileName = url.lastPathComponent
         let fileName = url.lastPathComponent
+        let cleaningLevel = TextCleaningLevel.resolve(textCleaningLevel)
 
         Task(priority: .userInitiated) {
             defer {
@@ -157,7 +159,11 @@ struct ContentView: View {
             do {
                 let importResult = try await Task.detached(priority: .userInitiated) {
                     let detectedType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType
-                    return try DocumentImportPipeline.extractWordsAndChapters(from: url, detectedContentType: detectedType)
+                    return try DocumentImportPipeline.extractWordsAndChapters(
+                        from: url,
+                        detectedContentType: detectedType,
+                        cleaningLevel: cleaningLevel
+                    )
                 }.value
 
                 guard !importResult.words.isEmpty else {

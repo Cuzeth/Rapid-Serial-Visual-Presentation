@@ -8,7 +8,10 @@ struct EPUBExtractionResult {
 
 enum EPUBTextExtractor {
 
-    nonisolated static func extractWordsAndChapters(from url: URL) throws -> EPUBExtractionResult {
+    nonisolated static func extractWordsAndChapters(
+        from url: URL,
+        cleaningLevel: TextCleaningLevel = .standard
+    ) throws -> EPUBExtractionResult {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("epub_\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -21,22 +24,37 @@ enum EPUBTextExtractor {
 
         let opf = try parseOPF(at: opfURL)
 
-        // Extract words from spine-ordered XHTML files
-        var words: [String] = []
-        words.reserveCapacity(opf.spineItems.count * 500)
-        var spineWordOffsets: [String: Int] = [:]
-        var carry: String?
+        // Phase 1: Collect raw text from spine-ordered XHTML files
+        var sectionTexts: [(href: String, text: String)] = []
+        sectionTexts.reserveCapacity(opf.spineItems.count)
 
         for itemID in opf.spineItems {
             guard let href = opf.manifest[itemID] else { continue }
             let fileURL = opfDir.appendingPathComponent(href)
-            spineWordOffsets[href] = words.count
 
             autoreleasepool {
                 guard let data = try? Data(contentsOf: fileURL),
                       let text = stripHTML(data) else { return }
-                Tokenizer.appendTokenizedText(text, into: &words, carry: &carry)
+                sectionTexts.append((href: href, text: text))
             }
+        }
+
+        // Phase 2: Clean text
+        let cleanedTexts = TextCleaner.cleanPages(
+            sectionTexts.map(\.text),
+            level: cleaningLevel
+        )
+
+        // Phase 3: Tokenize cleaned sections
+        var words: [String] = []
+        words.reserveCapacity(sectionTexts.count * 500)
+        var spineWordOffsets: [String: Int] = [:]
+        var carry: String?
+
+        for (i, pair) in sectionTexts.enumerated() {
+            spineWordOffsets[pair.href] = words.count
+            let text = i < cleanedTexts.count ? cleanedTexts[i] : pair.text
+            Tokenizer.appendTokenizedText(text, into: &words, carry: &carry)
         }
 
         if let carry, !carry.isEmpty {
@@ -401,12 +419,13 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     }
 
     nonisolated(unsafe) private(set) var navPoints: [NavPoint] = []
-    nonisolated(unsafe) private var depth = 0
-    nonisolated(unsafe) private var inNavPoint = false
+    nonisolated(unsafe) private var navPointDepth = 0
     nonisolated(unsafe) private var inText = false
     nonisolated(unsafe) private var currentTitle: String?
     nonisolated(unsafe) private var currentSrc: String?
-    nonisolated(unsafe) private var navPointDepth = 0
+    /// Tracks which navPoint depth we're currently collecting for.
+    /// We collect navPoints at depths 1 and 2 (handles Part > Chapter nesting).
+    nonisolated(unsafe) private var activeNavPointDepth: Int?
 
     nonisolated override init() { super.init() }
 
@@ -428,20 +447,21 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
 
         switch localName {
         case "navPoint":
-            depth += 1
-            if depth == 1 {
-                // Top-level navPoint only
-                inNavPoint = true
-                navPointDepth = depth
+            navPointDepth += 1
+            // Collect navPoints at depths 1 and 2 (top-level and one level nested)
+            if navPointDepth <= 2 {
+                // Save any in-progress navPoint before starting a new one
+                finishCurrentNavPoint()
+                activeNavPointDepth = navPointDepth
                 currentTitle = nil
                 currentSrc = nil
             }
         case "text":
-            if inNavPoint && depth == navPointDepth + 1 {
+            if activeNavPointDepth != nil {
                 inText = true
             }
         case "content":
-            if inNavPoint && depth == navPointDepth + 1 {
+            if activeNavPointDepth != nil, currentSrc == nil {
                 currentSrc = attributes["src"]?.removingPercentEncoding ?? attributes["src"]
             }
         default:
@@ -469,19 +489,29 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
 
         switch localName {
         case "navPoint":
-            if inNavPoint && depth == navPointDepth {
-                navPoints.append(NavPoint(
-                    title: currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
-                    src: currentSrc,
-                    depth: navPointDepth
-                ))
-                inNavPoint = false
+            if activeNavPointDepth == navPointDepth {
+                finishCurrentNavPoint()
             }
-            depth -= 1
+            navPointDepth -= 1
         case "text":
             inText = false
         default:
             break
         }
+    }
+
+    nonisolated private func finishCurrentNavPoint() {
+        guard let depth = activeNavPointDepth else { return }
+        let trimmedTitle = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTitle != nil || currentSrc != nil {
+            navPoints.append(NavPoint(
+                title: trimmedTitle,
+                src: currentSrc,
+                depth: depth
+            ))
+        }
+        activeNavPointDepth = nil
+        currentTitle = nil
+        currentSrc = nil
     }
 }

@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance: Int = 0
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+    @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
 
     @State private var wpmSliderValue: Double = 300
@@ -13,6 +14,10 @@ struct SettingsView: View {
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
+    }
+
+    private var currentCleaningLevel: TextCleaningLevel {
+        TextCleaningLevel.resolve(textCleaningLevel)
     }
 
     var body: some View {
@@ -128,6 +133,23 @@ struct SettingsView: View {
                 } header: {
                     Text("Reading")
                         .font(readerFont.regularFont(size: 12))
+                }
+
+                Section {
+                    Picker("Cleaning", selection: $textCleaningLevel) {
+                        ForEach(TextCleaningLevel.allCases) { level in
+                            Text(level.displayName)
+                                .font(readerFont.regularFont(size: 16))
+                                .tag(level.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                } header: {
+                    Text("Text Cleaning")
+                        .font(readerFont.regularFont(size: 12))
+                } footer: {
+                    Text(currentCleaningLevel.description)
+                        .font(readerFont.regularFont(size: 11))
                 }
             }
             .navigationTitle("Settings")
