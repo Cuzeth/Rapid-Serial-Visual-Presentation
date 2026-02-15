@@ -43,8 +43,8 @@ enum DocumentImportPipeline {
             let result = PDFTextExtractor.extractWordsAndChapters(from: url)
             return ImportResult(words: result.words, chapters: result.chapters, sourceType: .pdf)
         case .epub:
-            let words = try EPUBTextExtractor.extractWords(from: url)
-            return ImportResult(words: words, chapters: [], sourceType: .epub)
+            let result = try EPUBTextExtractor.extractWordsAndChapters(from: url)
+            return ImportResult(words: result.words, chapters: result.chapters, sourceType: .epub)
         case .unknown:
             throw DocumentImportError.unsupportedFileType
         }

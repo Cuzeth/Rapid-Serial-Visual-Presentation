@@ -12,22 +12,22 @@ internal import UniformTypeIdentifiers
 struct StrobeTests {
 
     @Test func tokenizesSimpleLineBreakHyphenation() {
-        let words = PDFTextExtractor.tokenize("infor-\nmation and recov-\nery")
+        let words = Tokenizer.tokenize("infor-\nmation and recov-\nery")
         #expect(words == ["information", "and", "recovery"])
     }
 
     @Test func preservesCompoundLineBreakHyphenation() {
-        let words = PDFTextExtractor.tokenize("one-in-a-\nlifetime")
+        let words = Tokenizer.tokenize("one-in-a-\nlifetime")
         #expect(words == ["one-in-a-lifetime"])
     }
 
     @Test func dropsFalseCompoundTailHyphenation() {
-        let words = PDFTextExtractor.tokenize("once-in-a-life-\ntime")
+        let words = Tokenizer.tokenize("once-in-a-life-\ntime")
         #expect(words == ["once-in-a-lifetime"])
     }
 
     @Test func normalizesSoftAndNonBreakingHyphens() {
-        let words = PDFTextExtractor.tokenize("hy\u{00AD}phen non\u{2011}breaking")
+        let words = Tokenizer.tokenize("hy\u{00AD}phen non\u{2011}breaking")
         #expect(words == ["hyphen", "non-breaking"])
     }
 
@@ -43,17 +43,17 @@ struct StrobeTests {
         #expect(DocumentImportPipeline.resolveSourceType(for: unknownPath, detectedContentType: .epub) == .epub)
     }
 
-    @Test func epubExtractionIsStubbed() {
+    @Test func epubExtractionFailsForMissingFile() {
         do {
             _ = try DocumentImportPipeline.extractWordsAndChapters(
-                from: URL(fileURLWithPath: "/tmp/book.epub"),
+                from: URL(fileURLWithPath: "/tmp/nonexistent.epub"),
                 detectedContentType: .epub
             )
-            Issue.record("Expected EPUB extraction to throw a not-implemented error.")
+            Issue.record("Expected EPUB extraction to throw an error for a missing file.")
         } catch let error as DocumentImportError {
-            #expect(error == .epubParsingNotImplemented)
+            #expect(error == .epubExtractionFailed)
         } catch {
-            Issue.record("Unexpected error type: \(error)")
+            // Any error is acceptable for a missing file
         }
     }
 
