@@ -70,6 +70,41 @@ struct StrobeTests {
         }
     }
 
+    // MARK: - Standalone punctuation filtering
+
+    @Test func attachesStandalonePunctuationToPreviousWord() {
+        let words = Tokenizer.tokenize("hello ' world . end")
+        #expect(words == ["hello'", "world.", "end"])
+    }
+
+    @Test func keepsPunctuationAttachedToWords() {
+        let words = Tokenizer.tokenize("don't end. \"hello\"")
+        #expect(words == ["don't", "end.", "\"hello\""])
+    }
+
+    @Test func attachesMultipleIsolatedPunctuationToPreviousWord() {
+        let words = Tokenizer.tokenize("word ... — – word2")
+        #expect(words == ["word...—–", "word2"])
+    }
+
+    // MARK: - Tabular data cleaning
+
+    @Test func detectsTabularDataLines() {
+        let input = "12.5  34  67.8  90.1\nThis is a normal sentence.\n$100  $200  $300  $400"
+        let cleaned = TextCleaner.cleanText(input, level: .standard)
+        #expect(cleaned.contains("normal sentence"))
+        #expect(!cleaned.contains("12.5"))
+        #expect(!cleaned.contains("$100"))
+    }
+
+    @Test func preservesNormalTextWithSomeNumbers() {
+        let input = "Chapter 3 describes 42 experiments in detail"
+        let cleaned = TextCleaner.cleanText(input, level: .standard)
+        #expect(cleaned.contains("42 experiments"))
+    }
+
+    // MARK: - Smart timing
+
     @Test func smartTimingMultiplierIncreasesForLongWords() {
         let short = RSVPEngine.smartTimingMultiplier(for: "cat")
         let long = RSVPEngine.smartTimingMultiplier(for: "characteristically")

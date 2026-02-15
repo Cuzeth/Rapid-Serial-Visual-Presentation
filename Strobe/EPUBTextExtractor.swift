@@ -293,6 +293,7 @@ enum EPUBTextExtractor {
         var inTag = false
         var inScript = false
         var inStyle = false
+        var tableDepth = 0
         var tagBuffer = String()
 
         for char in html {
@@ -313,13 +314,17 @@ enum EPUBTextExtractor {
                     else if tagName == "style" { inStyle = true }
                     else if tagName == "/style" { inStyle = false }
 
+                    // Skip <table>…</table> entirely — table/chart data
+                    // produces meaningless word sequences in an RSVP reader.
+                    if tagName == "table" { tableDepth += 1 }
+                    else if tagName == "/table" { tableDepth = max(0, tableDepth - 1) }
+
                     // Block-level elements get a space to prevent word joining
                     let blockTags: Set<String> = [
                         "p", "/p", "div", "/div", "br", "br/",
                         "h1", "/h1", "h2", "/h2", "h3", "/h3",
                         "h4", "/h4", "h5", "/h5", "h6", "/h6",
                         "li", "/li", "blockquote", "/blockquote",
-                        "tr", "/tr", "td", "/td", "th", "/th",
                         "section", "/section", "article", "/article"
                     ]
                     if blockTags.contains(tagName) {
@@ -333,26 +338,23 @@ enum EPUBTextExtractor {
                 continue
             }
 
-            if inScript || inStyle { continue }
-
-            if char == "&" {
-                // Peek-free entity handling: just insert a space
-                // Full entity resolution isn't needed for tokenization
-                output.append(" ")
-                continue
-            }
+            if inScript || inStyle || tableDepth > 0 { continue }
 
             output.append(char)
         }
 
-        // Decode common HTML entities that the simple & handler missed
+        // Resolve common HTML entities after stripping tags.
         return output
+            .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "&amp;", with: "&")
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&quot;", with: "\"")
             .replacingOccurrences(of: "&apos;", with: "'")
-            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&#x27;", with: "'")
+            .replacingOccurrences(of: "&#34;", with: "\"")
+            .replacingOccurrences(of: "&#x22;", with: "\"")
     }
 }
 

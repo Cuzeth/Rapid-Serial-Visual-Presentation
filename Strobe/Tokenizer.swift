@@ -47,12 +47,27 @@ enum Tokenizer {
         "a", "an", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"
     ]
 
+    /// Returns `true` when a token contains at least one letter or digit,
+    /// meaning it is a real word rather than isolated punctuation like `'` or `.`.
+    nonisolated private static func isReadableWord(_ token: String) -> Bool {
+        token.unicodeScalars.contains { $0.properties.isAlphabetic || $0.properties.numericType != nil }
+    }
+
     nonisolated private static func appendBufferedToken(
         _ token: String,
         into output: inout [String],
         carry: inout String?
     ) {
         guard !token.isEmpty else { return }
+
+        // Punctuation-only tokens (e.g. a stray period or apostrophe)
+        // get glued onto the previous word rather than becoming their own word.
+        if !isReadableWord(token) {
+            if !output.isEmpty {
+                output[output.count - 1].append(token)
+            }
+            return
+        }
 
         if var pending = carry {
             if shouldMerge(pending: pending, with: token) {

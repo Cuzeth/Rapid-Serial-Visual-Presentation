@@ -48,6 +48,7 @@ enum TextCleaner {
         case copyright = "copyright notice"
         case navigation = "navigation text"
         case publisher = "publisher boilerplate"
+        case tabularData = "tabular data"
     }
 
     /// Cleans an array of page-level or section-level text strings.
@@ -180,6 +181,9 @@ enum TextCleaner {
             // 8. Publisher boilerplate
             if isPublisherBoilerplate(trimmed) { return remove(.publisher) }
 
+            // 9. Tabular data — lines dominated by numbers/symbols from extracted tables/charts
+            if isTabularDataLine(trimmed) { return remove(.tabularData) }
+
             return line
         }
 
@@ -235,6 +239,29 @@ enum TextCleaner {
             "table of contents"
         ]
         return navPhrases.contains(line.lowercased())
+    }
+
+    /// Lines that look like table/chart data extracted from PDFs:
+    /// sequences of numbers, currency symbols, percentages, and separators
+    /// with very little readable prose.  Example: "12.5  34  67.8  90.1"
+    nonisolated private static func isTabularDataLine(_ line: String) -> Bool {
+        // Split into whitespace-delimited tokens
+        let tokens = line.split(omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
+        guard tokens.count >= 3 else { return false }
+
+        // A token is "numeric-ish" if, after stripping common formatting
+        // characters ($, %, commas, parens, dashes), only digits and dots remain.
+        let numericFormatting = CharacterSet(charactersIn: "$%,()+-")
+        var numericCount = 0
+        for token in tokens {
+            let stripped = String(token.unicodeScalars.filter { !numericFormatting.contains($0) })
+            if !stripped.isEmpty && stripped.allSatisfy({ $0.isNumber || $0 == "." }) {
+                numericCount += 1
+            }
+        }
+
+        // If ≥ 60% of tokens are numeric, treat the line as tabular data.
+        return Double(numericCount) / Double(tokens.count) >= 0.6
     }
 
     /// "Printed in...", "Published by...", "First edition..."
