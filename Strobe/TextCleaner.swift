@@ -1,11 +1,6 @@
 import Foundation
 import os
 
-nonisolated(unsafe) private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier ?? "com.abdeen.strobe",
-    category: "TextCleaner"
-)
-
 /// Controls the level of text cleaning applied during import.
 enum TextCleaningLevel: String, CaseIterable, Identifiable {
     static let storageKey = "textCleaningLevel"
@@ -38,6 +33,10 @@ enum TextCleaningLevel: String, CaseIterable, Identifiable {
 // MARK: - Rule-based text cleaning engine
 
 enum TextCleaner {
+    nonisolated private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.abdeen.strobe",
+        category: "TextCleaner"
+    )
 
     /// Why a line was removed — logged for debugging.
     private enum RemovalReason: String {
