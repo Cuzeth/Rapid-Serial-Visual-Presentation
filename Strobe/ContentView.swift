@@ -145,8 +145,7 @@ struct ContentView: View {
 
         isProcessingImport = true
         importFileName = url.lastPathComponent
-
-        let title = url.deletingPathExtension().lastPathComponent
+        let fileName = url.lastPathComponent
 
         Task(priority: .userInitiated) {
             defer {
@@ -165,9 +164,14 @@ struct ContentView: View {
                     throw DocumentImportError.noReadableText
                 }
 
+                let title = DocumentImportPipeline.resolveTitle(
+                    metadataTitle: importResult.title,
+                    fileName: fileName
+                )
+
                 let document = Document(
                     title: title,
-                    fileName: url.lastPathComponent,
+                    fileName: fileName,
                     bookmarkData: bookmarkData,
                     words: importResult.words,
                     chapters: importResult.chapters,
