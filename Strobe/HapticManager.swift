@@ -3,28 +3,28 @@ import UIKit
 final class HapticManager {
     static let shared = HapticManager()
 
+    private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
     private let lightImpact = UIImpactFeedbackGenerator(style: .light)
-    private let softImpact = UIImpactFeedbackGenerator(style: .soft)
     private let selection = UISelectionFeedbackGenerator()
     private let notification = UINotificationFeedbackGenerator()
 
     private init() {
+        mediumImpact.prepare()
         lightImpact.prepare()
-        softImpact.prepare()
         selection.prepare()
         notification.prepare()
     }
 
     /// Finger down (play) or finger up (pause)
     func playPause() {
-        lightImpact.impactOccurred()
-        lightImpact.prepare()
+        mediumImpact.impactOccurred()
+        mediumImpact.prepare()
     }
 
     /// Each word change during scrubbing
     func scrubTick() {
-        softImpact.impactOccurred(intensity: 0.5)
-        softImpact.prepare()
+        lightImpact.impactOccurred(intensity: 0.7)
+        lightImpact.prepare()
     }
 
     /// Hit the beginning or end while scrubbing
