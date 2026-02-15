@@ -3,6 +3,7 @@ import PDFKit
 struct PDFExtractionResult {
     let words: [String]
     let chapters: [Chapter]
+    let title: String?
 }
 
 enum PDFTextExtractor {
@@ -13,8 +14,11 @@ enum PDFTextExtractor {
 
     nonisolated static func extractWordsAndChapters(from url: URL) -> PDFExtractionResult {
         guard let document = PDFDocument(url: url) else {
-            return PDFExtractionResult(words: [], chapters: [])
+            return PDFExtractionResult(words: [], chapters: [], title: nil)
         }
+
+        let title = (document.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String)
+            .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
 
         var result: [String] = []
         result.reserveCapacity(document.pageCount * 250)
@@ -37,7 +41,7 @@ enum PDFTextExtractor {
         }
 
         let chapters = extractChapters(from: document, pageWordOffsets: pageWordOffsets)
-        return PDFExtractionResult(words: result, chapters: chapters)
+        return PDFExtractionResult(words: result, chapters: chapters, title: title)
     }
 
     // MARK: - Chapter extraction

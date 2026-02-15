@@ -3,6 +3,7 @@ import Foundation
 struct EPUBExtractionResult {
     let words: [String]
     let chapters: [Chapter]
+    let title: String?
 }
 
 enum EPUBTextExtractor {
@@ -50,7 +51,7 @@ enum EPUBTextExtractor {
             totalWordCount: words.count
         )
 
-        return EPUBExtractionResult(words: words, chapters: chapters)
+        return EPUBExtractionResult(words: words, chapters: chapters, title: opf.title)
     }
 
     // MARK: - container.xml → OPF path
@@ -79,6 +80,7 @@ enum EPUBTextExtractor {
         let spineItems: [String]          // ordered item IDs
         let tocID: String?                // NCX manifest ID
         let navHref: String?              // EPUB3 nav document href
+        let title: String?                // <dc:title>
     }
 
     nonisolated private static func parseOPF(at url: URL) throws -> OPFResult {
@@ -90,9 +92,17 @@ enum EPUBTextExtractor {
         var spineItems: [String] = []
         var tocID: String?
         var navHref: String?
+        var title: String?
 
         for element in parser.elements {
             switch element.name {
+            case "title":
+                // <dc:title> — take the first non-empty one
+                if title == nil,
+                   let text = element.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !text.isEmpty {
+                    title = text
+                }
             case "item":
                 if let id = element.attributes["id"],
                    let href = element.attributes["href"] {
@@ -119,7 +129,8 @@ enum EPUBTextExtractor {
             manifest: manifest,
             spineItems: spineItems,
             tocID: tocID,
-            navHref: navHref
+            navHref: navHref,
+            title: title
         )
     }
 
