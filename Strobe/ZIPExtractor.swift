@@ -77,18 +77,18 @@ enum ZIPExtractor {
 
     // MARK: - Helpers
 
-    private static func readUInt16(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt16 {
+    nonisolated private static func readUInt16(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt16 {
         UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
     }
 
-    private static func readUInt32(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt32 {
+    nonisolated private static func readUInt32(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt32 {
         UInt32(bytes[offset])
         | (UInt32(bytes[offset + 1]) << 8)
         | (UInt32(bytes[offset + 2]) << 16)
         | (UInt32(bytes[offset + 3]) << 24)
     }
 
-    private static func inflate(_ data: Data, expectedSize: Int) -> Data? {
+    nonisolated private static func inflate(_ data: Data, expectedSize: Int) -> Data? {
         // Use Apple's Compression framework for raw deflate
         let capacity = max(expectedSize, data.count * 4)
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: capacity)

@@ -336,9 +336,11 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
         var text: String?
     }
 
-    private(set) var elements: [Element] = []
-    private var currentText: String?
-    private var currentElementIndex: Int?
+    nonisolated(unsafe) private(set) var elements: [Element] = []
+    nonisolated(unsafe) private var currentText: String?
+    nonisolated(unsafe) private var currentElementIndex: Int?
+
+    nonisolated override init() { super.init() }
 
     nonisolated func parse(data: Data) {
         let parser = XMLParser(data: data)
@@ -387,13 +389,15 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
         let depth: Int
     }
 
-    private(set) var navPoints: [NavPoint] = []
-    private var depth = 0
-    private var inNavPoint = false
-    private var inText = false
-    private var currentTitle: String?
-    private var currentSrc: String?
-    private var navPointDepth = 0
+    nonisolated(unsafe) private(set) var navPoints: [NavPoint] = []
+    nonisolated(unsafe) private var depth = 0
+    nonisolated(unsafe) private var inNavPoint = false
+    nonisolated(unsafe) private var inText = false
+    nonisolated(unsafe) private var currentTitle: String?
+    nonisolated(unsafe) private var currentSrc: String?
+    nonisolated(unsafe) private var navPointDepth = 0
+
+    nonisolated override init() { super.init() }
 
     nonisolated func parse(data: Data) {
         let parser = XMLParser(data: data)
