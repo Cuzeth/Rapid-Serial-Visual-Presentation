@@ -8,10 +8,6 @@ struct PDFExtractionResult {
 
 enum PDFTextExtractor {
 
-    nonisolated static func extractWords(from url: URL) -> [String] {
-        extractWordsAndChapters(from: url).words
-    }
-
     nonisolated static func extractWordsAndChapters(
         from url: URL,
         cleaningLevel: TextCleaningLevel = .standard

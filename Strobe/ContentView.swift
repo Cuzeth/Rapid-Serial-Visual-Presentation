@@ -286,12 +286,6 @@ struct ContentView: View {
 
     // MARK: - Helpers
 
-    private func deleteDocuments(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(documents[index])
-        }
-    }
-
     private func compactLegacyWordStorageIfNeeded() {
         var didCompact = false
         for document in documents where document.wordsBlob == nil && !document.words.isEmpty {

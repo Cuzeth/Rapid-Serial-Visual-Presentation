@@ -190,6 +190,35 @@ enum TextCleaner {
         return (cleaned.joined(separator: "\n"), removedCount)
     }
 
+    // MARK: - Cached regex patterns
+
+    nonisolated private static let pageOfRegexes: [NSRegularExpression] = [
+        #"^[Pp]age\s+\d+(\s+(of|/)\s+\d+)?$"#,
+        #"^[Pp]\.\s*\d+$"#,
+        #"^\d+\s*/\s*\d+$"#,
+        #"^-\s*\d+\s*-$"#
+    ].map { try! NSRegularExpression(pattern: $0) }
+
+    nonisolated private static let tocLeaderRegex =
+        try! NSRegularExpression(pattern: #"\.{3,}\s*\d+\s*$"#)
+
+    nonisolated private static let isbnRegex =
+        try! NSRegularExpression(pattern: #"ISBN[\s:\-]*[\d\-]{10,}"#, options: .caseInsensitive)
+
+    nonisolated private static let firstEditionRegex =
+        try! NSRegularExpression(pattern: #"^first\s+(edition|printing)"#, options: .caseInsensitive)
+
+    nonisolated private static let navPhrases: Set<String> = [
+        "next", "previous", "prev", "back", "forward",
+        "next chapter", "previous chapter",
+        "next page", "previous page",
+        "back to top", "return to top",
+        "continue reading", "skip to content",
+        "table of contents"
+    ]
+
+    nonisolated private static let numericFormatting = CharacterSet(charactersIn: "$%,()+-")
+
     // MARK: - Pattern matchers
 
     /// Lines that are just a number, optionally wrapped in dashes, brackets, or parens.
@@ -200,23 +229,20 @@ enum TextCleaner {
 
     /// "Page 3 of 100", "page 3", "p. 42", "3 / 100", "- 3 -"
     nonisolated private static func isPageOfPattern(_ line: String) -> Bool {
-        let patterns = [
-            #"^[Pp]age\s+\d+(\s+(of|/)\s+\d+)?$"#,
-            #"^[Pp]\.\s*\d+$"#,
-            #"^\d+\s*/\s*\d+$"#,
-            #"^-\s*\d+\s*-$"#
-        ]
-        return patterns.contains { line.range(of: $0, options: .regularExpression) != nil }
+        let range = NSRange(line.startIndex..., in: line)
+        return pageOfRegexes.contains { $0.firstMatch(in: line, range: range) != nil }
     }
 
     /// "Chapter 1 ......... 15" — lines with dot leaders ending in a number.
     nonisolated private static func isTOCLeaderLine(_ line: String) -> Bool {
-        line.range(of: #"\.{3,}\s*\d+\s*$"#, options: .regularExpression) != nil
+        let range = NSRange(line.startIndex..., in: line)
+        return tocLeaderRegex.firstMatch(in: line, range: range) != nil
     }
 
     /// "ISBN 978-0-123456-78-9", "ISBN-13: ..."
     nonisolated private static func isISBN(_ line: String) -> Bool {
-        line.range(of: #"ISBN[\s:\-]*[\d\-]{10,}"#, options: [.regularExpression, .caseInsensitive]) != nil
+        let range = NSRange(line.startIndex..., in: line)
+        return isbnRegex.firstMatch(in: line, range: range) != nil
     }
 
     /// Lines starting with © or "Copyright", or containing "All rights reserved".
@@ -230,28 +256,16 @@ enum TextCleaner {
 
     /// Short navigation strings that appear as standalone lines.
     nonisolated private static func isNavigationText(_ line: String) -> Bool {
-        let navPhrases: Set<String> = [
-            "next", "previous", "prev", "back", "forward",
-            "next chapter", "previous chapter",
-            "next page", "previous page",
-            "back to top", "return to top",
-            "continue reading", "skip to content",
-            "table of contents"
-        ]
-        return navPhrases.contains(line.lowercased())
+        navPhrases.contains(line.lowercased())
     }
 
     /// Lines that look like table/chart data extracted from PDFs:
     /// sequences of numbers, currency symbols, percentages, and separators
     /// with very little readable prose.  Example: "12.5  34  67.8  90.1"
     nonisolated private static func isTabularDataLine(_ line: String) -> Bool {
-        // Split into whitespace-delimited tokens
         let tokens = line.split(omittingEmptySubsequences: true, whereSeparator: \.isWhitespace)
         guard tokens.count >= 3 else { return false }
 
-        // A token is "numeric-ish" if, after stripping common formatting
-        // characters ($, %, commas, parens, dashes), only digits and dots remain.
-        let numericFormatting = CharacterSet(charactersIn: "$%,()+-")
         var numericCount = 0
         for token in tokens {
             let stripped = String(token.unicodeScalars.filter { !numericFormatting.contains($0) })
@@ -270,7 +284,8 @@ enum TextCleaner {
         if lower.hasPrefix("printed in") { return true }
         if lower.hasPrefix("published by") { return true }
         if lower.hasPrefix("first published") { return true }
-        if lower.range(of: #"^first\s+(edition|printing)"#, options: .regularExpression) != nil { return true }
+        let range = NSRange(lower.startIndex..., in: lower)
+        if firstEditionRegex.firstMatch(in: lower, range: range) != nil { return true }
         return false
     }
 }

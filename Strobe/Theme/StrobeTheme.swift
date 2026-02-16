@@ -6,10 +6,7 @@ struct StrobeTheme {
     static let accent = Color(hex: "FF3B30") // Vibrant Red/Orange - "Strobe Red"
     static let textPrimary = Color(hex: "FAFAFA") // Off-white
     static let textSecondary = Color(hex: "A0A0A0") // Grey
-    
-    static let cornerRadius: CGFloat = 24
-    static let padding: CGFloat = 20
-    
+
     struct Gradients {
         static let mainBackground = LinearGradient(
             colors: [Color(hex: "050505"), Color(hex: "0A0A0A")],
@@ -58,18 +55,6 @@ extension Color {
             blue:  Double(b) / 255,
             opacity: Double(a) / 255
         )
-    }
-}
-
-struct StrobeButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding()
-            .background(StrobeTheme.accent)
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
