@@ -49,7 +49,13 @@ struct ReaderView: View {
 
     var body: some View {
         ZStack {
+            // Immersive Background
+            StrobeTheme.Gradients.mainBackground
+                .ignoresSafeArea()
+            
+            // Gesture Layer
             Color.black.opacity(0.001)
+                .ignoresSafeArea()
                 .gesture(unifiedGesture)
 
             VStack {
@@ -58,12 +64,13 @@ struct ReaderView: View {
 
                 if showCompletion {
                     completionView
-                        .transition(.opacity)
+                        .transition(.scale.combined(with: .opacity))
                 } else {
                     WordView(
                         word: engine.currentWord,
                         fontSize: CGFloat(fontSize)
                     )
+                    .id("wordview") // stabilize identity
                     .transition(.opacity)
                 }
 
@@ -75,10 +82,8 @@ struct ReaderView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            navHeader
-        }
         .toolbar(.hidden, for: .navigationBar)
+        .statusBarHidden(engine.isPlaying)
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
         }
@@ -94,7 +99,7 @@ struct ReaderView: View {
             if wasPlaying && !isNowPlaying && engine.isAtEnd {
                 HapticManager.shared.completedReading()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    withAnimation(.easeInOut(duration: 0.4)) {
+                    withAnimation(.spring(duration: 0.6)) {
                         showCompletion = true
                     }
                 }
@@ -114,6 +119,7 @@ struct ReaderView: View {
         } message: {
             Text(persistenceError ?? "")
         }
+        .preferredColorScheme(.dark)
     }
 
     private enum TouchMode {
@@ -199,83 +205,96 @@ struct ReaderView: View {
 
     // MARK: - Top bar
 
-    private var navHeader: some View {
-        HStack(spacing: 12) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .semibold))
-                    .padding(10)
-                    .background(Color.secondary.opacity(0.2))
-                    .clipShape(Circle())
-            }
-            .opacity(engine.isPlaying ? 0 : 1)
-            .allowsHitTesting(!engine.isPlaying)
-            .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
-
-            Spacer(minLength: 0)
-
-            Text(document.title)
-                .font(readerFont.regularFont(size: 20))
-                .lineLimit(1)
-                .opacity(engine.isPlaying ? 0 : 1)
-                .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
-
-            Spacer(minLength: 0)
-
-            Circle()
-                .fill(Color.clear)
-                .frame(width: 37, height: 37)
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 44)
-        .background(Color.clear)
-    }
-
     private var topBar: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 0) {
+            // Header
             HStack {
-                Text("\(displayedWPM) WPM")
-                    .font(readerFont.regularFont(size: 14))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.2))
-                    .cornerRadius(8)
-
-                Spacer()
-
-                Text("\(engine.currentIndex + 1) / \(engine.words.count)")
-                    .font(readerFont.regularFont(size: 14))
-                    .foregroundStyle(.secondary)
-            }
-
-            Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
-                isAdjustingWPM = editing
-                if !editing {
-                    applyWPM(Int(wpmSliderValue), withHaptic: true)
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                        .padding(12)
+                        .background(StrobeTheme.surface)
+                        .clipShape(Circle())
                 }
+                
+                Spacer()
+                
+                VStack(spacing: 2) {
+                    Text(document.title)
+                        .font(readerFont.boldFont(size: 16))
+                        .foregroundStyle(StrobeTheme.textPrimary)
+                    
+                    Text("\(engine.currentIndex + 1) / \(engine.words.count)")
+                        .font(readerFont.regularFont(size: 12))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                }
+                
+                Spacer()
+                
+                // Placeholder for symmetry or settings
+                Color.clear.frame(width: 44, height: 44)
             }
-            .tint(.red)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .opacity(engine.isPlaying ? 0.0 : 1.0)
+            
+            Spacer().frame(height: 20)
+            
+            // WPM Control
+            HStack {
+                Text("\(displayedWPM)")
+                    .font(readerFont.boldFont(size: 24))
+                    .foregroundStyle(StrobeTheme.accent)
+                    .frame(width: 60)
+                
+                Text("wpm")
+                    .font(readerFont.regularFont(size: 14))
+                    .foregroundStyle(StrobeTheme.textSecondary)
+                    .padding(.bottom, 4)
+                
+                Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
+                    isAdjustingWPM = editing
+                    if !editing {
+                        applyWPM(Int(wpmSliderValue), withHaptic: true)
+                    }
+                }
+                .tint(StrobeTheme.accent)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(StrobeTheme.surface.opacity(0.8))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal)
+            .opacity(engine.isPlaying ? 0.0 : 1.0)
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
-        .opacity(engine.isPlaying ? 0.0 : 1.0)
-        .allowsHitTesting(!engine.isPlaying)
-        .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+        .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
     }
 
     // MARK: - Bottom bar
 
     private var bottomBar: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 16) {
+            // Progress Scrubber
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Rectangle().fill(Color.secondary.opacity(0.2))
-                    Rectangle().fill(Color.red)
-                        .frame(width: geo.size.width * engine.progress)
+                    Capsule()
+                        .fill(StrobeTheme.surface)
+                        .frame(height: 6)
+                    
+                    Capsule()
+                        .fill(StrobeTheme.accent)
+                        .frame(width: geo.size.width * engine.progress, height: 6)
+                    
+                    // Thumb
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 16, height: 16)
+                        .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                        .offset(x: (geo.size.width * engine.progress) - 8)
                 }
-                .frame(height: 3)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .gesture(
@@ -296,30 +315,41 @@ struct ReaderView: View {
                 )
             }
             .frame(height: 24)
-            .clipShape(RoundedRectangle(cornerRadius: 1.5))
-
+            
             Text(hintText)
-                .font(readerFont.regularFont(size: 12))
-                .foregroundStyle(.secondary)
+                .font(readerFont.regularFont(size: 14))
+                .foregroundStyle(StrobeTheme.textSecondary)
+                .padding(.bottom, 8)
         }
-        .padding(.horizontal)
-        .padding(.bottom, 16)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 20)
     }
 
     // MARK: - Completion view
 
     private var completionView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.green)
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(StrobeTheme.accent.opacity(0.2))
+                    .frame(width: 100, height: 100)
+                
+                Image(systemName: "checkmark")
+                    .font(.system(size: 48, weight: .black))
+                    .foregroundStyle(StrobeTheme.accent)
+            }
+            .scaleEffect(showCompletion ? 1 : 0.5)
+            .animation(.spring(response: 0.5, dampingFraction: 0.6), value: showCompletion)
 
-            Text("Finished!")
-                .font(readerFont.boldFont(size: 28))
+            VStack(spacing: 8) {
+                Text("Finished!")
+                    .font(readerFont.boldFont(size: 32))
+                    .foregroundStyle(StrobeTheme.textPrimary)
 
-            Text("\(engine.words.count) words read")
-                .font(readerFont.regularFont(size: 16))
-                .foregroundStyle(.secondary)
+                Text("\(engine.words.count) words read")
+                    .font(readerFont.regularFont(size: 18))
+                    .foregroundStyle(StrobeTheme.textSecondary)
+            }
 
             Button {
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -328,14 +358,19 @@ struct ReaderView: View {
                 engine.restart()
             } label: {
                 Text("Read Again")
-                    .font(readerFont.regularFont(size: 16))
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.red)
+                    .font(readerFont.boldFont(size: 16))
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 16)
+                    .background(StrobeTheme.accent)
                     .foregroundStyle(.white)
-                    .cornerRadius(10)
+                    .clipShape(Capsule())
             }
+            .padding(.top, 16)
         }
+        .padding(40)
+        .background(StrobeTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 32))
+        .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
     }
 
     // MARK: - Hint text

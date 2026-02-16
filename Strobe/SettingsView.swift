@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
     @AppStorage("fontSize") private var fontSize: Int = 40
-    @AppStorage("appearance") private var appearance: Int = 0
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
@@ -22,159 +21,192 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("\(defaultWPM) WPM")
-                            .font(readerFont.regularFont(size: 14))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.secondary.opacity(0.2))
-                            .cornerRadius(8)
+        ZStack {
+            StrobeTheme.Gradients.mainBackground
+                .ignoresSafeArea()
 
-                        Slider(
-                            value: $wpmSliderValue,
-                            in: 100...1000,
-                            step: 10
-                        )
-                        .tint(.red)
-                        .onChange(of: wpmSliderValue) { _, newValue in
-                            let snapped = Int(newValue)
-                            if snapped != defaultWPM {
-                                defaultWPM = snapped
-                                HapticManager.shared.wpmChanged()
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                } header: {
-                    Text("Default WPM")
-                        .font(readerFont.regularFont(size: 12))
-                } footer: {
-                    Text("Applied to newly imported documents.")
-                        .font(readerFont.regularFont(size: 11))
-                }
-
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("\(fontSize) pt")
-                            .font(readerFont.regularFont(size: 14))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.secondary.opacity(0.2))
-                            .cornerRadius(8)
-
-                        Slider(
-                            value: $fontSizeSliderValue,
-                            in: 24...72,
-                            step: 2
-                        )
-                        .tint(.red)
-                        .onChange(of: fontSizeSliderValue) { _, newValue in
-                            let snapped = Int(newValue)
-                            if snapped != fontSize {
-                                fontSize = snapped
-                                HapticManager.shared.wpmChanged()
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                } header: {
-                    Text("Text Size")
-                        .font(readerFont.regularFont(size: 12))
-                } footer: {
-                    Text("Size of words during reading.")
-                        .font(readerFont.regularFont(size: 11))
-                }
-
-                Section {
-                    Picker(selection: $appearance) {
-                        Text("System").tag(0)
-                        Text("Light").tag(1)
-                        Text("Dark").tag(2)
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Settings")
+                        .font(readerFont.boldFont(size: 24))
+                        .foregroundStyle(StrobeTheme.textPrimary)
+                    
+                    Spacer()
+                    
+                    Button {
+                        dismiss()
                     } label: {
-                        Text("Theme")
-                            .font(readerFont.regularFont(size: 16))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(StrobeTheme.textSecondary)
+                            .padding(10)
+                            .background(StrobeTheme.surface)
+                            .clipShape(Circle())
                     }
-                    .pickerStyle(.menu)
-                } header: {
-                    Text("Appearance")
-                        .font(readerFont.regularFont(size: 12))
                 }
+                .padding(24)
 
-                Section {
-                    Picker("Reading Font", selection: $readerFontSelection) {
-                        ForEach(ReaderFont.allCases) { fontOption in
-                            Text(fontOption.displayName)
-                                .font(fontOption.regularFont(size: 16))
-                                .tag(fontOption.rawValue)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Reading Speed
+                        settingCard(title: "Default Speed") {
+                            VStack(spacing: 16) {
+                                HStack {
+                                    Text("\(defaultWPM)")
+                                        .font(readerFont.boldFont(size: 32))
+                                        .foregroundStyle(StrobeTheme.accent)
+                                    Text("WPM")
+                                        .font(readerFont.regularFont(size: 16))
+                                        .foregroundStyle(StrobeTheme.textSecondary)
+                                        .padding(.bottom, 6)
+                                    Spacer()
+                                }
+                                
+                                Slider(value: $wpmSliderValue, in: 100...1000, step: 10)
+                                    .tint(StrobeTheme.accent)
+                                    .onChange(of: wpmSliderValue) { _, newValue in
+                                        let snapped = Int(newValue)
+                                        if snapped != defaultWPM {
+                                            defaultWPM = snapped
+                                            HapticManager.shared.wpmChanged()
+                                        }
+                                    }
+                            }
+                        }
+
+                        // Font Size
+                        settingCard(title: "Text Size") {
+                            VStack(spacing: 16) {
+                                HStack {
+                                    Text("\(fontSize)")
+                                        .font(readerFont.boldFont(size: 32))
+                                        .foregroundStyle(StrobeTheme.textPrimary)
+                                    Text("pt")
+                                        .font(readerFont.regularFont(size: 16))
+                                        .foregroundStyle(StrobeTheme.textSecondary)
+                                        .padding(.bottom, 6)
+                                    Spacer()
+                                }
+                                
+                                Slider(value: $fontSizeSliderValue, in: 24...72, step: 2)
+                                    .tint(StrobeTheme.accent)
+                                    .onChange(of: fontSizeSliderValue) { _, newValue in
+                                        let snapped = Int(newValue)
+                                        if snapped != fontSize {
+                                            fontSize = snapped
+                                            HapticManager.shared.wpmChanged()
+                                        }
+                                    }
+                            }
+                        }
+
+                        // Style
+                        settingCard(title: "Font") {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    ForEach(ReaderFont.allCases) { fontOption in
+                                        fontButton(fontOption: fontOption)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Behavior
+                        settingCard(title: "Reading Behavior") {
+                            VStack(spacing: 16) {
+                                Toggle(isOn: $smartTimingEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Smart Timing")
+                                            .font(readerFont.boldFont(size: 16))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Adjusts speed based on word length")
+                                            .font(readerFont.regularFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $sentencePauseEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Sentence Pauses")
+                                            .font(readerFont.boldFont(size: 16))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Pauses at punctuation")
+                                            .font(readerFont.regularFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                }
+                                .tint(StrobeTheme.accent)
+                            }
+                        }
+                        
+                        // Text Cleaning
+                        settingCard(title: "Text Processing") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Picker("Cleaning", selection: $textCleaningLevel) {
+                                    ForEach(TextCleaningLevel.allCases) { level in
+                                        Text(level.displayName).tag(level.rawValue)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                
+                                Text(currentCleaningLevel.description)
+                                    .font(readerFont.regularFont(size: 12))
+                                    .foregroundStyle(StrobeTheme.textSecondary)
+                            }
                         }
                     }
-                    .pickerStyle(.menu)
-                } header: {
-                    Text("Font")
-                        .font(readerFont.regularFont(size: 12))
-                } footer: {
-                    Text("Available: Fraunces, Inter, Space Grotesk, PT Sans, PT Serif, PT Mono, JetBrains Mono.")
-                        .font(readerFont.regularFont(size: 11))
-                }
-
-                Section {
-                    Toggle(isOn: $smartTimingEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Smart Time Adjustments")
-                                .font(readerFont.regularFont(size: 16))
-                            Text("Longer words stay on screen slightly longer.")
-                                .font(readerFont.regularFont(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .tint(.red)
-
-                    Toggle(isOn: $sentencePauseEnabled) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Pause After Sentences")
-                                .font(readerFont.regularFont(size: 16))
-                            Text("Pause longer after periods, exclamation marks, and question marks.")
-                                .font(readerFont.regularFont(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .tint(.red)
-                } header: {
-                    Text("Reading")
-                        .font(readerFont.regularFont(size: 12))
-                }
-
-                Section {
-                    Picker("Cleaning", selection: $textCleaningLevel) {
-                        ForEach(TextCleaningLevel.allCases) { level in
-                            Text(level.displayName)
-                                .font(readerFont.regularFont(size: 16))
-                                .tag(level.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                } header: {
-                    Text("Text Cleaning")
-                        .font(readerFont.regularFont(size: 12))
-                } footer: {
-                    Text(currentCleaningLevel.description)
-                        .font(readerFont.regularFont(size: 11))
+                    .padding(24)
+                    .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .onAppear {
-                wpmSliderValue = Double(defaultWPM)
-                fontSizeSliderValue = Double(fontSize)
-            }
+        }
+        .onAppear {
+            wpmSliderValue = Double(defaultWPM)
+            fontSizeSliderValue = Double(fontSize)
+        }
+    }
+
+    // MARK: - Components
+
+    private func settingCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(readerFont.boldFont(size: 14))
+                .foregroundStyle(StrobeTheme.textSecondary)
+                .textCase(.uppercase)
+                .tracking(1)
+
+            content()
+        }
+        .padding(20)
+        .background(StrobeTheme.Gradients.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+        )
+    }
+
+    private func fontButton(fontOption: ReaderFont) -> some View {
+        let isSelected = readerFontSelection == fontOption.rawValue
+        return Button {
+            readerFontSelection = fontOption.rawValue
+        } label: {
+            Text(fontOption.displayName)
+                .font(fontOption.regularFont(size: 14))
+                .foregroundStyle(isSelected ? .white : StrobeTheme.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(isSelected ? StrobeTheme.accent : StrobeTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSelected ? Color.clear : StrobeTheme.textSecondary.opacity(0.2), lineWidth: 1)
+                )
         }
     }
 }

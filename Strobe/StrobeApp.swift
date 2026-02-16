@@ -1,10 +1,3 @@
-//
-//  StrobeApp.swift
-//  Strobe
-//
-//  Created by CZTH on 2/13/26.
-//
-
 import SwiftUI
 import SwiftData
 import os
@@ -17,24 +10,14 @@ struct StrobeApp: App {
     )
     private static let diagnosticsKey = "last_model_container_bootstrap_diagnostics"
 
-    @AppStorage("appearance") private var appearance: Int = 0
-
     private let bootstrapResult = Self.bootstrapModelContainer()
-
-    private var colorScheme: ColorScheme? {
-        switch appearance {
-        case 1: .light
-        case 2: .dark
-        default: nil
-        }
-    }
 
     var body: some Scene {
         WindowGroup {
             if let container = bootstrapResult.container {
                 ContentView()
                     .modelContainer(container)
-                    .preferredColorScheme(colorScheme)
+                    .preferredColorScheme(.dark)
             } else {
                 StartupFailureView(diagnostics: bootstrapResult.diagnostics)
             }
