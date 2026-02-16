@@ -250,7 +250,7 @@ struct ReaderView: View {
                 Text("\(displayedWPM)")
                     .font(readerFont.boldFont(size: 24))
                     .foregroundStyle(StrobeTheme.accent)
-                    .frame(width: 60)
+                    .frame(width: 80)
                 
                 Text("wpm")
                     .font(readerFont.regularFont(size: 14))
