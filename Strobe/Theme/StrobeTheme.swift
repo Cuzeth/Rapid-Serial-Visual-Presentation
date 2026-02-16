@@ -23,6 +23,16 @@ struct StrobeTheme {
             endPoint: .bottomTrailing
         )
     }
+
+    // MARK: - Typography
+    
+    static func titleFont(size: CGFloat) -> Font {
+        .custom("Fraunces-Bold", size: size)
+    }
+    
+    static func bodyFont(size: CGFloat, bold: Bool = false) -> Font {
+        .custom(bold ? "SpaceGrotesk-Light_Bold" : "SpaceGrotesk-Light_Regular", size: size)
+    }
 }
 
 extension Color {

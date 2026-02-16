@@ -80,10 +80,10 @@ struct SettingsView: View {
                             VStack(spacing: 16) {
                                 HStack {
                                     Text("\(fontSize)")
-                                        .font(readerFont.boldFont(size: 32))
+                                        .font(StrobeTheme.titleFont(size: 32))
                                         .foregroundStyle(StrobeTheme.textPrimary)
                                     Text("pt")
-                                        .font(readerFont.regularFont(size: 16))
+                                        .font(StrobeTheme.bodyFont(size: 16))
                                         .foregroundStyle(StrobeTheme.textSecondary)
                                         .padding(.bottom, 6)
                                     Spacer()
@@ -118,10 +118,10 @@ struct SettingsView: View {
                                 Toggle(isOn: $smartTimingEnabled) {
                                     VStack(alignment: .leading) {
                                         Text("Smart Timing")
-                                            .font(readerFont.boldFont(size: 16))
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
                                             .foregroundStyle(StrobeTheme.textPrimary)
                                         Text("Adjusts speed based on word length")
-                                            .font(readerFont.regularFont(size: 12))
+                                            .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
                                 }
@@ -132,10 +132,10 @@ struct SettingsView: View {
                                 Toggle(isOn: $sentencePauseEnabled) {
                                     VStack(alignment: .leading) {
                                         Text("Sentence Pauses")
-                                            .font(readerFont.boldFont(size: 16))
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
                                             .foregroundStyle(StrobeTheme.textPrimary)
                                         Text("Pauses at punctuation")
-                                            .font(readerFont.regularFont(size: 12))
+                                            .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
                                 }
@@ -154,7 +154,7 @@ struct SettingsView: View {
                                 .pickerStyle(.segmented)
                                 
                                 Text(currentCleaningLevel.description)
-                                    .font(readerFont.regularFont(size: 12))
+                                    .font(StrobeTheme.bodyFont(size: 12))
                                     .foregroundStyle(StrobeTheme.textSecondary)
                             }
                         }

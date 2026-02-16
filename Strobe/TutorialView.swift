@@ -77,12 +77,12 @@ struct TutorialView: View {
 
             VStack(spacing: 16) {
                 Text(title)
-                    .font(readerFont.boldFont(size: 32))
+                    .font(StrobeTheme.titleFont(size: 32))
                     .foregroundStyle(StrobeTheme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(description)
-                    .font(readerFont.regularFont(size: 18))
+                    .font(StrobeTheme.bodyFont(size: 18))
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -95,7 +95,7 @@ struct TutorialView: View {
                     dismiss()
                 } label: {
                     Text("Get Started")
-                        .font(readerFont.boldFont(size: 18))
+                        .font(StrobeTheme.bodyFont(size: 18, bold: true))
                         .padding(.horizontal, 32)
                         .padding(.vertical, 16)
                         .background(StrobeTheme.accent)

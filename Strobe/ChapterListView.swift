@@ -67,12 +67,12 @@ struct ChapterListView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(document.title)
-                    .font(readerFont.boldFont(size: 20))
+                    .font(StrobeTheme.titleFont(size: 20))
                     .foregroundStyle(StrobeTheme.textPrimary)
                     .lineLimit(1)
                 
                 Text("\(document.chapters.count) chapters")
-                    .font(readerFont.regularFont(size: 14))
+                    .font(StrobeTheme.bodyFont(size: 14))
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
             
@@ -89,7 +89,7 @@ struct ChapterListView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Read Full Document")
-                    .font(readerFont.boldFont(size: 18))
+                    .font(StrobeTheme.bodyFont(size: 18, bold: true))
                     .foregroundStyle(StrobeTheme.textPrimary)
 
                 HStack(spacing: 6) {
@@ -97,7 +97,7 @@ struct ChapterListView: View {
                     Text("•")
                     Text("\(Int(document.progress * 100))% complete")
                 }
-                .font(readerFont.regularFont(size: 14))
+                .font(StrobeTheme.bodyFont(size: 14))
                 .foregroundStyle(StrobeTheme.textSecondary)
             }
             Spacer()
@@ -119,12 +119,12 @@ struct ChapterListView: View {
         return HStack {
             VStack(alignment: .leading, spacing: 6) {
                 Text(chapter.title)
-                    .font(readerFont.boldFont(size: 16))
+                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
                     .foregroundStyle(status == .completed ? StrobeTheme.textSecondary : StrobeTheme.textPrimary)
                     .lineLimit(2)
 
                 Text("\(wordCount) words")
-                    .font(readerFont.regularFont(size: 12))
+                    .font(StrobeTheme.bodyFont(size: 12))
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
 

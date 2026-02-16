@@ -319,7 +319,7 @@ struct ReaderView: View {
             .frame(height: 24)
             
             Text(hintText)
-                .font(readerFont.regularFont(size: 14))
+                .font(StrobeTheme.bodyFont(size: 14))
                 .foregroundStyle(StrobeTheme.textSecondary)
                 .padding(.bottom, 8)
         }
@@ -345,11 +345,11 @@ struct ReaderView: View {
 
             VStack(spacing: 8) {
                 Text("Finished!")
-                    .font(readerFont.boldFont(size: 32))
+                    .font(StrobeTheme.titleFont(size: 32))
                     .foregroundStyle(StrobeTheme.textPrimary)
 
                 Text("\(engine.words.count) words read")
-                    .font(readerFont.regularFont(size: 18))
+                    .font(StrobeTheme.bodyFont(size: 18))
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
 
@@ -360,7 +360,7 @@ struct ReaderView: View {
                 engine.restart()
             } label: {
                 Text("Read Again")
-                    .font(readerFont.boldFont(size: 16))
+                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
                     .padding(.horizontal, 32)
                     .padding(.vertical, 16)
                     .background(StrobeTheme.accent)

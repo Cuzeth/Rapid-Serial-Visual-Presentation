@@ -101,11 +101,11 @@ struct ContentView: View {
     private var customHeader: some View {
         HStack {
             Text("Strobe")
-                .font(readerFont.boldFont(size: 32))
+                .font(StrobeTheme.titleFont(size: 32))
                 .foregroundStyle(StrobeTheme.textPrimary)
-            
+
             Spacer()
-            
+
             Button {
                 showSettings = true
             } label: {
@@ -142,11 +142,11 @@ struct ContentView: View {
             
             VStack(spacing: 8) {
                 Text("Library Empty")
-                    .font(readerFont.boldFont(size: 24))
+                    .font(StrobeTheme.titleFont(size: 24))
                     .foregroundStyle(StrobeTheme.textPrimary)
                 
                 Text("Tap the + button to import\na PDF or EPUB file")
-                    .font(readerFont.regularFont(size: 16))
+                    .font(StrobeTheme.bodyFont(size: 16))
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -345,7 +345,7 @@ struct DocumentCard: View {
             Spacer()
             
             Text(document.title)
-                .font(readerFont.boldFont(size: 18))
+                .font(StrobeTheme.titleFont(size: 18))
                 .foregroundStyle(StrobeTheme.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
@@ -357,7 +357,7 @@ struct DocumentCard: View {
                 Text("\(document.wordCount) words")
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
-            .font(readerFont.regularFont(size: 12))
+            .font(StrobeTheme.bodyFont(size: 12))
         }
         .padding(16)
         .frame(height: 180)
