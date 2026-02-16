@@ -226,6 +226,8 @@ struct ReaderView: View {
                     Text(document.title)
                         .font(readerFont.boldFont(size: 16))
                         .foregroundStyle(StrobeTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     
                     Text("\(engine.currentIndex + 1) / \(engine.words.count)")
                         .font(readerFont.regularFont(size: 12))

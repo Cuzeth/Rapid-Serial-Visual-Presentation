@@ -235,8 +235,7 @@ struct ContentView: View {
         isProcessingImport = true
         importFileName = url.lastPathComponent
         let fileName = url.lastPathComponent
-        let cleaningLevel = TextCleaningLevel.resolve(textCleaningLevel)
-
+        
         Task(priority: .userInitiated) {
             defer {
                 url.stopAccessingSecurityScopedResource()

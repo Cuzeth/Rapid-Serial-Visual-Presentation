@@ -159,9 +159,9 @@ final class RSVPEngine {
     }
 
     /// Extra multiplier applied when sentence pause is enabled.
-    static let sentencePauseMultiplier: Double = 1.5
+    nonisolated static let sentencePauseMultiplier: Double = 1.5
 
-    private static let sentenceEnders: Set<Character> = [".", "!", "?"]
+    nonisolated private static let sentenceEnders: Set<Character> = [".", "!", "?"]
 
     nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
         guard let last = word.last else { return false }
