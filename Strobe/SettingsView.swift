@@ -109,7 +109,20 @@ struct SettingsView: View {
                                         fontButton(fontOption: fontOption)
                                     }
                                 }
+                                .padding(.horizontal, 2) // Add tiny padding to prevent clipping at exact edges
                             }
+                            .mask(
+                                LinearGradient(
+                                    gradient: Gradient(stops: [
+                                        .init(color: .clear, location: 0),
+                                        .init(color: .black, location: 0.1),
+                                        .init(color: .black, location: 0.9),
+                                        .init(color: .clear, location: 1)
+                                    ]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
                         }
 
                         // Behavior
