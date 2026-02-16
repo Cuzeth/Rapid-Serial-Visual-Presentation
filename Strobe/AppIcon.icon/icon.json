@@ -1,59 +1,34 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:1.00000,0.98140,0.93606,1.00000"
+    "automatic-gradient" : "display-p3:0.03137,0.03137,0.03137,1.00000"
   },
   "groups" : [
     {
-      "blend-mode" : "normal",
-      "blur-material" : 1,
-      "hidden" : false,
-      "layers" : [
+      "blend-mode" : "screen",
+      "blur-material-specializations" : [
         {
-          "hidden" : false,
-          "image-name" : "Untitled.png",
-          "name" : "Untitled",
-          "opacity-specializations" : [
-            {
-              "value" : 0
-            },
-            {
-              "appearance" : "dark",
-              "value" : 1
-            },
-            {
-              "appearance" : "tinted",
-              "value" : 1
-            }
-          ],
-          "position" : {
-            "scale" : 0.77,
-            "translation-in-points" : [
-              0,
-              0
-            ]
-          }
+          "value" : null
         },
         {
-          "hidden" : false,
-          "image-name" : "Untitled2.png",
-          "name" : "Untitled2",
-          "opacity-specializations" : [
+          "appearance" : "tinted",
+          "value" : null
+        }
+      ],
+      "layers" : [
+        {
+          "glass-specializations" : [
             {
-              "appearance" : "dark",
-              "value" : 0
+              "appearance" : "tinted",
+              "value" : true
             }
           ],
-          "position" : {
-            "scale" : 0.77,
-            "translation-in-points" : [
-              5.684341886080802e-14,
-              0
-            ]
-          }
+          "hidden" : false,
+          "image-name" : "strobe 3.png",
+          "name" : "strobe"
         }
       ],
       "position" : {
-        "scale" : 2,
+        "scale" : 1.18,
         "translation-in-points" : [
           0,
           0
@@ -63,22 +38,32 @@
         {
           "value" : {
             "kind" : "layer-color",
-            "opacity" : 1
+            "opacity" : 0.5
           }
         },
         {
-          "appearance" : "dark",
+          "appearance" : "tinted",
           "value" : {
-            "kind" : "neutral",
-            "opacity" : 0.5
+            "kind" : "layer-color",
+            "opacity" : 1
           }
         }
       ],
-      "specular" : true,
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
-      }
+      "translucency-specializations" : [
+        {
+          "value" : {
+            "enabled" : true,
+            "value" : 0.5
+          }
+        },
+        {
+          "appearance" : "tinted",
+          "value" : {
+            "enabled" : true,
+            "value" : 0.34
+          }
+        }
+      ]
     }
   ],
   "supported-platforms" : {
