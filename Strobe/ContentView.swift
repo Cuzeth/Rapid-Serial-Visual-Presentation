@@ -9,12 +9,14 @@ struct ContentView: View {
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
+    @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
 
     @State private var isImporting = false
     @State private var isProcessingImport = false
     @State private var importFileName = ""
     @State private var importError: String?
     @State private var showSettings = false
+    @State private var showTutorial = false
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
@@ -50,8 +52,14 @@ struct ContentView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .fullScreenCover(isPresented: $showTutorial) {
+                TutorialView()
+            }
             .onAppear {
                 compactLegacyWordStorageIfNeeded()
+                if !hasSeenTutorial {
+                    showTutorial = true
+                }
             }
             .fileImporter(
                 isPresented: $isImporting,
