@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Centralized design tokens for the Strobe app — colors, gradients, and typography.
 struct StrobeTheme {
     static let background = Color(hex: "050505") // Deep, almost black
     static let surface = Color(hex: "121212") // Slightly lighter for cards/sheets
@@ -33,6 +34,7 @@ struct StrobeTheme {
 }
 
 extension Color {
+    /// Initializes a Color from a hex string (supports 3, 6, and 8 character formats).
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -58,6 +60,7 @@ extension Color {
     }
 }
 
+/// A button style with a subtle scale-down press animation for card-style buttons.
 struct StrobeCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

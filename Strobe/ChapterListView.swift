@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+/// Displays the chapter list for a document with progress indicators.
+///
+/// Shows a "Read Full Document" option and individual chapters with
+/// not-started / in-progress / completed status based on the current reading position.
 struct ChapterListView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var document: Document

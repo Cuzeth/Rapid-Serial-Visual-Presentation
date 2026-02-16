@@ -1,7 +1,12 @@
 import SwiftUI
 import UIKit
 
+/// The available font options for the RSVP reader display.
+///
+/// Each case maps to a bundled font with regular and bold weights.
+/// Falls back to the system font if a custom font fails to load.
 enum ReaderFont: String, CaseIterable, Identifiable {
+    /// The UserDefaults key used to persist the font selection.
     static let storageKey = "readerFontSelection"
     static let defaultValue: ReaderFont = .fraunces
 
@@ -15,6 +20,7 @@ enum ReaderFont: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Resolves a stored raw value to a font case, falling back to the default.
     static func resolve(_ rawValue: String) -> ReaderFont {
         ReaderFont(rawValue: rawValue) ?? defaultValue
     }
@@ -55,14 +61,17 @@ enum ReaderFont: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Returns a SwiftUI `Font` for the regular weight at the given size.
     func regularFont(size: CGFloat) -> Font {
         .custom(regularPostScriptName, size: size)
     }
 
+    /// Returns a SwiftUI `Font` for the bold weight at the given size.
     func boldFont(size: CGFloat) -> Font {
         .custom(boldPostScriptName, size: size)
     }
 
+    /// Returns a UIKit `UIFont`, with automatic fallback to the system font.
     func uiFont(size: CGFloat, bold: Bool = false) -> UIFont {
         let name = bold ? boldPostScriptName : regularPostScriptName
         if let custom = UIFont(name: name, size: size) {

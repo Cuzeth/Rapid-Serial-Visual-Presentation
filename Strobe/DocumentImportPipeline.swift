@@ -1,12 +1,14 @@
 import Foundation
 internal import UniformTypeIdentifiers
 
+/// The detected file format of an imported document.
 enum DocumentSourceType: String, Equatable {
     case pdf
     case epub
     case unknown
 }
 
+/// The result of a document import operation.
 struct ImportResult {
     let words: [String]
     let chapters: [Chapter]
@@ -14,9 +16,17 @@ struct ImportResult {
     let title: String?
 }
 
+/// Routes document files to the appropriate extractor based on file type.
+///
+/// Serves as the entry point for the import pipeline: detects the source type,
+/// delegates to ``PDFTextExtractor`` or ``EPUBTextExtractor``, and resolves
+/// the display title from metadata or the filename.
 enum DocumentImportPipeline {
+    /// The content types the app can import via the file picker.
     nonisolated static let supportedContentTypes: [UTType] = [.pdf, .epub]
 
+    /// Determines the document format from the system-detected content type
+    /// or, as a fallback, from the file extension.
     nonisolated static func resolveSourceType(for url: URL, detectedContentType: UTType? = nil) -> DocumentSourceType {
         if let detectedContentType {
             if detectedContentType.conforms(to: .pdf) { return .pdf }
@@ -74,6 +84,13 @@ enum DocumentImportPipeline {
         }.joined(separator: " ")
     }
 
+    /// Extracts words and chapters from a document file.
+    /// - Parameters:
+    ///   - url: The file URL to import.
+    ///   - detectedContentType: The system-detected UTType, if available.
+    ///   - cleaningLevel: How aggressively to remove boilerplate text.
+    /// - Returns: The extracted words, chapters, source type, and title.
+    /// - Throws: ``DocumentImportError/unsupportedFileType`` for unrecognized formats.
     nonisolated static func extractWordsAndChapters(
         from url: URL,
         detectedContentType: UTType? = nil,

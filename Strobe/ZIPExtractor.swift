@@ -1,8 +1,18 @@
 import Foundation
 import Compression
 
+/// Extracts files from ZIP archives without external dependencies.
+///
+/// Parses local file headers directly from the binary data and supports
+/// stored (method 0) and deflate (method 8) compression using Apple's
+/// Compression framework. Used internally for EPUB extraction.
 enum ZIPExtractor {
 
+    /// Extracts all files from a ZIP archive to a destination directory.
+    /// - Parameters:
+    ///   - source: The file URL of the ZIP archive.
+    ///   - destination: The directory to extract files into (created if needed).
+    /// - Throws: File system errors if directories cannot be created or files written.
     nonisolated static func extract(zipAt source: URL, to destination: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -77,10 +87,12 @@ enum ZIPExtractor {
 
     // MARK: - Helpers
 
+    /// Reads a little-endian UInt16 from the byte buffer.
     nonisolated private static func readUInt16(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt16 {
         UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
     }
 
+    /// Reads a little-endian UInt32 from the byte buffer.
     nonisolated private static func readUInt32(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt32 {
         UInt32(bytes[offset])
         | (UInt32(bytes[offset + 1]) << 8)
@@ -88,6 +100,7 @@ enum ZIPExtractor {
         | (UInt32(bytes[offset + 3]) << 24)
     }
 
+    /// Decompresses raw deflate data using Apple's Compression framework.
     nonisolated private static func inflate(_ data: Data, expectedSize: Int) -> Data? {
         // Use Apple's Compression framework for raw deflate
         let capacity = max(expectedSize, data.count * 4)

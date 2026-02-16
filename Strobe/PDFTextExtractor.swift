@@ -1,13 +1,25 @@
 import PDFKit
 
+/// The result of extracting text from a PDF file.
 struct PDFExtractionResult {
     let words: [String]
     let chapters: [Chapter]
     let title: String?
 }
 
+/// Extracts tokenized words and chapter structure from PDF files using PDFKit.
+///
+/// The extraction pipeline: read pages → clean text (cross-page header/footer
+/// detection + per-page boilerplate removal) → tokenize → extract chapters
+/// from the PDF outline.
 enum PDFTextExtractor {
 
+    /// Extracts words and chapters from a PDF file.
+    /// - Parameters:
+    ///   - url: The file URL of the PDF document.
+    ///   - cleaningLevel: How aggressively to remove boilerplate text.
+    /// - Returns: Tokenized words, chapter list, and metadata title.
+    ///   Returns an empty result if the PDF cannot be opened.
     nonisolated static func extractWordsAndChapters(
         from url: URL,
         cleaningLevel: TextCleaningLevel = .standard
@@ -59,6 +71,8 @@ enum PDFTextExtractor {
 
     // MARK: - Chapter extraction
 
+    /// Extracts chapters from the PDF outline (bookmarks), walking up to two
+    /// levels deep to handle "Part > Chapter" nesting.
     nonisolated private static func extractChapters(
         from document: PDFDocument,
         pageWordOffsets: [Int]

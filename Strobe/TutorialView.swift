@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Full-screen onboarding tutorial shown on first launch.
+/// A paged walkthrough introducing import, reading controls, chapters, and settings.
 struct TutorialView: View {
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue

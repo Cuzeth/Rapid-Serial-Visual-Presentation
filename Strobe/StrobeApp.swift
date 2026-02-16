@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 import os
 
+/// The app entry point. Bootstraps the SwiftData model container
+/// and displays a diagnostic error view if persistence initialization fails.
 @main
 struct StrobeApp: App {
     private static let logger = Logger(

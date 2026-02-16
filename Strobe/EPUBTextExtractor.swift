@@ -1,13 +1,25 @@
 import Foundation
 
+/// The result of extracting text from an EPUB file.
 struct EPUBExtractionResult {
     let words: [String]
     let chapters: [Chapter]
     let title: String?
 }
 
+/// Extracts tokenized words and chapter structure from EPUB files.
+///
+/// Supports both EPUB 2 (NCX table of contents) and EPUB 3 (nav document).
+/// The extraction pipeline: unzip → parse OPF manifest → read spine-ordered
+/// XHTML files → strip HTML → clean text → tokenize.
 enum EPUBTextExtractor {
 
+    /// Extracts words and chapters from an EPUB file.
+    /// - Parameters:
+    ///   - url: The file URL of the EPUB archive.
+    ///   - cleaningLevel: How aggressively to remove boilerplate text.
+    /// - Returns: Tokenized words, chapter list, and metadata title.
+    /// - Throws: ``DocumentImportError/epubExtractionFailed`` if the archive is invalid.
     nonisolated static func extractWordsAndChapters(
         from url: URL,
         cleaningLevel: TextCleaningLevel = .standard
@@ -74,6 +86,7 @@ enum EPUBTextExtractor {
 
     // MARK: - container.xml → OPF path
 
+    /// Reads `META-INF/container.xml` to find the path to the OPF package file.
     nonisolated private static func findOPFPath(in epubDir: URL) throws -> String {
         let containerURL = epubDir
             .appendingPathComponent("META-INF", isDirectory: true)
@@ -93,6 +106,7 @@ enum EPUBTextExtractor {
 
     // MARK: - OPF parsing
 
+    /// Parsed contents of the OPF (Open Packaging Format) manifest file.
     private struct OPFResult {
         let manifest: [String: String]   // id → href
         let spineItems: [String]          // ordered item IDs
@@ -101,6 +115,7 @@ enum EPUBTextExtractor {
         let title: String?                // <dc:title>
     }
 
+    /// Parses the OPF package file to extract manifest items, reading order, and metadata.
     nonisolated private static func parseOPF(at url: URL) throws -> OPFResult {
         let data = try Data(contentsOf: url)
         let parser = SimpleXMLParser()
@@ -154,6 +169,7 @@ enum EPUBTextExtractor {
 
     // MARK: - Chapter extraction
 
+    /// Extracts chapters by trying EPUB 3 nav document first, then falling back to EPUB 2 NCX.
     nonisolated private static func extractChapters(
         opf: OPFResult,
         opfDir: URL,
@@ -189,6 +205,7 @@ enum EPUBTextExtractor {
 
     // MARK: - EPUB3 Nav parsing
 
+    /// Parses an EPUB 3 navigation document (`<nav>`) for chapter titles and hrefs.
     nonisolated private static func parseNavDocument(
         at url: URL,
         navDir: URL,
@@ -222,6 +239,7 @@ enum EPUBTextExtractor {
 
     // MARK: - NCX parsing
 
+    /// Parses an EPUB 2 NCX file for chapter titles and content sources.
     nonisolated private static func parseNCX(
         at url: URL,
         ncxDir: URL,
@@ -255,6 +273,7 @@ enum EPUBTextExtractor {
 
     // MARK: - Href resolution
 
+    /// Resolves a chapter href to a word index by mapping the file path to its spine word offset.
     nonisolated private static func resolveWordIndex(
         href: String,
         referenceDir: URL,
@@ -273,6 +292,7 @@ enum EPUBTextExtractor {
         return spineWordOffsets[relativeToOPF]
     }
 
+    /// Sorts chapters by word index and removes duplicates at the same position.
     nonisolated private static func deduplicateChapters(_ chapters: [Chapter]) -> [Chapter] {
         guard !chapters.isEmpty else { return [] }
         var result = chapters.sorted { $0.wordIndex < $1.wordIndex }
@@ -283,6 +303,11 @@ enum EPUBTextExtractor {
 
     // MARK: - HTML stripping
 
+    /// Strips HTML tags from raw XHTML data, producing plain text.
+    ///
+    /// Skips `<script>`, `<style>`, and `<table>` content entirely.
+    /// Inserts spaces at block-level element boundaries to prevent word joining.
+    /// Resolves common HTML entities (`&amp;`, `&nbsp;`, etc.).
     nonisolated private static func stripHTML(_ data: Data) -> String? {
         let html = String(decoding: data, as: UTF8.self)
         guard !html.isEmpty else { return nil }
@@ -360,6 +385,8 @@ enum EPUBTextExtractor {
 
 // MARK: - Simple XML Parser (flat element collection)
 
+/// Lightweight XML parser that collects all elements into a flat array.
+/// Used for parsing container.xml, OPF manifests, and EPUB 3 nav documents.
 private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     struct Element {
         let name: String
@@ -413,6 +440,9 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
 
 // MARK: - NCX Parser (navPoint extraction)
 
+/// Specialized XML parser for EPUB 2 NCX (Navigation Control for XML) files.
+/// Extracts `navPoint` elements up to two levels deep to support
+/// "Part > Chapter" nesting common in non-fiction books.
 private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     struct NavPoint {
         var title: String?

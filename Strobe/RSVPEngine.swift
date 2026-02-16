@@ -1,12 +1,24 @@
 import Foundation
 
+/// Drives the word-by-word Rapid Serial Visual Presentation playback.
+///
+/// Manages a timer that advances through the word array at the configured
+/// words-per-minute rate. Supports smart timing (longer display for long words)
+/// and sentence pauses (extra delay at sentence-ending punctuation).
+///
+/// Conforms to `@Observable` so SwiftUI views automatically update when
+/// `currentIndex`, `isPlaying`, or settings change.
 @Observable
 final class RSVPEngine {
 
+    /// The full array of words to display.
     private(set) var words: [String]
+    /// The index of the word currently being displayed.
     private(set) var currentIndex: Int
+    /// Whether playback is currently running.
     private(set) var isPlaying: Bool = false
 
+    /// The target reading speed. Changing this during playback restarts the timer.
     var wordsPerMinute: Int {
         didSet {
             guard isPlaying else { return }
@@ -14,6 +26,7 @@ final class RSVPEngine {
         }
     }
 
+    /// When enabled, longer words are displayed for proportionally more time.
     var smartTimingEnabled: Bool {
         didSet {
             guard isPlaying else { return }
@@ -21,6 +34,7 @@ final class RSVPEngine {
         }
     }
 
+    /// When enabled, words ending with `.`, `!`, or `?` receive extra display time.
     var sentencePauseEnabled: Bool {
         didSet {
             guard isPlaying else { return }
@@ -28,13 +42,16 @@ final class RSVPEngine {
         }
     }
 
+    /// The word at the current playback position, or an empty string if out of bounds.
     var currentWord: String {
         guard currentIndex >= 0, currentIndex < words.count else { return "" }
         return words[currentIndex]
     }
 
+    /// Whether the playback position is at the last word.
     var isAtEnd: Bool { currentIndex >= words.count - 1 }
 
+    /// Playback progress as a value from 0.0 to 1.0.
     var progress: Double {
         guard words.count > 1 else { return isAtEnd ? 1 : 0 }
         return Double(currentIndex) / Double(words.count - 1)
@@ -60,21 +77,25 @@ final class RSVPEngine {
         self.sentencePauseEnabled = sentencePauseEnabled
     }
 
+    /// Starts playback from the current position. No-op if already playing or at end.
     func play() {
         guard !isPlaying, !isAtEnd else { return }
         isPlaying = true
         startTimer()
     }
 
+    /// Stops playback and invalidates the timer.
     func pause() {
         isPlaying = false
         stopTimer()
     }
 
+    /// Jumps to a specific word index, clamped to valid bounds.
     func seek(to index: Int) {
         currentIndex = max(0, min(index, words.count - 1))
     }
 
+    /// Moves the position by `delta` words. Returns `true` if the move was clamped (hit a boundary).
     @discardableResult
     func scrub(by delta: Int) -> Bool {
         let target = currentIndex + delta
@@ -82,6 +103,7 @@ final class RSVPEngine {
         return currentIndex != target
     }
 
+    /// Resets playback to the beginning of the word array.
     func restart() {
         seek(to: 0)
     }
@@ -129,6 +151,7 @@ final class RSVPEngine {
         return interval
     }
 
+    /// Returns a timing multiplier (1.0–1.7) based on word length and trailing punctuation.
     nonisolated static func smartTimingMultiplier(for word: String) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
         let letterCount = trimmed.count
@@ -163,6 +186,7 @@ final class RSVPEngine {
 
     nonisolated private static let sentenceEnders: Set<Character> = [".", "!", "?"]
 
+    /// Returns `true` if the word ends with sentence-terminating punctuation (`.`, `!`, `?`).
     nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
         guard let last = word.last else { return false }
         return sentenceEnders.contains(last)

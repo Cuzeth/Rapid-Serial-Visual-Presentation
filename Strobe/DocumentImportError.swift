@@ -1,5 +1,6 @@
 import Foundation
 
+/// Errors that can occur during document import.
 enum DocumentImportError: Error, Equatable, LocalizedError {
     case unsupportedFileType
     case epubExtractionFailed

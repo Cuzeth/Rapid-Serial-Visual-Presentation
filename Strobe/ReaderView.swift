@@ -1,6 +1,11 @@
 import SwiftUI
 import SwiftData
 
+/// The RSVP reading interface — displays words one at a time.
+///
+/// Gesture-driven: hold to play, release to pause, swipe to scrub.
+/// Includes a WPM slider, progress bar scrubber, and completion overlay.
+/// Persists reading state on disappear and scene phase changes.
 struct ReaderView: View {
     private let navFadeDuration: Double = 0.3
     private let playIntentDelay: TimeInterval = 0.12

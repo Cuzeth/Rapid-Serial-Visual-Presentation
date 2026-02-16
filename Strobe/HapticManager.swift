@@ -1,5 +1,9 @@
 import UIKit
 
+/// Provides haptic feedback for reading interactions.
+///
+/// Uses pre-prepared feedback generators for minimal latency.
+/// Each method fires its feedback and immediately re-prepares for the next use.
 final class HapticManager {
     static let shared = HapticManager()
 

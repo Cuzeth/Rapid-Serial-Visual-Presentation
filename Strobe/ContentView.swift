@@ -2,6 +2,10 @@ import SwiftUI
 import SwiftData
 internal import UniformTypeIdentifiers
 
+/// The main library view displaying imported documents in a grid.
+///
+/// Handles document import (PDF/EPUB via the system file picker), legacy word
+/// storage migration, and navigation to the reader or chapter list.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
@@ -319,6 +323,7 @@ struct ContentView: View {
 
 // MARK: - Document Card Component
 
+/// A grid card displaying a document's title, progress percentage, and word count.
 struct DocumentCard: View {
     let document: Document
     let readerFont: ReaderFont

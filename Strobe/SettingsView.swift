@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// App settings sheet for configuring reading speed, font, text size, and behavior.
 struct SettingsView: View {
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
     @AppStorage("fontSize") private var fontSize: Int = 40
