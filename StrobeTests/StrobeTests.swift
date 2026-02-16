@@ -117,4 +117,18 @@ struct StrobeTests {
         #expect(punctuated > plain)
     }
 
+    // MARK: - Sentence pause
+
+    @Test func sentencePauseDetectsFullStops() {
+        #expect(RSVPEngine.endsWithSentencePunctuation("end."))
+        #expect(RSVPEngine.endsWithSentencePunctuation("what?"))
+        #expect(RSVPEngine.endsWithSentencePunctuation("wow!"))
+    }
+
+    @Test func sentencePauseIgnoresNonSentencePunctuation() {
+        #expect(!RSVPEngine.endsWithSentencePunctuation("hello,"))
+        #expect(!RSVPEngine.endsWithSentencePunctuation("word"))
+        #expect(!RSVPEngine.endsWithSentencePunctuation("semi;"))
+    }
+
 }

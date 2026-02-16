@@ -21,6 +21,13 @@ final class RSVPEngine {
         }
     }
 
+    var sentencePauseEnabled: Bool {
+        didSet {
+            guard isPlaying else { return }
+            restartTimer()
+        }
+    }
+
     var currentWord: String {
         guard currentIndex >= 0, currentIndex < words.count else { return "" }
         return words[currentIndex]
@@ -43,12 +50,14 @@ final class RSVPEngine {
         words: [String],
         currentIndex: Int = 0,
         wordsPerMinute: Int = 300,
-        smartTimingEnabled: Bool = false
+        smartTimingEnabled: Bool = false,
+        sentencePauseEnabled: Bool = false
     ) {
         self.words = words
         self.currentIndex = currentIndex
         self.wordsPerMinute = wordsPerMinute
         self.smartTimingEnabled = smartTimingEnabled
+        self.sentencePauseEnabled = sentencePauseEnabled
     }
 
     func play() {
@@ -107,8 +116,17 @@ final class RSVPEngine {
     }
 
     private func nextInterval() -> TimeInterval {
-        guard smartTimingEnabled else { return baseInterval }
-        return baseInterval * Self.smartTimingMultiplier(for: currentWord)
+        var interval = baseInterval
+
+        if smartTimingEnabled {
+            interval *= Self.smartTimingMultiplier(for: currentWord)
+        }
+
+        if sentencePauseEnabled && Self.endsWithSentencePunctuation(currentWord) {
+            interval *= Self.sentencePauseMultiplier
+        }
+
+        return interval
     }
 
     nonisolated static func smartTimingMultiplier(for word: String) -> Double {
@@ -138,6 +156,16 @@ final class RSVPEngine {
     nonisolated private static func hasTrailingPunctuation(_ word: String) -> Bool {
         guard let last = word.unicodeScalars.last else { return false }
         return CharacterSet.punctuationCharacters.contains(last)
+    }
+
+    /// Extra multiplier applied when sentence pause is enabled.
+    static let sentencePauseMultiplier: Double = 1.5
+
+    private static let sentenceEnders: Set<Character> = [".", "!", "?"]
+
+    nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
+        guard let last = word.last else { return false }
+        return sentenceEnders.contains(last)
     }
 
     deinit {

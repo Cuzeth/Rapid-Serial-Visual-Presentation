@@ -10,6 +10,7 @@ struct ReaderView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
+    @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
@@ -35,11 +36,13 @@ struct ReaderView: View {
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
         let words = document.readingWords
         let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
+        let usesSentencePause = UserDefaults.standard.bool(forKey: "sentencePauseEnabled")
         self._engine = State(initialValue: RSVPEngine(
             words: words,
             currentIndex: effectiveIndex,
             wordsPerMinute: document.wordsPerMinute,
-            smartTimingEnabled: usesSmartTiming
+            smartTimingEnabled: usesSmartTiming,
+            sentencePauseEnabled: usesSentencePause
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
     }
@@ -99,6 +102,9 @@ struct ReaderView: View {
         }
         .onChange(of: smartTimingEnabled) { _, newValue in
             engine.smartTimingEnabled = newValue
+        }
+        .onChange(of: sentencePauseEnabled) { _, newValue in
+            engine.sentencePauseEnabled = newValue
         }
         .alert("Save Error", isPresented: .init(
             get: { persistenceError != nil },

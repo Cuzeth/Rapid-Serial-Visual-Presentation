@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("appearance") private var appearance: Int = 0
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
+    @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -125,6 +126,17 @@ struct SettingsView: View {
                             Text("Smart Time Adjustments")
                                 .font(readerFont.regularFont(size: 16))
                             Text("Longer words stay on screen slightly longer.")
+                                .font(readerFont.regularFont(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(.red)
+
+                    Toggle(isOn: $sentencePauseEnabled) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Pause After Sentences")
+                                .font(readerFont.regularFont(size: 16))
+                            Text("Pause longer after periods, exclamation marks, and question marks.")
                                 .font(readerFont.regularFont(size: 11))
                                 .foregroundStyle(.secondary)
                         }
