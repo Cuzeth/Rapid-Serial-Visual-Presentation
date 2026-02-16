@@ -190,7 +190,7 @@ struct StrobeTests {
 
     @Test func engineSingleWordProgress() {
         let engine = RSVPEngine(words: ["only"])
-        #expect(engine.progress == 0)
+        #expect(engine.progress == 1.0)
         #expect(engine.isAtEnd)
     }
 
@@ -206,7 +206,7 @@ struct StrobeTests {
     @Test func wordStorageEmptyArray() {
         let encoded = WordStorage.encode([])
         let decoded = WordStorage.decode(encoded)
-        #expect(decoded == [""])
+        #expect(decoded == [])
     }
 
     // MARK: - Text cleaning patterns

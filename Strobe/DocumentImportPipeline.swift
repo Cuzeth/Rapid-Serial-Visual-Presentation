@@ -46,8 +46,9 @@ enum DocumentImportPipeline {
 
     /// Returns the document's metadata title if available, otherwise cleans up the filename.
     nonisolated static func resolveTitle(metadataTitle: String?, fileName: String) -> String {
-        if let metadataTitle, !metadataTitle.isEmpty {
-            return metadataTitle
+        if let metadataTitle {
+            let trimmed = metadataTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
         }
         return cleanFileName(fileName)
     }
