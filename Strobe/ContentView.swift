@@ -347,7 +347,8 @@ struct DocumentCard: View {
             Text(document.title)
                 .font(StrobeTheme.titleFont(size: 18))
                 .foregroundStyle(StrobeTheme.textPrimary)
-                .lineLimit(2)
+                .lineLimit(3)
+                .minimumScaleFactor(0.9)
                 .multilineTextAlignment(.leading)
             
             HStack {
