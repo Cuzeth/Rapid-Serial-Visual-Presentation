@@ -22,25 +22,25 @@ struct ChapterListView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         // Full Document Option
-                        NavigationLink(destination: ReaderView(document: document)) {
-                            fullDocumentRow
-                        }
-                        .buttonStyle(StrobeButtonStyle())
-
-                        // Divide
-                        Rectangle()
-                            .fill(StrobeTheme.surface)
-                            .frame(height: 1)
-                            .padding(.horizontal)
-
-                        // Chapters
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(document.chapters.enumerated()), id: \.element.id) { index, chapter in
-                                NavigationLink(destination: ReaderView(document: document, startingWordIndex: chapter.wordIndex)) {
-                                    chapterRow(chapter: chapter, index: index)
-                                }
-                                .buttonStyle(StrobeButtonStyle())
+                            NavigationLink(destination: ReaderView(document: document)) {
+                                fullDocumentRow
                             }
+                            .buttonStyle(StrobeCardButtonStyle())
+
+                            // Divide
+                            Rectangle()
+                                .fill(StrobeTheme.surface)
+                                .frame(height: 1)
+                                .padding(.horizontal)
+
+                            // Chapters
+                            LazyVStack(spacing: 12) {
+                                ForEach(Array(document.chapters.enumerated()), id: \.element.id) { index, chapter in
+                                    NavigationLink(destination: ReaderView(document: document, startingWordIndex: chapter.wordIndex)) {
+                                        chapterRow(chapter: chapter, index: index)
+                                    }
+                                    .buttonStyle(StrobeCardButtonStyle())
+                                }
                         }
                     }
                     .padding(20)
