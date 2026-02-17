@@ -6,6 +6,7 @@ struct TutorialView: View {
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var currentPage = 0
 
     private var readerFont: ReaderFont {
@@ -62,7 +63,12 @@ struct TutorialView: View {
         description: String,
         showButton: Bool = false
     ) -> some View {
-        VStack(spacing: 32) {
+        let isPad = horizontalSizeClass == .regular
+        let iconSize: CGFloat = isPad ? 100 : 80
+        let titleSize: CGFloat = isPad ? 40 : 32
+        let bodySize: CGFloat = isPad ? 20 : 18
+
+        return VStack(spacing: 32) {
             Spacer()
 
             ZStack {
@@ -70,21 +76,21 @@ struct TutorialView: View {
                     .fill(StrobeTheme.accent.opacity(0.1))
                     .frame(width: 160, height: 160)
                     .blur(radius: 20)
-                
+
                 Image(systemName: icon)
-                    .font(.system(size: 80))
+                    .font(.system(size: iconSize))
                     .foregroundStyle(StrobeTheme.accent)
                     .shadow(color: StrobeTheme.accent.opacity(0.5), radius: 10)
             }
 
             VStack(spacing: 16) {
                 Text(title)
-                    .font(StrobeTheme.titleFont(size: 32))
+                    .font(StrobeTheme.titleFont(size: titleSize))
                     .foregroundStyle(StrobeTheme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(description)
-                    .font(StrobeTheme.bodyFont(size: 18))
+                    .font(StrobeTheme.bodyFont(size: bodySize))
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -97,7 +103,7 @@ struct TutorialView: View {
                     dismiss()
                 } label: {
                     Text("Get Started")
-                        .font(StrobeTheme.bodyFont(size: 18, bold: true))
+                        .font(StrobeTheme.bodyFont(size: bodySize, bold: true))
                         .padding(.horizontal, 32)
                         .padding(.vertical, 16)
                         .background(StrobeTheme.accent)
@@ -114,6 +120,9 @@ struct TutorialView: View {
             Spacer()
             Spacer()
         }
+        // Constrain content to a comfortable readable column on iPad
+        .frame(maxWidth: isPad ? 640 : .infinity)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)
     }
 }

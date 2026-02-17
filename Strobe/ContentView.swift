@@ -22,10 +22,13 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showTutorial = false
 
-    // Grid layout definition
-    private let columns = [
-        GridItem(.adaptive(minimum: 160), spacing: 16)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    // Grid layout definition — wider cards on iPad regular width
+    private var columns: [GridItem] {
+        let minWidth: CGFloat = horizontalSizeClass == .regular ? 200 : 160
+        return [GridItem(.adaptive(minimum: minWidth), spacing: 16)]
+    }
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
@@ -64,7 +67,9 @@ struct ContentView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
-                    .presentationDetents([.medium, .large])
+                    // On iPad (regular width) the medium detent is too small;
+                    // offer large only so settings fills the sheet properly.
+                    .presentationDetents(horizontalSizeClass == .regular ? [.large] : [.medium, .large])
                     .presentationCornerRadius(24)
             }
             .fullScreenCover(isPresented: $showTutorial) {
@@ -177,7 +182,9 @@ struct ContentView: View {
             }
             .padding(24)
             // Add extra padding at bottom for FAB
-            .padding(.bottom, 80) 
+            .padding(.bottom, 80)
+            .frame(maxWidth: horizontalSizeClass == .regular ? 1024 : .infinity)
+            .frame(maxWidth: .infinity)
         }
     }
 
