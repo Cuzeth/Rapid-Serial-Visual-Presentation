@@ -172,9 +172,15 @@ struct SettingsView: View {
                                     .foregroundStyle(StrobeTheme.textSecondary)
                             }
                         }
+
+                        Text(appVersionLabel)
+                            .font(StrobeTheme.bodyFont(size: 12))
+                            .foregroundStyle(StrobeTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 4)
                     }
                     .padding(24)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 28)
                 }
             }
         }
@@ -222,5 +228,11 @@ struct SettingsView: View {
                         .stroke(isSelected ? Color.clear : StrobeTheme.textSecondary.opacity(0.2), lineWidth: 1)
                 )
         }
+    }
+
+    private var appVersionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "x.x"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "x"
+        return "Strobe v\(version) (\(build))"
     }
 }
