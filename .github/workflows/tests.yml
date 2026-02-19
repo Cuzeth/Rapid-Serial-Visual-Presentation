@@ -23,7 +23,7 @@ jobs:
           xcodebuild test \
             -project Strobe.xcodeproj \
             -scheme Strobe \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
             -resultBundlePath TestResults \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO | xcpretty --color
