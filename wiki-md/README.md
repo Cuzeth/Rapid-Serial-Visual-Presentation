@@ -1,0 +1,35 @@
+Generated on: 2026-02-20 04:02:51Z
+Source: /Users/cuz/GitHub/Rapid-Serial-Visual-Presentation/Strobe.doccarchive
+Pages:
+Chapter.md
+ChapterListView.md
+ContentView.md
+Document.md
+DocumentCard.md
+DocumentImportError.md
+DocumentImportPipeline.md
+DocumentSourceType.md
+EPUBExtractionResult.md
+EPUBTextExtractor.md
+HapticManager.md
+Home.md
+ImportResult.md
+PDFExtractionResult.md
+PDFTextExtractor.md
+README.md
+RSVPEngine.md
+ReaderFont.md
+ReaderView.md
+SettingsView.md
+StrobeApp.md
+StrobeCardButtonStyle.md
+StrobeTheme.md
+SwiftUICore.md
+TextCleaner.md
+TextCleaningLevel.md
+Tokenizer.md
+TutorialView.md
+WordStorage.md
+WordView.md
+ZIPExtractor.md
+_Sidebar.md
