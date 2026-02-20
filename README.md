@@ -98,4 +98,4 @@ Issues and pull requests are welcome. Keep changes focused, include tests when p
 
 ## License
 
-No license file is currently included in this repository.
+Licensed under the Apache License, Version 2.0.
