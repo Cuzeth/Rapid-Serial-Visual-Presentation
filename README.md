@@ -1,5 +1,5 @@
 # Strobe
-
+[<img src="https://img.shields.io/itunes/v/6759187873?logo=App-Store&logoColor=white&logoSize=large&label=App%20Store&labelColor=%231CBBFA">](https://apps.apple.com/us/app/strobe-rapid-serial-reader/id6759187873)
 [![Tests](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml/badge.svg)](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml)
 
 Strobe is an iOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB files. It presents one word at a time so you can read long material with less eye movement and tighter focus.
