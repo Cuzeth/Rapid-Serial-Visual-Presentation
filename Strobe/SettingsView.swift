@@ -181,6 +181,27 @@ struct SettingsView: View {
                             }
                         }
 
+                        // Source Code
+                        Link(destination: URL(string: "https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation")!) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "chevron.left.forwardslash.chevron.right")
+                                    .font(.system(size: 16))
+                                Text("View Source Code")
+                                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(StrobeTheme.textPrimary)
+                            .padding(16)
+                            .background(StrobeTheme.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+
                         // Support
                         Link(destination: URL(string: "https://buymeacoffee.com/cuzeth")!) {
                             HStack(spacing: 10) {
@@ -192,13 +213,13 @@ struct SettingsView: View {
                                 Image(systemName: "arrow.up.right")
                                     .font(.system(size: 13, weight: .semibold))
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(StrobeTheme.textPrimary)
                             .padding(16)
-                            .background(Color(red: 1.0, green: 0.8, blue: 0.0).opacity(0.15))
+                            .background(StrobeTheme.surface)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color(red: 1.0, green: 0.8, blue: 0.0).opacity(0.3), lineWidth: 1)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
                             )
                         }
 
