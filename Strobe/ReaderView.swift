@@ -13,6 +13,7 @@ struct ReaderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
@@ -33,6 +34,12 @@ struct ReaderView: View {
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
+    }
+
+    /// On iPad (regular width) we constrain controls to a comfortable column so
+    /// sliders and buttons don't stretch the full width of a 12.9" display.
+    private var controlsMaxWidth: CGFloat {
+        horizontalSizeClass == .regular ? 680 : .infinity
     }
 
     init(document: Document, startingWordIndex: Int? = nil) {
@@ -212,6 +219,15 @@ struct ReaderView: View {
 
     private var topBar: some View {
         VStack(spacing: 0) {
+            topBarContent
+                .frame(maxWidth: controlsMaxWidth)
+                .frame(maxWidth: .infinity)
+        }
+        .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
+    }
+
+    private var topBarContent: some View {
+        VStack(spacing: 0) {
             // Header
             HStack {
                 Button {
@@ -290,11 +306,11 @@ struct ReaderView: View {
                     Capsule()
                         .fill(StrobeTheme.surface)
                         .frame(height: 6)
-                    
+
                     Capsule()
                         .fill(StrobeTheme.accent)
                         .frame(width: geo.size.width * engine.progress, height: 6)
-                    
+
                     // Thumb
                     Circle()
                         .fill(.white)
@@ -322,7 +338,7 @@ struct ReaderView: View {
                 )
             }
             .frame(height: 24)
-            
+
             Text(hintText)
                 .font(StrobeTheme.bodyFont(size: 14))
                 .foregroundStyle(StrobeTheme.textSecondary)
@@ -330,6 +346,8 @@ struct ReaderView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
+        .frame(maxWidth: controlsMaxWidth)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Completion view
