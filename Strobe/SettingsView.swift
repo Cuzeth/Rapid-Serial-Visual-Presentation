@@ -9,9 +9,15 @@ struct SettingsView: View {
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
+
+    /// On iPad (regular width), constrain the settings content to a readable column width.
+    private var contentMaxWidth: CGFloat {
+        horizontalSizeClass == .regular ? 640 : .infinity
+    }
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
@@ -32,9 +38,9 @@ struct SettingsView: View {
                     Text("Settings")
                         .font(readerFont.boldFont(size: 24))
                         .foregroundStyle(StrobeTheme.textPrimary)
-                    
+
                     Spacer()
-                    
+
                     Button {
                         dismiss()
                     } label: {
@@ -46,6 +52,8 @@ struct SettingsView: View {
                             .clipShape(Circle())
                     }
                 }
+                .frame(maxWidth: contentMaxWidth)
+                .frame(maxWidth: .infinity)
                 .padding(24)
 
                 ScrollView {
@@ -202,6 +210,8 @@ struct SettingsView: View {
                     }
                     .padding(24)
                     .padding(.bottom, 28)
+                    .frame(maxWidth: contentMaxWidth)
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
