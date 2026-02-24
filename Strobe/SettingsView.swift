@@ -173,6 +173,27 @@ struct SettingsView: View {
                             }
                         }
 
+                        // Support
+                        Link(destination: URL(string: "https://buymeacoffee.com/cuzeth")!) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "cup.and.heat.waves.fill")
+                                    .font(.system(size: 16))
+                                Text("Buy Me a Coffee")
+                                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(16)
+                            .background(Color(red: 1.0, green: 0.8, blue: 0.0).opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(red: 1.0, green: 0.8, blue: 0.0).opacity(0.3), lineWidth: 1)
+                            )
+                        }
+
                         Text(appVersionLabel)
                             .font(StrobeTheme.bodyFont(size: 12))
                             .foregroundStyle(StrobeTheme.textSecondary)
