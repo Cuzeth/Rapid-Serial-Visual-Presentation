@@ -51,16 +51,16 @@ struct ReaderView: View {
         let words = document.readingWords
         let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
         let usesSentencePause = UserDefaults.standard.bool(forKey: "sentencePauseEnabled")
-        let percentPerLetter = UserDefaults.standard.double(forKey: "smartTimingPercentPerLetter")
-        let pauseMultiplier = UserDefaults.standard.double(forKey: "sentencePauseMultiplier")
+        let percentPerLetter = UserDefaults.standard.object(forKey: "smartTimingPercentPerLetter") as? Double ?? 4.0
+        let pauseMultiplier = UserDefaults.standard.object(forKey: "sentencePauseMultiplier") as? Double ?? 1.5
         self._engine = State(initialValue: RSVPEngine(
             words: words,
             currentIndex: effectiveIndex,
             wordsPerMinute: document.wordsPerMinute,
             smartTimingEnabled: usesSmartTiming,
             sentencePauseEnabled: usesSentencePause,
-            smartTimingPercentPerLetter: percentPerLetter == 0 ? 4.0 : percentPerLetter,
-            sentencePauseMultiplier: pauseMultiplier == 0 ? 1.5 : pauseMultiplier
+            smartTimingPercentPerLetter: percentPerLetter,
+            sentencePauseMultiplier: pauseMultiplier
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
     }

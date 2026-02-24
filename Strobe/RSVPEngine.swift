@@ -182,7 +182,7 @@ final class RSVPEngine {
 
         var multiplier = 1.0 + Double(letterCount) * (percentPerLetter / 100.0)
 
-        if hasTrailingPunctuation(word) {
+        if percentPerLetter > 0, hasTrailingPunctuation(word) {
             multiplier += 0.2
         }
 

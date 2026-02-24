@@ -15,8 +15,6 @@ struct SettingsView: View {
 
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
-    @State private var smartTimingPercentSlider: Double = 4.0
-    @State private var sentencePauseSlider: Double = 1.5
 
     /// On iPad (regular width), constrain the settings content to a readable column width.
     private var contentMaxWidth: CGFloat {
@@ -164,11 +162,8 @@ struct SettingsView: View {
                                                 .font(StrobeTheme.bodyFont(size: 14, bold: true))
                                                 .foregroundStyle(StrobeTheme.textPrimary)
                                         }
-                                        Slider(value: $smartTimingPercentSlider, in: 0...50, step: 1)
+                                        Slider(value: $smartTimingPercentPerLetter, in: 0...50, step: 1)
                                             .tint(StrobeTheme.accent)
-                                            .onChange(of: smartTimingPercentSlider) { _, newValue in
-                                                smartTimingPercentPerLetter = newValue
-                                            }
                                     }
                                     .padding(.leading, 4)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -199,18 +194,17 @@ struct SettingsView: View {
                                                 .font(StrobeTheme.bodyFont(size: 14, bold: true))
                                                 .foregroundStyle(StrobeTheme.textPrimary)
                                         }
-                                        Slider(value: $sentencePauseSlider, in: 1...4, step: 0.1)
+                                        Slider(value: $sentencePauseMultiplierValue, in: 1...4, step: 0.1)
                                             .tint(StrobeTheme.accent)
-                                            .onChange(of: sentencePauseSlider) { _, newValue in
-                                                sentencePauseMultiplierValue = newValue
-                                            }
                                     }
                                     .padding(.leading, 4)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
                             }
+                            .animation(.easeInOut(duration: 0.2), value: smartTimingEnabled)
+                            .animation(.easeInOut(duration: 0.2), value: sentencePauseEnabled)
                         }
-                        
+
                         // Text Cleaning
                         settingCard(title: "Text Processing") {
                             VStack(alignment: .leading, spacing: 12) {
@@ -285,8 +279,6 @@ struct SettingsView: View {
         .onAppear {
             wpmSliderValue = Double(defaultWPM)
             fontSizeSliderValue = Double(fontSize)
-            smartTimingPercentSlider = smartTimingPercentPerLetter
-            sentencePauseSlider = sentencePauseMultiplierValue
         }
     }
 
