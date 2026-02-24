@@ -42,6 +42,23 @@ final class RSVPEngine {
         }
     }
 
+    /// Percentage points added to the display interval per letter when smart timing is on.
+    /// E.g. 4.0 means a 10-letter word gets +40% duration (1.4× base interval).
+    var smartTimingPercentPerLetter: Double {
+        didSet {
+            guard isPlaying else { return }
+            restartTimer()
+        }
+    }
+
+    /// Multiplier applied to the interval at sentence-ending punctuation when sentence pauses are on.
+    var sentencePauseMultiplier: Double {
+        didSet {
+            guard isPlaying else { return }
+            restartTimer()
+        }
+    }
+
     /// The word at the current playback position, or an empty string if out of bounds.
     var currentWord: String {
         guard currentIndex >= 0, currentIndex < words.count else { return "" }
@@ -68,13 +85,17 @@ final class RSVPEngine {
         currentIndex: Int = 0,
         wordsPerMinute: Int = 300,
         smartTimingEnabled: Bool = false,
-        sentencePauseEnabled: Bool = false
+        sentencePauseEnabled: Bool = false,
+        smartTimingPercentPerLetter: Double = 4.0,
+        sentencePauseMultiplier: Double = 1.5
     ) {
         self.words = words
         self.currentIndex = currentIndex
         self.wordsPerMinute = wordsPerMinute
         self.smartTimingEnabled = smartTimingEnabled
         self.sentencePauseEnabled = sentencePauseEnabled
+        self.smartTimingPercentPerLetter = smartTimingPercentPerLetter
+        self.sentencePauseMultiplier = sentencePauseMultiplier
     }
 
     /// Starts playback from the current position. No-op if already playing or at end.
@@ -141,48 +162,37 @@ final class RSVPEngine {
         var interval = baseInterval
 
         if smartTimingEnabled {
-            interval *= Self.smartTimingMultiplier(for: currentWord)
+            interval *= Self.smartTimingMultiplier(for: currentWord, percentPerLetter: smartTimingPercentPerLetter)
         }
 
         if sentencePauseEnabled && Self.endsWithSentencePunctuation(currentWord) {
-            interval *= Self.sentencePauseMultiplier
+            interval *= sentencePauseMultiplier
         }
 
         return interval
     }
 
-    /// Returns a timing multiplier (1.0–1.7) based on word length and trailing punctuation.
-    nonisolated static func smartTimingMultiplier(for word: String) -> Double {
+    /// Returns a timing multiplier based on word length.
+    /// Each letter contributes `percentPerLetter`% to the interval increase.
+    /// E.g. at 4%, an 8-letter word yields a 1.32× multiplier.
+    /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus.
+    nonisolated static func smartTimingMultiplier(for word: String, percentPerLetter: Double = 4.0) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
         let letterCount = trimmed.count
 
-        var multiplier: Double = 1.0
-
-        switch letterCount {
-        case 0...6:
-            multiplier = 1.0
-        case 7...9:
-            multiplier = 1.3
-        case 10...12:
-            multiplier = 1.4
-        default:
-            multiplier = 1.5
-        }
+        var multiplier = 1.0 + Double(letterCount) * (percentPerLetter / 100.0)
 
         if hasTrailingPunctuation(word) {
             multiplier += 0.2
         }
 
-        return min(multiplier, 1.7)
+        return multiplier
     }
 
     nonisolated private static func hasTrailingPunctuation(_ word: String) -> Bool {
         guard let last = word.unicodeScalars.last else { return false }
         return CharacterSet.punctuationCharacters.contains(last)
     }
-
-    /// Extra multiplier applied when sentence pause is enabled.
-    nonisolated static let sentencePauseMultiplier: Double = 1.5
 
     nonisolated private static let sentenceEnders: Set<Character> = [".", "!", "?"]
 

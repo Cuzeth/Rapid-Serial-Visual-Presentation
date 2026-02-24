@@ -17,6 +17,8 @@ struct ReaderView: View {
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
+    @AppStorage("smartTimingPercentPerLetter") private var smartTimingPercentPerLetter: Double = 4.0
+    @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
@@ -49,12 +51,16 @@ struct ReaderView: View {
         let words = document.readingWords
         let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
         let usesSentencePause = UserDefaults.standard.bool(forKey: "sentencePauseEnabled")
+        let percentPerLetter = UserDefaults.standard.double(forKey: "smartTimingPercentPerLetter")
+        let pauseMultiplier = UserDefaults.standard.double(forKey: "sentencePauseMultiplier")
         self._engine = State(initialValue: RSVPEngine(
             words: words,
             currentIndex: effectiveIndex,
             wordsPerMinute: document.wordsPerMinute,
             smartTimingEnabled: usesSmartTiming,
-            sentencePauseEnabled: usesSentencePause
+            sentencePauseEnabled: usesSentencePause,
+            smartTimingPercentPerLetter: percentPerLetter == 0 ? 4.0 : percentPerLetter,
+            sentencePauseMultiplier: pauseMultiplier == 0 ? 1.5 : pauseMultiplier
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
     }
@@ -122,6 +128,12 @@ struct ReaderView: View {
         }
         .onChange(of: sentencePauseEnabled) { _, newValue in
             engine.sentencePauseEnabled = newValue
+        }
+        .onChange(of: smartTimingPercentPerLetter) { _, newValue in
+            engine.smartTimingPercentPerLetter = newValue
+        }
+        .onChange(of: sentencePauseMultiplierValue) { _, newValue in
+            engine.sentencePauseMultiplier = newValue
         }
         .alert("Save Error", isPresented: .init(
             get: { persistenceError != nil },

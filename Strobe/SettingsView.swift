@@ -6,6 +6,8 @@ struct SettingsView: View {
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
+    @AppStorage("smartTimingPercentPerLetter") private var smartTimingPercentPerLetter: Double = 4.0
+    @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -13,6 +15,8 @@ struct SettingsView: View {
 
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
+    @State private var smartTimingPercentSlider: Double = 4.0
+    @State private var sentencePauseSlider: Double = 1.5
 
     /// On iPad (regular width), constrain the settings content to a readable column width.
     private var contentMaxWidth: CGFloat {
@@ -149,6 +153,27 @@ struct SettingsView: View {
                                 }
                                 .tint(StrobeTheme.accent)
 
+                                if smartTimingEnabled {
+                                    VStack(spacing: 8) {
+                                        HStack {
+                                            Text("Slowdown per letter")
+                                                .font(StrobeTheme.bodyFont(size: 14))
+                                                .foregroundStyle(StrobeTheme.textSecondary)
+                                            Spacer()
+                                            Text("\(Int(smartTimingPercentPerLetter))%")
+                                                .font(StrobeTheme.bodyFont(size: 14, bold: true))
+                                                .foregroundStyle(StrobeTheme.textPrimary)
+                                        }
+                                        Slider(value: $smartTimingPercentSlider, in: 0...50, step: 1)
+                                            .tint(StrobeTheme.accent)
+                                            .onChange(of: smartTimingPercentSlider) { _, newValue in
+                                                smartTimingPercentPerLetter = newValue
+                                            }
+                                    }
+                                    .padding(.leading, 4)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+
                                 Divider().background(StrobeTheme.surface)
 
                                 Toggle(isOn: $sentencePauseEnabled) {
@@ -162,6 +187,27 @@ struct SettingsView: View {
                                     }
                                 }
                                 .tint(StrobeTheme.accent)
+
+                                if sentencePauseEnabled {
+                                    VStack(spacing: 8) {
+                                        HStack {
+                                            Text("Pause multiplier")
+                                                .font(StrobeTheme.bodyFont(size: 14))
+                                                .foregroundStyle(StrobeTheme.textSecondary)
+                                            Spacer()
+                                            Text(String(format: "%.1fx", sentencePauseMultiplierValue))
+                                                .font(StrobeTheme.bodyFont(size: 14, bold: true))
+                                                .foregroundStyle(StrobeTheme.textPrimary)
+                                        }
+                                        Slider(value: $sentencePauseSlider, in: 1...4, step: 0.1)
+                                            .tint(StrobeTheme.accent)
+                                            .onChange(of: sentencePauseSlider) { _, newValue in
+                                                sentencePauseMultiplierValue = newValue
+                                            }
+                                    }
+                                    .padding(.leading, 4)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             }
                         }
                         
@@ -239,6 +285,8 @@ struct SettingsView: View {
         .onAppear {
             wpmSliderValue = Double(defaultWPM)
             fontSizeSliderValue = Double(fontSize)
+            smartTimingPercentSlider = smartTimingPercentPerLetter
+            sentencePauseSlider = sentencePauseMultiplierValue
         }
     }
 
