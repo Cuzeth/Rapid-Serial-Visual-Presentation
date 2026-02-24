@@ -95,7 +95,7 @@ struct ReaderView: View {
             .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .statusBarHidden(engine.isPlaying)
+        .statusBarHidden(true)
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
         }
