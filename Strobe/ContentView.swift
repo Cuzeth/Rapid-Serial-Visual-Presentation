@@ -4,8 +4,8 @@ internal import UniformTypeIdentifiers
 
 /// The main library view displaying imported documents in a grid.
 ///
-/// Handles document import (PDF/EPUB via the system file picker), legacy word
-/// storage migration, and navigation to the reader or chapter list.
+/// Handles document import (PDF/EPUB via the system file picker), plain text
+/// entry, legacy word storage migration, and navigation to the reader or chapter list.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]

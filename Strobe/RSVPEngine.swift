@@ -175,7 +175,7 @@ final class RSVPEngine {
     /// Returns a timing multiplier based on word length.
     /// Each letter contributes `percentPerLetter`% to the interval increase.
     /// E.g. at 4%, an 8-letter word yields a 1.32× multiplier.
-    /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus.
+    /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus when `percentPerLetter > 0`.
     nonisolated static func smartTimingMultiplier(for word: String, percentPerLetter: Double = 4.0) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
         let letterCount = trimmed.count
