@@ -394,7 +394,7 @@ struct DocumentCard: View {
 
 extension Document {
     var progressPercentage: Int {
-        let total = max(1, wordCount)
-        return Int((Double(currentWordIndex) / Double(total)) * 100)
+        guard wordCount > 1 else { return currentWordIndex > 0 ? 100 : 0 }
+        return Int((Double(currentWordIndex) / Double(wordCount - 1)) * 100)
     }
 }

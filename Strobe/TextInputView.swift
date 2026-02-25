@@ -9,6 +9,7 @@ struct TextInputView: View {
 
     @State private var title: String = ""
     @State private var inputText: String = ""
+    @State private var saveError: String?
     @FocusState private var editorFocused: Bool
 
     /// Approximate word count for display — uses fast whitespace split, not full tokenizer.
@@ -77,7 +78,7 @@ struct TextInputView: View {
                     // Word count
                     HStack {
                         Spacer()
-                        Text(inputText.isEmpty ? "No text" : "\(approximateWordCount) words")
+                        Text(approximateWordCount == 0 ? "No text" : approximateWordCount == 1 ? "1 word" : "\(approximateWordCount) words")
                             .font(StrobeTheme.bodyFont(size: 12))
                             .foregroundStyle(StrobeTheme.textSecondary)
                     }
@@ -88,6 +89,14 @@ struct TextInputView: View {
         }
         .onAppear {
             editorFocused = true
+        }
+        .alert("Save Error", isPresented: .init(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
         }
     }
 
@@ -158,7 +167,13 @@ struct TextInputView: View {
             wordsPerMinute: defaultWPM
         )
         modelContext.insert(document)
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.delete(document)
+            saveError = "Could not save: \(error.localizedDescription)"
+            return
+        }
 
         dismiss()
     }
