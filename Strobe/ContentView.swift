@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var importError: String?
     @State private var showSettings = false
     @State private var showTutorial = false
+    @State private var showTextInput = false
+    @State private var editingDocument: Document?
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -74,6 +76,16 @@ struct ContentView: View {
             }
             .fullScreenCover(isPresented: $showTutorial) {
                 TutorialView()
+            }
+            .sheet(isPresented: $showTextInput) {
+                TextInputView()
+                    .presentationDetents([.large])
+                    .presentationCornerRadius(24)
+            }
+            .sheet(item: $editingDocument) { doc in
+                TextInputView(editingDocument: doc)
+                    .presentationDetents([.large])
+                    .presentationCornerRadius(24)
             }
             .onAppear {
                 compactLegacyWordStorageIfNeeded()
@@ -154,7 +166,7 @@ struct ContentView: View {
                     .font(StrobeTheme.titleFont(size: 24))
                     .foregroundStyle(StrobeTheme.textPrimary)
                 
-                Text("Tap the + button to import\na PDF or EPUB file")
+                Text("Tap the + button to import\na PDF or EPUB, or enter text directly")
                     .font(StrobeTheme.bodyFont(size: 16))
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -172,6 +184,13 @@ struct ContentView: View {
                         DocumentCard(document: document, readerFont: readerFont)
                     }
                     .contextMenu {
+                        if document.isTextDocument {
+                            Button {
+                                editingDocument = document
+                            } label: {
+                                Label("Edit Text", systemImage: "pencil")
+                            }
+                        }
                         Button(role: .destructive) {
                             modelContext.delete(document)
                         } label: {
@@ -189,8 +208,17 @@ struct ContentView: View {
     }
 
     private var importButton: some View {
-        Button {
-            isImporting = true
+        Menu {
+            Button {
+                isImporting = true
+            } label: {
+                Label("Import File", systemImage: "doc.fill")
+            }
+            Button {
+                showTextInput = true
+            } label: {
+                Label("Enter Text", systemImage: "text.cursor")
+            }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))
