@@ -49,19 +49,8 @@ final class Document {
     }
 
     /// Whether this document was created from typed/pasted text rather than a file.
-    /// Text documents have no security-scoped file bookmark.
+    /// Always `false` for file-backed documents (which have non-empty bookmark data).
     var isTextDocument: Bool { bookmarkData.isEmpty }
-
-    /// Replaces the stored text content and resets reading progress.
-    /// Only valid for text documents — file-backed documents should not be mutated this way.
-    func updateTextContent(title: String, words: [String]) {
-        self.title = title
-        self.fileName = title
-        self.wordsBlob = WordStorage.encode(words)
-        self.wordCount = words.count
-        self.currentWordIndex = 0
-        self.cachedWords = words
-    }
 
     /// Migrates words from the legacy `words` array to the `wordsBlob` external storage format.
     /// No-op if `wordsBlob` already exists or the legacy array is empty.

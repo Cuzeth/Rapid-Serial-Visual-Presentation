@@ -22,7 +22,6 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showTutorial = false
     @State private var showTextInput = false
-    @State private var editingDocument: Document?
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -79,11 +78,6 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showTextInput) {
                 TextInputView()
-                    .presentationDetents([.large])
-                    .presentationCornerRadius(24)
-            }
-            .sheet(item: $editingDocument) { doc in
-                TextInputView(editingDocument: doc)
                     .presentationDetents([.large])
                     .presentationCornerRadius(24)
             }
@@ -184,13 +178,6 @@ struct ContentView: View {
                         DocumentCard(document: document, readerFont: readerFont)
                     }
                     .contextMenu {
-                        if document.isTextDocument {
-                            Button {
-                                editingDocument = document
-                            } label: {
-                                Label("Edit Text", systemImage: "pencil")
-                            }
-                        }
                         Button(role: .destructive) {
                             modelContext.delete(document)
                         } label: {

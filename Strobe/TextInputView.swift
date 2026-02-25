@@ -1,13 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// A sheet for typing or pasting plain text to add directly to the library,
-/// or for editing the content of an existing text document.
+/// A sheet for typing or pasting plain text to add directly to the library.
 struct TextInputView: View {
-    /// When set, the view operates in edit mode — pre-populating fields and
-    /// updating the document in place rather than creating a new one.
-    var editingDocument: Document? = nil
-
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @AppStorage("defaultWPM") private var defaultWPM: Int = 300
@@ -15,8 +10,6 @@ struct TextInputView: View {
     @State private var title: String = ""
     @State private var inputText: String = ""
     @FocusState private var editorFocused: Bool
-
-    private var isEditing: Bool { editingDocument != nil }
 
     /// Approximate word count for display — uses fast whitespace split, not full tokenizer.
     private var approximateWordCount: Int {
@@ -94,10 +87,6 @@ struct TextInputView: View {
             }
         }
         .onAppear {
-            if let doc = editingDocument {
-                title = doc.title
-                inputText = doc.readingWords.joined(separator: " ")
-            }
             editorFocused = true
         }
     }
@@ -119,7 +108,7 @@ struct TextInputView: View {
 
             Spacer()
 
-            Text(isEditing ? "Edit Text" : "New Text")
+            Text("New Text")
                 .font(StrobeTheme.bodyFont(size: 18, bold: true))
                 .foregroundStyle(StrobeTheme.textPrimary)
 
@@ -128,7 +117,7 @@ struct TextInputView: View {
             Button {
                 save()
             } label: {
-                Text(isEditing ? "Save" : "Add")
+                Text("Add")
                     .font(StrobeTheme.bodyFont(size: 16, bold: true))
                     .foregroundStyle(canSave ? .white : StrobeTheme.textSecondary)
                     .padding(.horizontal, 18)
@@ -152,30 +141,24 @@ struct TextInputView: View {
 
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if let doc = editingDocument {
-            let resolvedTitle = trimmedTitle.isEmpty ? doc.title : trimmedTitle
-            doc.updateTextContent(title: resolvedTitle, words: words)
-            try? modelContext.save()
+        let resolvedTitle: String
+        if trimmedTitle.isEmpty {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            resolvedTitle = "Text — \(formatter.string(from: Date()))"
         } else {
-            let resolvedTitle: String
-            if trimmedTitle.isEmpty {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .medium
-                formatter.timeStyle = .short
-                resolvedTitle = "Text — \(formatter.string(from: Date()))"
-            } else {
-                resolvedTitle = trimmedTitle
-            }
-            let document = Document(
-                title: resolvedTitle,
-                fileName: resolvedTitle,
-                bookmarkData: Data(),
-                words: words,
-                wordsPerMinute: defaultWPM
-            )
-            modelContext.insert(document)
-            try? modelContext.save()
+            resolvedTitle = trimmedTitle
         }
+        let document = Document(
+            title: resolvedTitle,
+            fileName: resolvedTitle,
+            bookmarkData: Data(),
+            words: words,
+            wordsPerMinute: defaultWPM
+        )
+        modelContext.insert(document)
+        try? modelContext.save()
 
         dismiss()
     }
