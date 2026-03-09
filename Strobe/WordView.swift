@@ -20,6 +20,7 @@ struct WordView: View {
 
     /// The character index of the ORP anchor letter (the red letter).
     /// Calculated from letter-only positions, skipping punctuation.
+    /// For short CJK words (≤3 characters), centers the anchor instead.
     private var redIndex: Int {
         // Collect indices of letter characters only (skip punctuation like apostrophes)
         let letterIndices = word.enumerated().compactMap { offset, char in
@@ -32,8 +33,28 @@ struct WordView: View {
         }
 
         let letterCount = letterIndices.count
+
+        // Short CJK words look better with the anchor centered rather than
+        // at the 1/3 position used for longer Latin words.
+        if letterCount <= 3, word.unicodeScalars.contains(where: { isCJKIdeograph($0) }) {
+            return letterIndices[letterCount / 2]
+        }
+
         let letterPos = letterCount <= 1 ? 0 : max(1, letterCount / 2)
         return letterIndices[letterPos]
+    }
+
+    /// Returns `true` if the scalar is a CJK ideograph.
+    private static func isCJKIdeograph(_ scalar: Unicode.Scalar) -> Bool {
+        let v = scalar.value
+        return (v >= 0x4E00 && v <= 0x9FFF)
+            || (v >= 0x3400 && v <= 0x4DBF)
+            || (v >= 0xF900 && v <= 0xFAFF)
+            || (v >= 0x20000 && v <= 0x2A6DF)
+    }
+
+    private func isCJKIdeograph(_ scalar: Unicode.Scalar) -> Bool {
+        Self.isCJKIdeograph(scalar)
     }
 
     private var before: String {

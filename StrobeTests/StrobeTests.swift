@@ -281,4 +281,48 @@ struct StrobeTests {
         #expect(title == "Fallback")
     }
 
+    // MARK: - Chinese / CJK tokenization
+
+    @Test func tokenizesChineseTextIntoWords() {
+        let words = Tokenizer.tokenize("今天天气很好")
+        // NLTokenizer should segment this into multiple words, not one blob
+        #expect(words.count > 1)
+        // Rejoining should give back the original text
+        #expect(words.joined() == "今天天气很好")
+    }
+
+    @Test func tokenizesMixedChineseEnglish() {
+        let words = Tokenizer.tokenize("Hello 世界 is great")
+        #expect(words.contains("Hello"))
+        #expect(words.contains("is"))
+        #expect(words.contains("great"))
+        // 世界 should appear as a token (possibly with punctuation attached)
+        #expect(words.contains(where: { $0.contains("世界") }))
+    }
+
+    @Test func attachesChinesePunctuationToPrecedingWord() {
+        let words = Tokenizer.tokenize("你好。世界")
+        // The 。 should be attached to the word before it, not standalone
+        #expect(words.contains(where: { $0.hasSuffix("。") }))
+        #expect(!words.contains("。"))
+    }
+
+    @Test func detectsChineseSentencePunctuation() {
+        #expect(RSVPEngine.endsWithSentencePunctuation("好。"))
+        #expect(RSVPEngine.endsWithSentencePunctuation("吗？"))
+        #expect(RSVPEngine.endsWithSentencePunctuation("啊！"))
+    }
+
+    @Test func chineseSentencePauseIgnoresComma() {
+        #expect(!RSVPEngine.endsWithSentencePunctuation("好，"))
+    }
+
+    @Test func tokenizesChineseWithLatinInterspersed() {
+        // Common pattern: Chinese text with English brand names / tech terms
+        let words = Tokenizer.tokenize("我在使用iPhone阅读")
+        #expect(words.count >= 2)
+        // All original text should be preserved
+        #expect(words.joined() == "我在使用iPhone阅读")
+    }
+
 }

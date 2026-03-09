@@ -12,9 +12,36 @@ struct TextInputView: View {
     @State private var saveError: String?
     @FocusState private var editorFocused: Bool
 
-    /// Approximate word count for display — uses fast whitespace split, not full tokenizer.
+    /// Approximate word count for display.
+    /// Counts CJK ideographs individually and whitespace-splits Latin text.
     private var approximateWordCount: Int {
-        inputText.split(whereSeparator: \.isWhitespace).count
+        var cjkCount = 0
+        var latinBuffer = ""
+        var latinWords = 0
+
+        for scalar in inputText.unicodeScalars {
+            let v = scalar.value
+            let isCJK = (v >= 0x4E00 && v <= 0x9FFF)
+                || (v >= 0x3400 && v <= 0x4DBF)
+                || (v >= 0xF900 && v <= 0xFAFF)
+                || (v >= 0x20000 && v <= 0x2A6DF)
+
+            if isCJK {
+                cjkCount += 1
+                if !latinBuffer.isEmpty {
+                    latinWords += latinBuffer.split(whereSeparator: \.isWhitespace).count
+                    latinBuffer.removeAll(keepingCapacity: true)
+                }
+            } else {
+                latinBuffer.unicodeScalars.append(scalar)
+            }
+        }
+
+        if !latinBuffer.isEmpty {
+            latinWords += latinBuffer.split(whereSeparator: \.isWhitespace).count
+        }
+
+        return cjkCount + latinWords
     }
 
     private var canSave: Bool {

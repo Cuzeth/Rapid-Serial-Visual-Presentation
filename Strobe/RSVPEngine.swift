@@ -194,7 +194,12 @@ final class RSVPEngine {
         return CharacterSet.punctuationCharacters.contains(last)
     }
 
-    nonisolated private static let sentenceEnders: Set<Character> = [".", "!", "?"]
+    nonisolated private static let sentenceEnders: Set<Character> = [
+        ".", "!", "?",       // Latin
+        "\u{3002}",          // 。 CJK full stop
+        "\u{FF01}",          // ！ fullwidth exclamation
+        "\u{FF1F}",          // ？ fullwidth question mark
+    ]
 
     /// Returns `true` if the word ends with sentence-terminating punctuation (`.`, `!`, `?`).
     nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
