@@ -39,25 +39,16 @@ struct WordView: View {
 
         // Short CJK words look better with the anchor centered rather than
         // at the 1/3 position used for longer Latin words.
-        if letterCount <= 3, word.unicodeScalars.contains(where: { isCJKIdeograph($0) }) {
+        if letterCount <= 3, word.unicodeScalars.contains(where: { v in
+            let c = v.value
+            return (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF)
+                || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2A6DF)
+        }) {
             return letterIndices[letterCount / 2]
         }
 
         let letterPos = letterCount <= 1 ? 0 : max(1, letterCount / 2)
         return letterIndices[letterPos]
-    }
-
-    /// Returns `true` if the scalar is a CJK ideograph.
-    private static func isCJKIdeograph(_ scalar: Unicode.Scalar) -> Bool {
-        let v = scalar.value
-        return (v >= 0x4E00 && v <= 0x9FFF)
-            || (v >= 0x3400 && v <= 0x4DBF)
-            || (v >= 0xF900 && v <= 0xFAFF)
-            || (v >= 0x20000 && v <= 0x2A6DF)
-    }
-
-    private func isCJKIdeograph(_ scalar: Unicode.Scalar) -> Bool {
-        Self.isCJKIdeograph(scalar)
     }
 
     /// Whether the word contains Arabic script. Arabic is cursive — changing
