@@ -9,6 +9,9 @@ import UIKit
 /// is displayed in red and centered on screen. The rest of the word is offset
 /// so the reader's eye stays fixed at the center. Font size scales down
 /// automatically for very long words.
+///
+/// Uses `AttributedString` to render the word as a single text run, which
+/// preserves cursive shaping for Arabic and correct glyph order for all scripts.
 struct WordView: View {
     let word: String
     let fontSize: CGFloat
@@ -57,14 +60,47 @@ struct WordView: View {
         Self.isCJKIdeograph(scalar)
     }
 
+    /// Whether the word contains Arabic script. Arabic is cursive — changing
+    /// the font weight on individual characters breaks glyph connections,
+    /// so only color is changed for the anchor letter.
+    private var isArabic: Bool {
+        word.unicodeScalars.contains { scalar in
+            let v = scalar.value
+            return (v >= 0x0600 && v <= 0x06FF)
+                || (v >= 0x0750 && v <= 0x077F)
+                || (v >= 0x08A0 && v <= 0x08FF)
+                || (v >= 0xFB50 && v <= 0xFDFF)
+                || (v >= 0xFE70 && v <= 0xFEFF)
+        }
+    }
+
+    /// Builds an `AttributedString` with the anchor letter colored red.
+    /// For non-Arabic scripts the anchor is also bolded. For Arabic, only
+    /// color is changed to avoid breaking cursive glyph connections.
+    private func attributedWord(fontSize: CGFloat) -> AttributedString {
+        var attributed = AttributedString(word)
+        attributed.font = readerFont.regularFont(size: fontSize)
+        attributed.foregroundColor = .primary
+
+        guard redIndex < word.count else { return attributed }
+
+        let start = word.index(word.startIndex, offsetBy: redIndex)
+        let end = word.index(after: start)
+        if let attrStart = AttributedString.Index(start, within: attributed),
+           let attrEnd = AttributedString.Index(end, within: attributed) {
+            attributed[attrStart..<attrEnd].foregroundColor = .red
+            // Bold breaks Arabic cursive shaping — only apply for non-Arabic.
+            if !isArabic {
+                attributed[attrStart..<attrEnd].font = readerFont.boldFont(size: fontSize)
+            }
+        }
+
+        return attributed
+    }
+
     private var before: String {
         guard !word.isEmpty else { return "" }
         return String(word.prefix(redIndex))
-    }
-
-    private var anchor: String {
-        guard redIndex < word.count else { return "" }
-        return String(word[word.index(word.startIndex, offsetBy: redIndex)])
     }
 
     private var after: String {
@@ -83,24 +119,11 @@ struct WordView: View {
                         .fill(Color.red.opacity(0.12))
                         .frame(width: 1.5, height: displayFontSize * 1.6)
 
-                    // Word with ORP-anchored red letter
-                    HStack(spacing: 0) {
-                        Text(before)
-                            .foregroundStyle(.primary)
-
-                        Text(anchor)
-                            .foregroundStyle(.red)
-                            .fontWeight(.bold)
-
-                        Text(after)
-                            .foregroundStyle(.primary)
-                    }
-                    .font(readerFont.regularFont(size: displayFontSize))
-                    // Shift the entire word so the red ORP letter sits exactly on center.
-                    .offset(x: orpAnchorOffset(fontSize: displayFontSize))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.58)
-                    .padding(.horizontal, 6)
+                    Text(attributedWord(fontSize: displayFontSize))
+                        .offset(x: orpAnchorOffset(fontSize: displayFontSize))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.58)
+                        .padding(.horizontal, 6)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -120,10 +143,12 @@ struct WordView: View {
     }
 
     /// Calculates the horizontal offset to center the ORP anchor letter on screen.
+    /// For Arabic the visual layout is mirrored, so the offset is negated.
     private func orpAnchorOffset(fontSize: CGFloat) -> CGFloat {
         let beforeWidth = textWidth(before, fontSize: fontSize)
         let afterWidth = textWidth(after, fontSize: fontSize)
-        return (afterWidth - beforeWidth) / 2
+        let offset = (afterWidth - beforeWidth) / 2
+        return isArabic ? -offset : offset
     }
 
     /// Measures the rendered width of a text string using the current reader font.

@@ -317,6 +317,24 @@ struct StrobeTests {
         #expect(!RSVPEngine.endsWithSentencePunctuation("好，"))
     }
 
+    // MARK: - Arabic support
+
+    @Test func tokenizesArabicText() {
+        let words = Tokenizer.tokenize("مرحبا بالعالم")
+        #expect(words == ["مرحبا", "بالعالم"])
+    }
+
+    @Test func detectsArabicSentencePunctuation() {
+        #expect(RSVPEngine.endsWithSentencePunctuation("ماذا؟"))
+        #expect(RSVPEngine.endsWithSentencePunctuation("نعم۔"))
+    }
+
+    @Test func arabicSentencePauseIgnoresComma() {
+        #expect(!RSVPEngine.endsWithSentencePunctuation("مرحبا،"))
+    }
+
+    // MARK: - Mixed language (CJK + Latin)
+
     @Test func tokenizesChineseWithLatinInterspersed() {
         // Common pattern: Chinese text with English brand names / tech terms
         let words = Tokenizer.tokenize("我在使用iPhone阅读")

@@ -199,6 +199,8 @@ final class RSVPEngine {
         "\u{3002}",          // 。 CJK full stop
         "\u{FF01}",          // ！ fullwidth exclamation
         "\u{FF1F}",          // ？ fullwidth question mark
+        "\u{061F}",          // ؟ Arabic question mark
+        "\u{06D4}",          // ۔ Arabic/Urdu full stop
     ]
 
     /// Returns `true` if the word ends with sentence-terminating punctuation (`.`, `!`, `?`).
