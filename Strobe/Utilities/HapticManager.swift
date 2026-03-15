@@ -1,12 +1,16 @@
+#if os(iOS)
 import UIKit
+#endif
 
 /// Provides haptic feedback for reading interactions.
 ///
 /// Uses pre-prepared feedback generators for minimal latency.
 /// Each method fires its feedback and immediately re-prepares for the next use.
+/// On macOS, all methods are no-ops since haptic feedback is unavailable.
 final class HapticManager {
     static let shared = HapticManager()
 
+    #if os(iOS)
     private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
     private let lightImpact = UIImpactFeedbackGenerator(style: .light)
     private let selection = UISelectionFeedbackGenerator()
@@ -48,4 +52,12 @@ final class HapticManager {
         notification.notificationOccurred(.success)
         notification.prepare()
     }
+    #else
+    private init() {}
+    func playPause() {}
+    func scrubTick() {}
+    func scrubBoundary() {}
+    func wpmChanged() {}
+    func completedReading() {}
+    #endif
 }

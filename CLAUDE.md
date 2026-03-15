@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Do NOT run `xcodebuild` commands.** The user builds and tests separately in Xcode.
 
-The project targets iOS 17.0+ and uses the `Strobe` scheme. CI runs on GitHub Actions with `macos-26` and `iPhone 17 Pro` simulator.
+The project targets iOS 17.0+ / macOS 14.0+ and uses the `Strobe` scheme. CI runs on GitHub Actions with `macos-26`, testing both `iPhone 17 Pro` simulator and native macOS.
 
 ### Testing
 Tests use the **Swift Testing** framework (not XCTest):
@@ -15,7 +15,7 @@ Tests use the **Swift Testing** framework (not XCTest):
 
 ## Architecture
 
-Strobe is an RSVP (Rapid Serial Visual Presentation) speed reader for iOS. Users import PDFs/EPUBs or paste text, then read word-by-word with configurable timing.
+Strobe is an RSVP (Rapid Serial Visual Presentation) speed reader for iOS and macOS. Users import PDFs/EPUBs or paste text, then read word-by-word with configurable timing.
 
 ### Data Flow
 ```
@@ -68,3 +68,6 @@ Strobe/
 - **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
 - **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `noReadableText`)
 - **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `readerFontSelection`, `textCleaningLevel`
+- **Platform conditionals**: `#if os(iOS)` / `#if os(macOS)` for UIKit/AppKit imports, haptics, presentation modifiers, and hint text. Engine, import pipeline, and models are fully cross-platform.
+- **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader) — via `.onKeyPress`, also works on iPad with hardware keyboard
+- **macOS haptics**: `HapticManager` is no-op on macOS (all methods are empty stubs)

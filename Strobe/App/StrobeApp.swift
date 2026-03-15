@@ -20,10 +20,17 @@ struct StrobeApp: App {
                 ContentView()
                     .modelContainer(container)
                     .preferredColorScheme(.dark)
+                    #if os(macOS)
+                    .frame(minWidth: 700, minHeight: 500)
+                    #endif
             } else {
                 StartupFailureView(diagnostics: bootstrapResult.diagnostics)
             }
         }
+        #if os(macOS)
+        .defaultSize(width: 900, height: 700)
+        .windowStyle(.hiddenTitleBar)
+        #endif
     }
 
     private struct BootstrapResult {

@@ -107,8 +107,10 @@ struct ReaderView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
         }
+        #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden(true)
+        #endif
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
         }
@@ -157,6 +159,47 @@ struct ReaderView: View {
             Text(persistenceError ?? "")
         }
         .preferredColorScheme(.dark)
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.space) {
+            guard !showCompletion else { return .ignored }
+            if engine.isPlaying {
+                engine.pause()
+                HapticManager.shared.playPause()
+            } else {
+                engine.play()
+                HapticManager.shared.playPause()
+            }
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            if engine.isPlaying { engine.pause() }
+            if showCompletion {
+                withAnimation { showCompletion = false }
+            }
+            if engine.scrub(by: -1) {
+                HapticManager.shared.scrubBoundary()
+            } else {
+                HapticManager.shared.scrubTick()
+            }
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            if engine.isPlaying { engine.pause() }
+            if showCompletion {
+                withAnimation { showCompletion = false }
+            }
+            if engine.scrub(by: 1) {
+                HapticManager.shared.scrubBoundary()
+            } else {
+                HapticManager.shared.scrubTick()
+            }
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            dismiss()
+            return .handled
+        }
     }
 
     private enum TouchMode {
@@ -255,6 +298,7 @@ struct ReaderView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
+                #if os(iOS)
                 Button {
                     dismiss()
                 } label: {
@@ -265,23 +309,25 @@ struct ReaderView: View {
                         .background(StrobeTheme.surface)
                         .clipShape(Circle())
                 }
-                
+                .buttonStyle(.plain)
+                #endif
+
                 Spacer()
-                
+
                 VStack(spacing: 2) {
                     Text(document.title)
                         .font(readerFont.boldFont(size: 16))
                         .foregroundStyle(StrobeTheme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    
+
                     Text("\(engine.currentIndex + 1) / \(engine.words.count)")
                         .font(readerFont.regularFont(size: 12))
                         .foregroundStyle(StrobeTheme.textSecondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Placeholder for symmetry or settings
                 Color.clear.frame(width: 44, height: 44)
             }
@@ -415,6 +461,7 @@ struct ReaderView: View {
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
             }
+            .buttonStyle(.plain)
             .padding(.top, 16)
         }
         .padding(40)
@@ -428,8 +475,13 @@ struct ReaderView: View {
     private var hintText: String {
         if showCompletion { return "Completed" }
         if isBarScrubbing { return "Seeking..." }
+        #if os(macOS)
+        if engine.isPlaying { return "Press Space to pause" }
+        return "Press Space to read, arrows to scrub"
+        #else
         if engine.isPlaying { return "Release to pause" }
         return "Hold to read"
+        #endif
     }
 
     private var displayedWPM: Int {

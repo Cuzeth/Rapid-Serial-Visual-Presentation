@@ -141,6 +141,7 @@ struct TextInputView: View {
                     .background(StrobeTheme.surface)
                     .clipShape(Circle())
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
@@ -161,6 +162,7 @@ struct TextInputView: View {
                     .background(canSave ? StrobeTheme.accent : StrobeTheme.surface)
                     .clipShape(Capsule())
             }
+            .buttonStyle(.plain)
             .disabled(!canSave)
             .animation(.easeInOut(duration: 0.15), value: canSave)
         }

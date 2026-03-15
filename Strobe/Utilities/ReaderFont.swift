@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// The available font options for the RSVP reader display.
 ///
@@ -71,12 +75,23 @@ enum ReaderFont: String, CaseIterable, Identifiable {
         .custom(boldPostScriptName, size: size)
     }
 
-    /// Returns a UIKit `UIFont`, with automatic fallback to the system font.
-    func uiFont(size: CGFloat, bold: Bool = false) -> UIFont {
+    /// Returns a platform-native font (`UIFont` on iOS, `NSFont` on macOS),
+    /// with automatic fallback to the system font.
+    #if os(iOS)
+    func platformFont(size: CGFloat, bold: Bool = false) -> UIFont {
         let name = bold ? boldPostScriptName : regularPostScriptName
         if let custom = UIFont(name: name, size: size) {
             return custom
         }
         return .systemFont(ofSize: size, weight: bold ? .bold : .regular)
     }
+    #elseif os(macOS)
+    func platformFont(size: CGFloat, bold: Bool = false) -> NSFont {
+        let name = bold ? boldPostScriptName : regularPostScriptName
+        if let custom = NSFont(name: name, size: size) {
+            return custom
+        }
+        return .systemFont(ofSize: size, weight: bold ? .bold : .regular)
+    }
+    #endif
 }

@@ -31,6 +31,13 @@ struct SettingsView: View {
         TextCleaningLevel.resolve(textCleaningLevel)
     }
 
+    private var textCleaningEnabled: Binding<Bool> {
+        Binding(
+            get: { textCleaningLevel == TextCleaningLevel.standard.rawValue },
+            set: { textCleaningLevel = $0 ? TextCleaningLevel.standard.rawValue : TextCleaningLevel.none.rawValue }
+        )
+    }
+
     var body: some View {
         ZStack {
             StrobeTheme.Gradients.mainBackground
@@ -55,6 +62,7 @@ struct SettingsView: View {
                             .background(StrobeTheme.surface)
                             .clipShape(Circle())
                     }
+                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: contentMaxWidth)
                 .frame(maxWidth: .infinity)
@@ -150,6 +158,7 @@ struct SettingsView: View {
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .tint(StrobeTheme.accent)
 
@@ -182,6 +191,7 @@ struct SettingsView: View {
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .tint(StrobeTheme.accent)
 
@@ -213,6 +223,7 @@ struct SettingsView: View {
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .tint(StrobeTheme.accent)
 
@@ -237,6 +248,7 @@ struct SettingsView: View {
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
                             }
+                            .toggleStyle(.switch)
                             .animation(.easeInOut(duration: 0.2), value: smartTimingEnabled)
                             .animation(.easeInOut(duration: 0.2), value: sentencePauseEnabled)
                             .animation(.easeInOut(duration: 0.2), value: complexityTimingEnabled)
@@ -244,18 +256,19 @@ struct SettingsView: View {
 
                         // Text Cleaning
                         settingCard(title: "Text Processing") {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Picker("Cleaning", selection: $textCleaningLevel) {
-                                    ForEach(TextCleaningLevel.allCases) { level in
-                                        Text(level.displayName).tag(level.rawValue)
-                                    }
+                            Toggle(isOn: textCleaningEnabled) {
+                                VStack(alignment: .leading) {
+                                    Text("Text Cleaning")
+                                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                        .foregroundStyle(StrobeTheme.textPrimary)
+                                    Text("Removes page numbers, headers, footers, and common boilerplate")
+                                        .font(StrobeTheme.bodyFont(size: 12))
+                                        .foregroundStyle(StrobeTheme.textSecondary)
                                 }
-                                .pickerStyle(.segmented)
-                                
-                                Text(currentCleaningLevel.description)
-                                    .font(StrobeTheme.bodyFont(size: 12))
-                                    .foregroundStyle(StrobeTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
+                            .tint(StrobeTheme.accent)
+                            .toggleStyle(.switch)
                         }
 
                         // Source Code
@@ -336,6 +349,7 @@ struct SettingsView: View {
                         .stroke(isSelected ? Color.clear : StrobeTheme.textSecondary.opacity(0.2), lineWidth: 1)
                 )
         }
+        .buttonStyle(.plain)
     }
 
     private var appVersionLabel: String {

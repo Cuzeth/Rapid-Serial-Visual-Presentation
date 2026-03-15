@@ -58,13 +58,16 @@ struct ChapterListView: View {
                 }
             }
         }
+        #if os(iOS)
         .navigationBarHidden(true)
+        #endif
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 16) {
+            #if os(iOS)
             Button {
                 dismiss()
             } label: {
@@ -75,6 +78,8 @@ struct ChapterListView: View {
                     .background(StrobeTheme.surface)
                     .clipShape(Circle())
             }
+            .buttonStyle(.plain)
+            #endif
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(document.title)

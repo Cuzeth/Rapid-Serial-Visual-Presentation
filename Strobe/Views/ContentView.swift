@@ -65,21 +65,34 @@ struct ContentView: View {
                     }
                 }
             }
+            #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
+            #endif
             .sheet(isPresented: $showSettings) {
                 SettingsView()
+                    #if os(iOS)
                     // On iPad (regular width) the medium detent is too small;
                     // offer large only so settings fills the sheet properly.
                     .presentationDetents(horizontalSizeClass == .regular ? [.large] : [.medium, .large])
                     .presentationCornerRadius(24)
+                    #endif
             }
+            #if os(iOS)
             .fullScreenCover(isPresented: $showTutorial) {
                 TutorialView()
             }
+            #else
+            .sheet(isPresented: $showTutorial) {
+                TutorialView()
+                    .frame(minWidth: 600, minHeight: 500)
+            }
+            #endif
             .sheet(isPresented: $showTextInput) {
                 TextInputView()
+                    #if os(iOS)
                     .presentationDetents([.large])
                     .presentationCornerRadius(24)
+                    #endif
             }
             .onAppear {
                 compactLegacyWordStorageIfNeeded()
@@ -131,6 +144,7 @@ struct ContentView: View {
                     .background(Color.white.opacity(0.05))
                     .clipShape(Circle())
             }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
@@ -139,6 +153,14 @@ struct ContentView: View {
             StrobeTheme.background.opacity(0.8)
                 .ignoresSafeArea()
         )
+    }
+
+    private var emptyStateSubtitle: Text {
+        #if os(macOS)
+        Text("Click the + button to import\na PDF or EPUB, or enter text directly")
+        #else
+        Text("Tap the + button to import\na PDF or EPUB, or enter text directly")
+        #endif
     }
 
     // MARK: - Empty state
@@ -160,7 +182,7 @@ struct ContentView: View {
                     .font(StrobeTheme.titleFont(size: 24))
                     .foregroundStyle(StrobeTheme.textPrimary)
                 
-                Text("Tap the + button to import\na PDF or EPUB, or enter text directly")
+                emptyStateSubtitle
                     .font(StrobeTheme.bodyFont(size: 16))
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -177,6 +199,7 @@ struct ContentView: View {
                     NavigationLink(destination: destination(for: document)) {
                         DocumentCard(document: document, readerFont: readerFont)
                     }
+                    .buttonStyle(.plain)
                     .contextMenu {
                         Button(role: .destructive) {
                             modelContext.delete(document)
@@ -215,6 +238,7 @@ struct ContentView: View {
                 .clipShape(Circle())
                 .shadow(color: StrobeTheme.accent.opacity(0.4), radius: 10, x: 0, y: 5)
         }
+        .buttonStyle(.plain)
         .disabled(isProcessingImport)
     }
 
@@ -248,8 +272,13 @@ struct ContentView: View {
             return
         }
 
+        #if os(iOS)
+        let bookmarkOptions: URL.BookmarkCreationOptions = .minimalBookmark
+        #else
+        let bookmarkOptions: URL.BookmarkCreationOptions = [.withSecurityScope]
+        #endif
         guard let bookmarkData = try? url.bookmarkData(
-            options: .minimalBookmark,
+            options: bookmarkOptions,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         ) else {

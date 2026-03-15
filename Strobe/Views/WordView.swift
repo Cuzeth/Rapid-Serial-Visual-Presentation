@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 // MARK: - Word view
 
@@ -146,7 +150,7 @@ struct WordView: View {
     private func textWidth(_ text: String, fontSize: CGFloat) -> CGFloat {
         guard !text.isEmpty else { return 0 }
 
-        let font = readerFont.uiFont(size: fontSize)
+        let font = readerFont.platformFont(size: fontSize)
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         return ceil((text as NSString).size(withAttributes: attributes).width)
     }
