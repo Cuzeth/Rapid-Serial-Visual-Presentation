@@ -19,6 +19,8 @@ struct ReaderView: View {
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
     @AppStorage("smartTimingPercentPerLetter") private var smartTimingPercentPerLetter: Double = 4.0
     @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
+    @AppStorage("complexityTimingEnabled") private var complexityTimingEnabled: Bool = false
+    @AppStorage("complexityIntensity") private var complexityIntensity: Double = 0.5
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
@@ -53,6 +55,8 @@ struct ReaderView: View {
         let usesSentencePause = UserDefaults.standard.bool(forKey: "sentencePauseEnabled")
         let percentPerLetter = UserDefaults.standard.object(forKey: "smartTimingPercentPerLetter") as? Double ?? 4.0
         let pauseMultiplier = UserDefaults.standard.object(forKey: "sentencePauseMultiplier") as? Double ?? 1.5
+        let usesComplexityTiming = UserDefaults.standard.bool(forKey: "complexityTimingEnabled")
+        let complexityIntensityValue = UserDefaults.standard.object(forKey: "complexityIntensity") as? Double ?? 0.5
         self._engine = State(initialValue: RSVPEngine(
             words: words,
             currentIndex: effectiveIndex,
@@ -60,7 +64,10 @@ struct ReaderView: View {
             smartTimingEnabled: usesSmartTiming,
             sentencePauseEnabled: usesSentencePause,
             smartTimingPercentPerLetter: percentPerLetter,
-            sentencePauseMultiplier: pauseMultiplier
+            sentencePauseMultiplier: pauseMultiplier,
+            complexityTimingEnabled: usesComplexityTiming,
+            complexityIntensity: complexityIntensityValue,
+            complexityScores: document.complexityScores
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
     }
@@ -134,6 +141,12 @@ struct ReaderView: View {
         }
         .onChange(of: sentencePauseMultiplierValue) { _, newValue in
             engine.sentencePauseMultiplier = newValue
+        }
+        .onChange(of: complexityTimingEnabled) { _, newValue in
+            engine.complexityTimingEnabled = newValue
+        }
+        .onChange(of: complexityIntensity) { _, newValue in
+            engine.complexityIntensity = newValue
         }
         .alert("Save Error", isPresented: .init(
             get: { persistenceError != nil },

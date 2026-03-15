@@ -8,6 +8,8 @@ struct SettingsView: View {
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
     @AppStorage("smartTimingPercentPerLetter") private var smartTimingPercentPerLetter: Double = 4.0
     @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
+    @AppStorage("complexityTimingEnabled") private var complexityTimingEnabled: Bool = false
+    @AppStorage("complexityIntensity") private var complexityIntensity: Double = 0.5
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -144,7 +146,7 @@ struct SettingsView: View {
                                         Text("Smart Timing")
                                             .font(StrobeTheme.bodyFont(size: 16, bold: true))
                                             .foregroundStyle(StrobeTheme.textPrimary)
-                                        Text("Adjusts speed based on word length")
+                                        Text("Longer words stay on screen longer")
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
@@ -176,7 +178,7 @@ struct SettingsView: View {
                                         Text("Sentence Pauses")
                                             .font(StrobeTheme.bodyFont(size: 16, bold: true))
                                             .foregroundStyle(StrobeTheme.textPrimary)
-                                        Text("Pauses at punctuation")
+                                        Text("Brief pause at sentence-ending punctuation")
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
@@ -200,9 +202,44 @@ struct SettingsView: View {
                                     .padding(.leading, 4)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $complexityTimingEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Complexity Timing")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Adapts speed to word difficulty, not just length")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                if complexityTimingEnabled {
+                                    VStack(spacing: 8) {
+                                        HStack {
+                                            Text("Intensity")
+                                                .font(StrobeTheme.bodyFont(size: 14))
+                                                .foregroundStyle(StrobeTheme.textSecondary)
+                                            Spacer()
+                                            Text("\(Int(complexityIntensity * 100))%")
+                                                .font(StrobeTheme.bodyFont(size: 14, bold: true))
+                                                .foregroundStyle(StrobeTheme.textPrimary)
+                                        }
+                                        Slider(value: $complexityIntensity, in: 0...1, step: 0.05)
+                                            .tint(StrobeTheme.accent)
+                                        Text("How much to speed up common words and slow down rare ones. Higher = more variation.")
+                                            .font(StrobeTheme.bodyFont(size: 11))
+                                            .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                                    }
+                                    .padding(.leading, 4)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             }
                             .animation(.easeInOut(duration: 0.2), value: smartTimingEnabled)
                             .animation(.easeInOut(duration: 0.2), value: sentencePauseEnabled)
+                            .animation(.easeInOut(duration: 0.2), value: complexityTimingEnabled)
                         }
 
                         // Text Cleaning

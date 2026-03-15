@@ -59,6 +59,25 @@ final class RSVPEngine {
         }
     }
 
+    /// When enabled, per-word display time scales with cognitive complexity.
+    var complexityTimingEnabled: Bool {
+        didSet {
+            guard isPlaying else { return }
+            restartTimer()
+        }
+    }
+
+    /// How strongly complexity affects timing (0.0 = no effect, 1.0 = full effect).
+    var complexityIntensity: Double {
+        didSet {
+            guard isPlaying else { return }
+            restartTimer()
+        }
+    }
+
+    /// Pre-computed complexity scores, parallel to the `words` array. Nil for legacy documents.
+    private(set) var complexityScores: [Float]?
+
     /// The word at the current playback position, or an empty string if out of bounds.
     var currentWord: String {
         guard currentIndex >= 0, currentIndex < words.count else { return "" }
@@ -87,7 +106,10 @@ final class RSVPEngine {
         smartTimingEnabled: Bool = false,
         sentencePauseEnabled: Bool = false,
         smartTimingPercentPerLetter: Double = 4.0,
-        sentencePauseMultiplier: Double = 1.5
+        sentencePauseMultiplier: Double = 1.5,
+        complexityTimingEnabled: Bool = false,
+        complexityIntensity: Double = 0.5,
+        complexityScores: [Float]? = nil
     ) {
         self.words = words
         self.currentIndex = currentIndex
@@ -96,6 +118,9 @@ final class RSVPEngine {
         self.sentencePauseEnabled = sentencePauseEnabled
         self.smartTimingPercentPerLetter = smartTimingPercentPerLetter
         self.sentencePauseMultiplier = sentencePauseMultiplier
+        self.complexityTimingEnabled = complexityTimingEnabled
+        self.complexityIntensity = complexityIntensity
+        self.complexityScores = complexityScores
     }
 
     /// Starts playback from the current position. No-op if already playing or at end.
@@ -169,7 +194,23 @@ final class RSVPEngine {
             interval *= sentencePauseMultiplier
         }
 
+        if complexityTimingEnabled, let scores = complexityScores,
+           currentIndex < scores.count {
+            let score = Double(scores[currentIndex])
+            interval *= Self.complexityMultiplier(score: score, intensity: complexityIntensity)
+        }
+
         return interval
+    }
+
+    /// Maps a complexity score (0.0–1.0) and intensity (0.0–1.0) to a timing multiplier.
+    ///
+    /// At score 0.0 (trivial word) and full intensity: 0.7× (30% faster).
+    /// At score 0.5 (average word): 1.0× (no change).
+    /// At score 1.0 (complex word) and full intensity: 1.6× (60% slower).
+    /// At zero intensity, the multiplier is always 1.0.
+    nonisolated static func complexityMultiplier(score: Double, intensity: Double) -> Double {
+        1.0 + (score - 0.5) * 1.2 * intensity
     }
 
     /// Returns a timing multiplier based on word length.

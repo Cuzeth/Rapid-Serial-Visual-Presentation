@@ -294,6 +294,7 @@ struct ContentView: View {
                     fileName: fileName,
                     bookmarkData: bookmarkData,
                     words: importResult.words,
+                    complexityScores: importResult.complexityScores,
                     chapters: importResult.chapters,
                     wordsPerMinute: defaultWPM
                 )

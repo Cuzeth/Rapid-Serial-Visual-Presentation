@@ -11,6 +11,7 @@ enum DocumentSourceType: String, Equatable {
 /// The result of a document import operation.
 struct ImportResult {
     let words: [String]
+    let complexityScores: [Float]
     let chapters: [Chapter]
     let sourceType: DocumentSourceType
     let title: String?
@@ -101,10 +102,12 @@ enum DocumentImportPipeline {
         switch type {
         case .pdf:
             let result = PDFTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
-            return ImportResult(words: result.words, chapters: result.chapters, sourceType: .pdf, title: result.title)
+            let complexity = WordComplexityAnalyzer.analyzeComplexity(result.words)
+            return ImportResult(words: result.words, complexityScores: complexity, chapters: result.chapters, sourceType: .pdf, title: result.title)
         case .epub:
             let result = try EPUBTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
-            return ImportResult(words: result.words, chapters: result.chapters, sourceType: .epub, title: result.title)
+            let complexity = WordComplexityAnalyzer.analyzeComplexity(result.words)
+            return ImportResult(words: result.words, complexityScores: complexity, chapters: result.chapters, sourceType: .epub, title: result.title)
         case .unknown:
             throw DocumentImportError.unsupportedFileType
         }

@@ -186,11 +186,13 @@ struct TextInputView: View {
         } else {
             resolvedTitle = trimmedTitle
         }
+        let complexityScores = WordComplexityAnalyzer.analyzeComplexity(words)
         let document = Document(
             title: resolvedTitle,
             fileName: resolvedTitle,
             bookmarkData: Data(),
             words: words,
+            complexityScores: complexityScores,
             wordsPerMinute: defaultWPM
         )
         modelContext.insert(document)

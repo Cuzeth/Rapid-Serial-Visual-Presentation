@@ -19,6 +19,8 @@ final class Document {
     var words: [String]
     /// Newline-delimited word data stored externally to avoid bloating the database.
     @Attribute(.externalStorage) var wordsBlob: Data?
+    /// Per-word complexity scores stored as raw Float binary data.
+    @Attribute(.externalStorage) var complexityBlob: Data?
     var chapters: [Chapter]
     var currentWordIndex: Int
     var wordsPerMinute: Int
@@ -29,6 +31,8 @@ final class Document {
 
     /// In-memory cache of the decoded words array, invalidated on compaction.
     @Transient private var cachedWords: [String]?
+    /// In-memory cache of decoded complexity scores.
+    @Transient private var cachedComplexity: [Float]?
 
     /// The document's words, resolved from `wordsBlob` (preferred) or the legacy `words` array.
     /// Results are cached in memory for the lifetime of the model object.
@@ -46,6 +50,19 @@ final class Document {
 
         cachedWords = resolvedWords
         return resolvedWords
+    }
+
+    /// The document's per-word complexity scores, decoded from `complexityBlob`.
+    /// Returns `nil` if no complexity data exists (legacy documents).
+    var complexityScores: [Float]? {
+        if let cachedComplexity {
+            return cachedComplexity
+        }
+
+        guard let complexityBlob, !complexityBlob.isEmpty else { return nil }
+        let decoded = ComplexityStorage.decode(complexityBlob)
+        cachedComplexity = decoded
+        return decoded
     }
 
     /// Whether this document was created from typed/pasted text rather than a file.
@@ -74,6 +91,7 @@ final class Document {
         fileName: String,
         bookmarkData: Data,
         words: [String],
+        complexityScores: [Float] = [],
         chapters: [Chapter] = [],
         currentWordIndex: Int = 0,
         wordsPerMinute: Int = 300
@@ -83,6 +101,7 @@ final class Document {
         self.fileName = fileName
         self.bookmarkData = bookmarkData
         self.wordsBlob = WordStorage.encode(words)
+        self.complexityBlob = complexityScores.isEmpty ? nil : ComplexityStorage.encode(complexityScores)
         self.words = []
         self.chapters = chapters
         self.wordCount = words.count
@@ -90,5 +109,6 @@ final class Document {
         self.wordsPerMinute = wordsPerMinute
         self.dateAdded = Date()
         self.cachedWords = words
+        self.cachedComplexity = complexityScores.isEmpty ? nil : complexityScores
     }
 }

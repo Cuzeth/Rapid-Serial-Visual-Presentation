@@ -36,11 +36,13 @@ PDF/EPUB/Text → DocumentImportPipeline → Extractor → TextCleaner → Token
 - CJK text: detected by Unicode range, segmented via `NLTokenizer`, punctuation attached to preceding word
 - Mixed-script text: character-by-character buffering switches between Latin and CJK
 
-**RSVPEngine** (`Engine/RSVPEngine.swift`): `@Observable` class driving timer-based word advancement. Supports smart timing (duration scales with word length) and sentence pauses (multiplier at sentence-ending punctuation across Latin, CJK, and Arabic scripts).
+**RSVPEngine** (`Engine/RSVPEngine.swift`): `@Observable` class driving timer-based word advancement. Supports smart timing (duration scales with word length), sentence pauses (multiplier at sentence-ending punctuation across Latin, CJK, and Arabic scripts), and complexity timing (per-word duration modulation based on cognitive complexity scores).
+
+**WordComplexityAnalyzer** (`Engine/WordComplexityAnalyzer.swift`): Scores each word's cognitive complexity (0.0–1.0) using NLTagger lexical class, named entity recognition, word frequency (built-in common word list), character composition, and word length. Scores are computed at import time and stored as a parallel `[Float]` blob via `ComplexityStorage`.
 
 **WordView** (`Views/WordView.swift`): Renders words with Optimal Recognition Point (ORP) highlighting — anchor letter at ~1/3 position in red. Uses single `AttributedString` to preserve Arabic cursive shaping (color-only highlight, no bold) and correct glyph order. CJK short words use centered anchor.
 
-**Persistence**: SwiftData `Document` model stores words externally as newline-delimited UTF-8 blob (`WordStorage`) to avoid SQLite bloat. In-memory cache (`cachedWords`) avoids repeated deserialization.
+**Persistence**: SwiftData `Document` model stores words externally as newline-delimited UTF-8 blob (`WordStorage`) and per-word complexity scores as raw Float binary (`ComplexityStorage`). In-memory caches (`cachedWords`, `cachedComplexity`) avoid repeated deserialization.
 
 ### Xcode Project
 Uses `PBXFileSystemSynchronizedRootGroup` — Xcode auto-mirrors the on-disk folder structure. Moving files on disk is sufficient; no `project.pbxproj` edits needed.
@@ -49,9 +51,9 @@ Uses `PBXFileSystemSynchronizedRootGroup` — Xcode auto-mirrors the on-disk fol
 ```
 Strobe/
 ├── App/          App entry point, SwiftData container bootstrap
-├── Engine/       RSVPEngine (playback), Tokenizer (word splitting)
+├── Engine/       RSVPEngine (playback), Tokenizer (word splitting), WordComplexityAnalyzer
 ├── Import/       DocumentImportPipeline, extractors, TextCleaner, ZIPExtractor
-├── Models/       SwiftData models (Document, Chapter, WordStorage)
+├── Models/       SwiftData models (Document, Chapter, WordStorage, ComplexityStorage)
 ├── Views/        All SwiftUI views
 ├── Theme/        StrobeTheme (colors, typography, hex parser)
 ├── Utilities/    HapticManager, ReaderFont
@@ -65,4 +67,4 @@ Strobe/
 - **Logging**: `os.Logger` with subsystem/category
 - **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
 - **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `noReadableText`)
-- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `readerFontSelection`, `textCleaningLevel`
+- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `readerFontSelection`, `textCleaningLevel`

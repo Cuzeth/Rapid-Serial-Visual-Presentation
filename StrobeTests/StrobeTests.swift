@@ -333,6 +333,62 @@ struct StrobeTests {
         #expect(!RSVPEngine.endsWithSentencePunctuation("مرحبا،"))
     }
 
+    // MARK: - Complexity timing
+
+    @Test func complexityMultiplierAtMidpointIsUnity() {
+        let multiplier = RSVPEngine.complexityMultiplier(score: 0.5, intensity: 1.0)
+        #expect(multiplier == 1.0)
+    }
+
+    @Test func complexityMultiplierSpeedsUpSimpleWords() {
+        let multiplier = RSVPEngine.complexityMultiplier(score: 0.0, intensity: 1.0)
+        #expect(multiplier < 1.0)
+    }
+
+    @Test func complexityMultiplierSlowsComplexWords() {
+        let multiplier = RSVPEngine.complexityMultiplier(score: 1.0, intensity: 1.0)
+        #expect(multiplier > 1.0)
+    }
+
+    @Test func complexityMultiplierAtZeroIntensityIsUnity() {
+        let low = RSVPEngine.complexityMultiplier(score: 0.0, intensity: 0.0)
+        let high = RSVPEngine.complexityMultiplier(score: 1.0, intensity: 0.0)
+        #expect(low == 1.0)
+        #expect(high == 1.0)
+    }
+
+    @Test func complexityAnalyzerProducesCorrectCount() {
+        let words = ["the", "quick", "brown", "fox"]
+        let scores = WordComplexityAnalyzer.analyzeComplexity(words)
+        #expect(scores.count == words.count)
+    }
+
+    @Test func complexityAnalyzerScoresCommonWordsLow() {
+        let scores = WordComplexityAnalyzer.analyzeComplexity(["the", "is", "and", "epistemological"])
+        // Common words should score lower than a rare, long word
+        #expect(scores[0] < scores[3])
+        #expect(scores[1] < scores[3])
+        #expect(scores[2] < scores[3])
+    }
+
+    @Test func complexityAnalyzerHandlesEmptyInput() {
+        let scores = WordComplexityAnalyzer.analyzeComplexity([])
+        #expect(scores.isEmpty)
+    }
+
+    @Test func complexityStorageRoundTrip() {
+        let scores: [Float] = [0.1, 0.5, 0.9, 0.0, 1.0]
+        let encoded = ComplexityStorage.encode(scores)
+        let decoded = ComplexityStorage.decode(encoded)
+        #expect(decoded == scores)
+    }
+
+    @Test func complexityStorageEmptyArray() {
+        let encoded = ComplexityStorage.encode([])
+        let decoded = ComplexityStorage.decode(encoded)
+        #expect(decoded.isEmpty)
+    }
+
     // MARK: - Mixed language (CJK + Latin)
 
     @Test func tokenizesChineseWithLatinInterspersed() {
