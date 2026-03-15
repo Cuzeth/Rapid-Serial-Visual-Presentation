@@ -120,6 +120,22 @@ struct ContentView: View {
             } message: {
                 Text(importError ?? "")
             }
+            .onDrop(of: DocumentImportPipeline.supportedContentTypes, isTargeted: nil) { providers in
+                guard let provider = providers.first else { return false }
+                for type in DocumentImportPipeline.supportedContentTypes {
+                    if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                        provider.loadItem(forTypeIdentifier: type.identifier) { data, _ in
+                            guard let data = data as? Data,
+                                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                            Task { @MainActor in
+                                importDocument(from: url)
+                            }
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
         }
         .preferredColorScheme(.dark) // Force dark mode for the theme
     }
