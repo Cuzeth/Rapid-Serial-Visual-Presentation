@@ -272,19 +272,20 @@ struct ContentView: View {
             return
         }
 
+        let bookmarkData: Data
         #if os(iOS)
         let bookmarkOptions: URL.BookmarkCreationOptions = .minimalBookmark
         #else
         let bookmarkOptions: URL.BookmarkCreationOptions = [.withSecurityScope]
         #endif
-        guard let bookmarkData = try? url.bookmarkData(
+        if let data = try? url.bookmarkData(
             options: bookmarkOptions,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
-        ) else {
-            url.stopAccessingSecurityScopedResource()
-            importError = "Could not save a reference to this file."
-            return
+        ) {
+            bookmarkData = data
+        } else {
+            bookmarkData = Data()
         }
 
         isProcessingImport = true
