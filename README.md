@@ -2,7 +2,7 @@
 [<img src="https://img.shields.io/itunes/v/6759187873?logo=App-Store&logoColor=white&logoSize=large&label=App%20Store&labelColor=%231CBBFA">](https://apps.apple.com/us/app/strobe-rapid-serial-reader/id6759187873)
 [![Tests](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml/badge.svg)](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml)
 
-Strobe is an iOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB files. It presents one word at a time so you can read long material with less eye movement and tighter focus.
+Strobe is an iOS and macOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB files. It presents one word at a time so you can read long material with less eye movement and tighter focus.
 
 ## Features
 
@@ -10,7 +10,7 @@ Strobe is an iOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB
 - Read with an RSVP interface (one word at a time).
 - Hold to play, release to pause, and swipe to scrub.
 - Adjust reading speed (`100-1000` WPM), text size, and font.
-- Optional Smart Timing and Sentence Pauses.
+- Optional Smart Timing, Sentence Pauses, and Complexity Timing.
 - Chapter list navigation with progress tracking.
 - Local persistence with SwiftData and security-scoped file bookmarks.
 - Built-in onboarding tutorial and haptic feedback.
@@ -21,6 +21,7 @@ Strobe is an iOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB
 - SwiftUI
 - SwiftData
 - PDFKit
+- NaturalLanguage
 - UniformTypeIdentifiers
 - XCTest + Swift Testing
 
@@ -28,6 +29,7 @@ Strobe is an iOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB
 
 - macOS with Xcode 15 or newer
 - iOS deployment target: 17.0
+- macOS deployment target: 14.0
 
 ## Getting Started
 
