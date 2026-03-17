@@ -120,21 +120,19 @@ struct ContentView: View {
             } message: {
                 Text(importError ?? "")
             }
-            .onDrop(of: DocumentImportPipeline.supportedContentTypes, isTargeted: nil) { providers in
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 guard let provider = providers.first else { return false }
-                for type in DocumentImportPipeline.supportedContentTypes {
-                    if provider.hasItemConformingToTypeIdentifier(type.identifier) {
-                        provider.loadItem(forTypeIdentifier: type.identifier) { data, _ in
-                            guard let data = data as? Data,
-                                  let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
-                            Task { @MainActor in
-                                importDocument(from: url)
-                            }
-                        }
-                        return true
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                    guard let data = data as? Data,
+                          let path = String(data: data, encoding: .utf8),
+                          let url = URL(string: path) else { return }
+                    let ext = url.pathExtension.lowercased()
+                    guard ext == "pdf" || ext == "epub" else { return }
+                    Task { @MainActor in
+                        importDocument(from: url)
                     }
                 }
-                return false
+                return true
             }
         }
         .preferredColorScheme(.dark) // Force dark mode for the theme
@@ -283,10 +281,7 @@ struct ContentView: View {
         // Logic identical to original, just ensuring we don't break it
         guard !isProcessingImport else { return }
 
-        guard url.startAccessingSecurityScopedResource() else {
-            importError = "Cannot access this file."
-            return
-        }
+        let isSecurityScoped = url.startAccessingSecurityScopedResource()
 
         let bookmarkData: Data
         #if os(iOS)
@@ -310,7 +305,7 @@ struct ContentView: View {
         
         Task(priority: .userInitiated) {
             defer {
-                url.stopAccessingSecurityScopedResource()
+                if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
                 isProcessingImport = false
                 importFileName = ""
             }
