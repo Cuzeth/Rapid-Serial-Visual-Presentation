@@ -125,6 +125,17 @@ struct StrobeTests {
         #expect(RSVPEngine.endsWithSentencePunctuation("wow!"))
     }
 
+    @Test func sentencePauseDetectsPunctuationInsideDelimiters() {
+        #expect(RSVPEngine.endsWithSentencePunctuation("home.\""))
+        #expect(RSVPEngine.endsWithSentencePunctuation("laughed?\""))
+        #expect(RSVPEngine.endsWithSentencePunctuation("fun!)"))
+        #expect(RSVPEngine.endsWithSentencePunctuation("pages.)"))
+        #expect(RSVPEngine.endsWithSentencePunctuation("done.\u{201D}"))  // "
+        #expect(RSVPEngine.endsWithSentencePunctuation("end.])"))
+        #expect(!RSVPEngine.endsWithSentencePunctuation("said,\""))
+        #expect(!RSVPEngine.endsWithSentencePunctuation("(word)"))
+    }
+
     @Test func sentencePauseIgnoresNonSentencePunctuation() {
         #expect(!RSVPEngine.endsWithSentencePunctuation("hello,"))
         #expect(!RSVPEngine.endsWithSentencePunctuation("word"))

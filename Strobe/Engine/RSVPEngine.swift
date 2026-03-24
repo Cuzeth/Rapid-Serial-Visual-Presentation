@@ -244,10 +244,20 @@ final class RSVPEngine {
         "\u{06D4}",          // ۔ Arabic/Urdu full stop
     ]
 
-    /// Returns `true` if the word ends with sentence-terminating punctuation (`.`, `!`, `?`).
+    /// Characters that may wrap sentence-ending punctuation (closing quotes, parens, brackets).
+    nonisolated private static let closingDelimiters: Set<Character> = [
+        "\"", "'", "\u{201D}", "\u{2019}", // " ' " '
+        ")", "]", "\u{00BB}",              // ) ] »
+    ]
+
+    /// Returns `true` if the word ends with sentence-terminating punctuation,
+    /// looking past any trailing closing delimiters (quotes, parentheses, brackets).
     nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
-        guard let last = word.last else { return false }
-        return sentenceEnders.contains(last)
+        for char in word.reversed() {
+            if sentenceEnders.contains(char) { return true }
+            if !closingDelimiters.contains(char) { return false }
+        }
+        return false
     }
 
     deinit {
