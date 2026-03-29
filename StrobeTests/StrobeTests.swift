@@ -543,6 +543,73 @@ struct StrobeTests {
         #expect(decoded == scores) // should ignore trailing partial float
     }
 
+    // MARK: - HTML entity resolution
+
+    @Test func resolvesNamedHTMLEntities() {
+        let input = "Hello&nbsp;World&amp;Co &lt;tag&gt; &quot;quoted&quot; &apos;apos&apos;"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "Hello World&Co <tag> \"quoted\" 'apos'")
+    }
+
+    @Test func resolvesTypographicEntities() {
+        let input = "word&mdash;word&ndash;word&hellip;more"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "word\u{2014}word\u{2013}word\u{2026}more")
+    }
+
+    @Test func resolvesQuoteEntities() {
+        let input = "&lsquo;single&rsquo; &ldquo;double&rdquo;"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "\u{2018}single\u{2019} \u{201C}double\u{201D}")
+    }
+
+    @Test func resolvesDecimalNumericEntities() {
+        // &#65; = 'A', &#8212; = em dash
+        let input = "&#65; &#8212; &#169;"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "A \u{2014} \u{00A9}")
+    }
+
+    @Test func resolvesHexNumericEntities() {
+        // &#x41; = 'A', &#x2014; = em dash, &#x1F600; = grinning face emoji
+        let input = "&#x41; &#x2014; &#x1F600;"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "A \u{2014} \u{1F600}")
+    }
+
+    @Test func numericEntityWithMissingSemicolonEmitsLiteral() {
+        // No semicolon — should emit the literal '&' and continue
+        let input = "&#65 next"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "&#65 next")
+    }
+
+    @Test func numericEntityWithEmptyDigitsEmitsLiteral() {
+        // &#; has no digits — should pass through
+        let input = "&#; text"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "&#; text")
+    }
+
+    @Test func numericEntityWithInvalidCodePointEmitsLiteral() {
+        // 0xFFFFFF is not a valid Unicode scalar
+        let input = "&#xFFFFFF; text"
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "&#xFFFFFF; text")
+    }
+
+    @Test func mixedNamedAndNumericEntities() {
+        let input = "&amp;&#38;&#x26;"  // all three ways to encode '&'
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == "&&&")
+    }
+
+    @Test func textWithNoEntitiesPassesThrough() {
+        let input = "Plain text with no entities at all."
+        let result = EPUBTextExtractor.resolveHTMLEntities(input)
+        #expect(result == input)
+    }
+
     // MARK: - ZIP test helpers
 
     /// Builds a minimal valid ZIP archive containing a single stored (uncompressed) entry.
