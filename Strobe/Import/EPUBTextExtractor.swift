@@ -402,7 +402,7 @@ enum EPUBTextExtractor {
     ]
 
     /// Resolves named and numeric HTML entities in the given string.
-    nonisolated private static func resolveHTMLEntities(_ text: String) -> String {
+    nonisolated static func resolveHTMLEntities(_ text: String) -> String {
         var result = text
 
         // Named entities
