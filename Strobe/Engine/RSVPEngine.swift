@@ -18,61 +18,40 @@ final class RSVPEngine {
     /// Whether playback is currently running.
     private(set) var isPlaying: Bool = false
 
-    /// The target reading speed. Changing this during playback restarts the timer.
+    /// The target reading speed. Changing this during playback reschedules the timer.
     var wordsPerMinute: Int {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// When enabled, longer words are displayed for proportionally more time.
     var smartTimingEnabled: Bool {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// When enabled, words ending with `.`, `!`, or `?` receive extra display time.
     var sentencePauseEnabled: Bool {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// Percentage points added to the display interval per letter when smart timing is on.
     /// E.g. 4.0 means a 10-letter word gets +40% duration (1.4× base interval).
     var smartTimingPercentPerLetter: Double {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// Multiplier applied to the interval at sentence-ending punctuation when sentence pauses are on.
     var sentencePauseMultiplier: Double {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// When enabled, per-word display time scales with cognitive complexity.
     var complexityTimingEnabled: Bool {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// How strongly complexity affects timing (0.0 = no effect, 1.0 = full effect).
     var complexityIntensity: Double {
-        didSet {
-            guard isPlaying else { return }
-            restartTimer()
-        }
+        didSet { onPlaybackSettingChanged() }
     }
 
     /// Pre-computed complexity scores, parallel to the `words` array. Nil for legacy documents.
@@ -96,7 +75,7 @@ final class RSVPEngine {
     private var timerSource: DispatchSourceTimer?
 
     private var baseInterval: TimeInterval {
-        60.0 / Double(wordsPerMinute)
+        60.0 / Double(max(1, wordsPerMinute))
     }
 
     init(
@@ -127,7 +106,7 @@ final class RSVPEngine {
     func play() {
         guard !isPlaying, !isAtEnd else { return }
         isPlaying = true
-        startTimer()
+        scheduleNextWord()
     }
 
     /// Stops playback and invalidates the timer.
@@ -154,37 +133,40 @@ final class RSVPEngine {
         seek(to: 0)
     }
 
-    private func startTimer() {
+    private func onPlaybackSettingChanged() {
         guard isPlaying else { return }
-        let delay = nextInterval()
-        let source = DispatchSource.makeTimerSource(queue: .main)
-        source.schedule(deadline: .now() + delay)
-        source.setEventHandler { [weak self] in
-            self?.advance()
+        scheduleNextWord()
+    }
+
+    /// Schedules (or reschedules) the single reusable timer for the next word advance.
+    private func scheduleNextWord() {
+        guard isPlaying else { return }
+        if timerSource == nil {
+            let source = DispatchSource.makeTimerSource(queue: .main)
+            source.setEventHandler { [weak self] in
+                self?.advance()
+            }
+            source.resume()
+            timerSource = source
         }
-        timerSource = source
-        source.resume()
+        timerSource?.schedule(deadline: .now() + nextInterval())
     }
 
     private func stopTimer() {
-        timerSource?.cancel()
+        guard let source = timerSource else { return }
+        source.setEventHandler {}
+        source.cancel()
         timerSource = nil
     }
 
     private func advance() {
+        guard isPlaying else { return }
         if currentIndex < words.count - 1 {
             currentIndex += 1
-            if isPlaying {
-                startTimer()
-            }
+            scheduleNextWord()
         } else {
             pause()
         }
-    }
-
-    private func restartTimer() {
-        stopTimer()
-        startTimer()
     }
 
     private func nextInterval() -> TimeInterval {

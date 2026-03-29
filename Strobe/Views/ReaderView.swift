@@ -516,8 +516,9 @@ struct ReaderView: View {
     }
 
     private func applyWPM(_ value: Int, withHaptic: Bool) {
-        guard value != engine.wordsPerMinute else { return }
-        engine.wordsPerMinute = value
+        let clamped = max(1, value)
+        guard clamped != engine.wordsPerMinute else { return }
+        engine.wordsPerMinute = clamped
         document.wordsPerMinute = value
         if withHaptic {
             HapticManager.shared.wpmChanged()
