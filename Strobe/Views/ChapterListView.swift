@@ -59,7 +59,7 @@ struct ChapterListView: View {
             }
         }
         #if os(iOS)
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         #endif
     }
 

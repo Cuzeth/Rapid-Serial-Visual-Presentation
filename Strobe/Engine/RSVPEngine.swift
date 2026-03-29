@@ -93,7 +93,7 @@ final class RSVPEngine {
         return Double(currentIndex) / Double(words.count - 1)
     }
 
-    private var timer: Timer?
+    private var timerSource: DispatchSourceTimer?
 
     private var baseInterval: TimeInterval {
         60.0 / Double(wordsPerMinute)
@@ -157,14 +157,18 @@ final class RSVPEngine {
     private func startTimer() {
         guard isPlaying else { return }
         let delay = nextInterval()
-        timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+        let source = DispatchSource.makeTimerSource(queue: .main)
+        source.schedule(deadline: .now() + delay)
+        source.setEventHandler { [weak self] in
             self?.advance()
         }
+        timerSource = source
+        source.resume()
     }
 
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        timerSource?.cancel()
+        timerSource = nil
     }
 
     private func advance() {

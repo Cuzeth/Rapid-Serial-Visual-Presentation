@@ -50,7 +50,7 @@ enum Tokenizer {
         cjkBuffer.reserveCapacity(64)
 
         for scalar in text.unicodeScalars {
-            if isCJK(scalar) {
+            if CJKUtilities.isCJK(scalar) {
                 // Flush any pending Latin token before switching to CJK
                 if !tokenBuffer.isEmpty {
                     appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
@@ -196,29 +196,6 @@ enum Tokenizer {
     }
 
     // MARK: - CJK support
-
-    /// Returns `true` if the scalar is a CJK ideograph, CJK punctuation,
-    /// or fullwidth form — characters that belong to CJK text runs.
-    nonisolated private static func isCJK(_ scalar: Unicode.Scalar) -> Bool {
-        let v = scalar.value
-        // CJK Unified Ideographs
-        if v >= 0x4E00 && v <= 0x9FFF { return true }
-        // CJK Extension A
-        if v >= 0x3400 && v <= 0x4DBF { return true }
-        // CJK Compatibility Ideographs
-        if v >= 0xF900 && v <= 0xFAFF { return true }
-        // CJK Unified Ideographs Extension B
-        if v >= 0x20000 && v <= 0x2A6DF { return true }
-        // CJK punctuation and symbols (。、「」etc.)
-        if v >= 0x3000 && v <= 0x303F { return true }
-        // Fullwidth forms (！？，etc.)
-        if v >= 0xFF00 && v <= 0xFFEF { return true }
-        // Bopomofo
-        if v >= 0x3100 && v <= 0x312F { return true }
-        // Hiragana + Katakana (for Japanese mixed text)
-        if v >= 0x3040 && v <= 0x30FF { return true }
-        return false
-    }
 
     /// Segments a buffer of CJK text into words using `NLTokenizer`
     /// and appends them to the output. CJK punctuation is attached

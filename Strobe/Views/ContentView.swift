@@ -265,8 +265,11 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Import Logic (Unchanged logic, just keeping it here)
+}
 
+// MARK: - Import Logic
+
+extension ContentView {
     private func handleImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
@@ -278,7 +281,6 @@ struct ContentView: View {
     }
 
     private func importDocument(from url: URL) {
-        // Logic identical to original, just ensuring we don't break it
         guard !isProcessingImport else { return }
 
         let isSecurityScoped = url.startAccessingSecurityScopedResource()
@@ -302,7 +304,7 @@ struct ContentView: View {
         isProcessingImport = true
         importFileName = url.lastPathComponent
         let fileName = url.lastPathComponent
-        
+
         Task(priority: .userInitiated) {
             defer {
                 if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
@@ -351,8 +353,6 @@ struct ContentView: View {
             }
         }
     }
-
-    // MARK: - Helpers
 
     private func compactLegacyWordStorageIfNeeded() {
         var didCompact = false

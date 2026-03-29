@@ -19,13 +19,13 @@ enum PDFTextExtractor {
     ///   - url: The file URL of the PDF document.
     ///   - cleaningLevel: How aggressively to remove boilerplate text.
     /// - Returns: Tokenized words, chapter list, and metadata title.
-    ///   Returns an empty result if the PDF cannot be opened.
+    ///   Throws ``DocumentImportError/pdfLoadFailed`` if the PDF cannot be opened.
     nonisolated static func extractWordsAndChapters(
         from url: URL,
         cleaningLevel: TextCleaningLevel = .standard
-    ) -> PDFExtractionResult {
+    ) throws -> PDFExtractionResult {
         guard let document = PDFDocument(url: url) else {
-            return PDFExtractionResult(words: [], chapters: [], title: nil)
+            throw DocumentImportError.pdfLoadFailed
         }
 
         let title = (document.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String)

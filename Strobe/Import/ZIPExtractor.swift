@@ -1,5 +1,6 @@
 import Foundation
 import Compression
+import os
 
 /// Extracts files from ZIP archives without external dependencies.
 ///
@@ -7,6 +8,20 @@ import Compression
 /// stored (method 0) and deflate (method 8) compression using Apple's
 /// Compression framework. Used internally for EPUB extraction.
 enum ZIPExtractor {
+
+    nonisolated private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.abdeen.strobe",
+        category: "ZIPExtractor"
+    )
+
+    /// ZIP local file header signature (`PK\x03\x04`).
+    nonisolated private static let localFileHeaderSignature: UInt32 = 0x04034b50
+
+    /// Fixed-size portion of the ZIP local file header (30 bytes).
+    nonisolated private static let localFileHeaderSize = 30
+
+    /// Maximum decompression buffer size (100 MB) to prevent ZIP bombs.
+    nonisolated private static let maxDecompressionSize = 100 * 1024 * 1024
 
     /// Extracts all files from a ZIP archive to a destination directory.
     /// - Parameters:
@@ -17,7 +32,7 @@ enum ZIPExtractor {
         let fm = FileManager.default
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
 
-        let data = try Data(contentsOf: source)
+        let data = try Data(contentsOf: source, options: .mappedIfSafe)
 
         try data.withUnsafeBytes { (rawBuffer: UnsafeRawBufferPointer) in
             guard let baseAddress = rawBuffer.baseAddress else { return }
@@ -25,10 +40,9 @@ enum ZIPExtractor {
             let size = rawBuffer.count
 
             var offset = 0
-            while offset + 30 <= size {
-                // Local file header signature: 0x04034b50
+            while offset + localFileHeaderSize <= size {
                 let sig = readUInt32(bytes, at: offset)
-                guard sig == 0x04034b50 else { break }
+                guard sig == localFileHeaderSignature else { break }
 
                 let compressionMethod = readUInt16(bytes, at: offset + 8)
                 let compressedSize = Int(readUInt32(bytes, at: offset + 18))
@@ -36,7 +50,7 @@ enum ZIPExtractor {
                 let nameLength = Int(readUInt16(bytes, at: offset + 26))
                 let extraLength = Int(readUInt16(bytes, at: offset + 28))
 
-                let nameStart = offset + 30
+                let nameStart = offset + localFileHeaderSize
                 guard nameStart + nameLength <= size else { break }
                 let nameData = Data(bytes: bytes + nameStart, count: nameLength)
                 guard let name = String(data: nameData, encoding: .utf8), !name.isEmpty else {
@@ -48,6 +62,14 @@ enum ZIPExtractor {
                 guard dataStart + compressedSize <= size else { break }
 
                 let fileURL = destination.appendingPathComponent(name)
+
+                // Prevent Zip Slip path traversal
+                guard fileURL.standardizedFileURL.path
+                    .hasPrefix(destination.standardizedFileURL.path + "/") else {
+                    logger.warning("Skipping ZIP entry with path traversal: \(name, privacy: .public)")
+                    offset = dataStart + compressedSize
+                    continue
+                }
 
                 if name.hasSuffix("/") {
                     // Directory entry
@@ -67,12 +89,13 @@ enum ZIPExtractor {
                         // Deflate
                         let compressed = Data(bytes: bytes + dataStart, count: compressedSize)
                         guard let decompressed = inflate(compressed, expectedSize: uncompressedSize) else {
+                            logger.warning("Deflate decompression failed for entry: \(name, privacy: .public)")
                             offset = dataStart + compressedSize
                             continue
                         }
                         fileData = decompressed
                     } else {
-                        // Unsupported compression — skip
+                        logger.warning("Unsupported compression method \(compressionMethod) for entry: \(name, privacy: .public)")
                         offset = dataStart + compressedSize
                         continue
                     }
@@ -104,6 +127,10 @@ enum ZIPExtractor {
     nonisolated private static func inflate(_ data: Data, expectedSize: Int) -> Data? {
         // Use Apple's Compression framework for raw deflate
         let capacity = max(expectedSize, data.count * 4)
+        guard capacity <= maxDecompressionSize else {
+            logger.warning("Decompression buffer exceeds \(maxDecompressionSize) bytes — possible ZIP bomb")
+            return nil
+        }
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: capacity)
         defer { destinationBuffer.deallocate() }
 

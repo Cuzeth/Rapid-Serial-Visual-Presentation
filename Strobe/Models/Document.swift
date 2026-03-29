@@ -15,7 +15,8 @@ final class Document {
     var lastReadDate: Date?
     /// Security-scoped bookmark for re-accessing the original file.
     var bookmarkData: Data
-    /// Legacy word storage — empty for new documents. See ``compactWordStorageIfNeeded()``.
+    /// Legacy word storage — empty for new documents. Retained for SwiftData
+    /// schema compatibility with pre-blob versions. See ``compactWordStorageIfNeeded()``.
     var words: [String]
     /// Newline-delimited word data stored externally to avoid bloating the database.
     @Attribute(.externalStorage) var wordsBlob: Data?

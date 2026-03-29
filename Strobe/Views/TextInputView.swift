@@ -20,11 +20,7 @@ struct TextInputView: View {
         var latinWords = 0
 
         for scalar in inputText.unicodeScalars {
-            let v = scalar.value
-            let isCJK = (v >= 0x4E00 && v <= 0x9FFF)
-                || (v >= 0x3400 && v <= 0x4DBF)
-                || (v >= 0xF900 && v <= 0xFAFF)
-                || (v >= 0x20000 && v <= 0x2A6DF)
+            let isCJK = CJKUtilities.isHanIdeograph(scalar)
 
             if isCJK {
                 cjkCount += 1

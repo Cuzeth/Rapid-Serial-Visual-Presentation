@@ -101,7 +101,7 @@ enum DocumentImportPipeline {
         let type = resolveSourceType(for: url, detectedContentType: detectedContentType)
         switch type {
         case .pdf:
-            let result = PDFTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
+            let result = try PDFTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
             let complexity = WordComplexityAnalyzer.analyzeComplexity(result.words)
             return ImportResult(words: result.words, complexityScores: complexity, chapters: result.chapters, sourceType: .pdf, title: result.title)
         case .epub:

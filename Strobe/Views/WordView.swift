@@ -16,10 +16,15 @@ import AppKit
 ///
 /// Uses `AttributedString` to render the word as a single text run, which
 /// preserves cursive shaping for Arabic and correct glyph order for all scripts.
-struct WordView: View {
+struct WordView: View, Equatable {
     let word: String
     let fontSize: CGFloat
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+
+    static func == (lhs: WordView, rhs: WordView) -> Bool {
+        lhs.word == rhs.word && lhs.fontSize == rhs.fontSize
+            && lhs.readerFontSelection == rhs.readerFontSelection
+    }
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
@@ -43,11 +48,7 @@ struct WordView: View {
 
         // Short CJK words look better with the anchor centered rather than
         // at the 1/3 position used for longer Latin words.
-        if letterCount <= 3, word.unicodeScalars.contains(where: { v in
-            let c = v.value
-            return (c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF)
-                || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2A6DF)
-        }) {
+        if letterCount <= 3, word.unicodeScalars.contains(where: { CJKUtilities.isHanIdeograph($0) }) {
             return letterIndices[letterCount / 2]
         }
 
@@ -129,6 +130,8 @@ struct WordView: View {
     /// Scales the font size down if the word would exceed the available width.
     private func fittedFontSize(for availableWidth: CGFloat) -> CGFloat {
         guard availableWidth > 0 else { return fontSize }
+        // Approximate average character width as a fraction of font size.
+        // Tuned empirically for the default monospaced/serif reader fonts.
         let estimatedCharacterWidth = fontSize * 0.62
         let estimatedWordWidth = CGFloat(max(word.count, 1)) * estimatedCharacterWidth
         guard estimatedWordWidth > availableWidth else { return fontSize }

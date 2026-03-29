@@ -51,6 +51,9 @@ struct ReaderView: View {
         self.startingWordIndex = startingWordIndex
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
         let words = document.readingWords
+        // Read settings via UserDefaults because @AppStorage properties aren't
+        // accessible before `self` is fully initialized. Keys and defaults must
+        // match the @AppStorage declarations above.
         let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
         let usesSentencePause = UserDefaults.standard.bool(forKey: "sentencePauseEnabled")
         let percentPerLetter = UserDefaults.standard.object(forKey: "smartTimingPercentPerLetter") as? Double ?? 4.0
@@ -95,6 +98,7 @@ struct ReaderView: View {
                         word: engine.currentWord,
                         fontSize: CGFloat(fontSize)
                     )
+                    .equatable()
                     .id("wordview") // stabilize identity
                     .transition(.opacity)
                 }

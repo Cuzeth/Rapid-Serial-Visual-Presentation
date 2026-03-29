@@ -13,11 +13,16 @@ enum ComplexityStorage {
     }
 
     /// Decodes raw binary data back into a complexity score array.
+    ///
+    /// Uses `load(fromByteOffset:as:)` instead of `bindMemory` to handle
+    /// potentially unaligned data safely.
     static func decode(_ data: Data) -> [Float] {
         guard !data.isEmpty else { return [] }
         let count = data.count / MemoryLayout<Float>.size
         return data.withUnsafeBytes { buffer in
-            Array(buffer.bindMemory(to: Float.self).prefix(count))
+            (0..<count).map { i in
+                buffer.load(fromByteOffset: i * MemoryLayout<Float>.size, as: Float.self)
+            }
         }
     }
 }

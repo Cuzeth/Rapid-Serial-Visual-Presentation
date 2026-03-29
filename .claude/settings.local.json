@@ -4,7 +4,9 @@
       "Bash(grep:*)",
       "Bash(ls:*)",
       "Bash(find:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

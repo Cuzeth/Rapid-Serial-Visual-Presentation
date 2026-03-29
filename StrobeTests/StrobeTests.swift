@@ -410,4 +410,161 @@ struct StrobeTests {
         #expect(words.joined() == "我在使用iPhone阅读")
     }
 
+    // MARK: - ZIP security
+
+    @Test func zipExtractorRejectsPathTraversal() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Build a minimal ZIP with a path-traversal entry: "../../evil.txt"
+        let zipData = buildMinimalZIP(name: "../../evil.txt", content: Data("pwned".utf8))
+        let zipURL = tempDir.appendingPathComponent("malicious.zip")
+        try zipData.write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("extracted")
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        // The file should NOT exist outside the extraction directory
+        let escapedFile = tempDir.appendingPathComponent("evil.txt")
+        #expect(!FileManager.default.fileExists(atPath: escapedFile.path))
+    }
+
+    @Test func zipInflateCapsDecompressionBuffer() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        // Build a ZIP whose uncompressed-size header claims ~200 MB (exceeds 100 MB cap).
+        // The actual content is tiny, but the header tricks the allocator.
+        let content = Data("hello".utf8)
+        var zip = Data()
+        let name = Data("bomb.txt".utf8)
+
+        // Local file header
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(0x04034b50).littleEndian) { Data($0) })
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(20).littleEndian) { Data($0) })   // version
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })    // flags
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(8).littleEndian) { Data($0) })    // compression: deflate
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })    // mod time
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })    // mod date
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(0).littleEndian) { Data($0) })    // crc32
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(content.count).littleEndian) { Data($0) })  // compressed size
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(200_000_000).littleEndian) { Data($0) })    // uncompressed: 200 MB
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(name.count).littleEndian) { Data($0) })
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })    // extra length
+        zip.append(name)
+        zip.append(content)
+
+        let zipURL = tempDir.appendingPathComponent("bomb.zip")
+        try zip.write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("extracted")
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        // The file should NOT be extracted (inflate returns nil due to cap)
+        let extractedFile = extractDir.appendingPathComponent("bomb.txt")
+        #expect(!FileManager.default.fileExists(atPath: extractedFile.path))
+    }
+
+    // MARK: - PDF error propagation
+
+    @Test func pdfExtractionThrowsForInvalidFile() {
+        do {
+            _ = try DocumentImportPipeline.extractWordsAndChapters(
+                from: URL(fileURLWithPath: "/tmp/nonexistent.pdf"),
+                detectedContentType: .pdf
+            )
+            Issue.record("Expected PDF extraction to throw an error for a missing file.")
+        } catch let error as DocumentImportError {
+            #expect(error == .pdfLoadFailed)
+        } catch {
+            Issue.record("Unexpected error type: \(error)")
+        }
+    }
+
+    // MARK: - CJK utilities
+
+    @Test func cjkUtilitiesDetectsAllRanges() {
+        // CJK Unified Ideographs
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x4E00)!))
+        // CJK Extension A
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x3400)!))
+        // CJK Compatibility
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0xF900)!))
+        // CJK Extension B
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x20000)!))
+        // CJK punctuation
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x3001)!))  // 、
+        // Fullwidth forms
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0xFF01)!))  // ！
+        // Bopomofo
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x3105)!))
+        // Hiragana
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x3042)!))  // あ
+        // Katakana
+        #expect(CJKUtilities.isCJK(Unicode.Scalar(0x30A2)!))  // ア
+        // Latin should NOT match
+        #expect(!CJKUtilities.isCJK(Unicode.Scalar(0x0041)!)) // A
+    }
+
+    @Test func cjkUtilitiesHanIdeographExcludesKana() {
+        // Han ideograph should match
+        #expect(CJKUtilities.isHanIdeograph(Unicode.Scalar(0x4E00)!))
+        // Hiragana should NOT match isHanIdeograph
+        #expect(!CJKUtilities.isHanIdeograph(Unicode.Scalar(0x3042)!))
+        // Fullwidth should NOT match isHanIdeograph
+        #expect(!CJKUtilities.isHanIdeograph(Unicode.Scalar(0xFF01)!))
+    }
+
+    @Test func cjkUtilitiesIsCJKDominant() {
+        #expect(CJKUtilities.isCJKDominant("你好世界"))
+        #expect(!CJKUtilities.isCJKDominant("Hello World"))
+        #expect(CJKUtilities.isCJKDominant("你好世界ab"))  // 4/6 CJK > 50%
+    }
+
+    // MARK: - ComplexityStorage alignment safety
+
+    @Test func complexityStorageHandlesRoundTrip() {
+        let scores: [Float] = [0.0, 0.25, 0.5, 0.75, 1.0, 0.123456]
+        let encoded = ComplexityStorage.encode(scores)
+        let decoded = ComplexityStorage.decode(encoded)
+        #expect(decoded == scores)
+    }
+
+    @Test func complexityStorageDecodesSubsetOfData() {
+        // Verify decode handles data that's not an exact multiple of Float size
+        let scores: [Float] = [0.1, 0.2, 0.3]
+        var encoded = ComplexityStorage.encode(scores)
+        encoded.append(contentsOf: [0xFF, 0xFF]) // extra trailing bytes
+        let decoded = ComplexityStorage.decode(encoded)
+        #expect(decoded == scores) // should ignore trailing partial float
+    }
+
+    // MARK: - ZIP test helpers
+
+    /// Builds a minimal valid ZIP archive containing a single stored (uncompressed) entry.
+    private func buildMinimalZIP(name: String, content: Data) -> Data {
+        let nameData = Data(name.utf8)
+        var zip = Data()
+
+        // Local file header
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(0x04034b50).littleEndian) { Data($0) })  // signature
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(20).littleEndian) { Data($0) })          // version needed
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })           // flags
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })           // compression (stored)
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })           // mod time
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })           // mod date
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(0).littleEndian) { Data($0) })           // crc32
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(content.count).littleEndian) { Data($0) }) // compressed size
+        zip.append(contentsOf: withUnsafeBytes(of: UInt32(content.count).littleEndian) { Data($0) }) // uncompressed size
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(nameData.count).littleEndian) { Data($0) }) // name length
+        zip.append(contentsOf: withUnsafeBytes(of: UInt16(0).littleEndian) { Data($0) })           // extra length
+        zip.append(nameData)
+        zip.append(content)
+
+        return zip
+    }
 }

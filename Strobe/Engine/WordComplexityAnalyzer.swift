@@ -18,11 +18,8 @@ enum WordComplexityAnalyzer {
         // Reconstruct text for NLTagger context
         let joinedText = words.joined(separator: " ")
 
-        // Tag lexical classes
-        let lexicalTags = tagLexicalClasses(text: joinedText, wordCount: words.count)
-
-        // Tag named entities
-        let entityTags = tagNamedEntities(text: joinedText, wordCount: words.count)
+        // Tag lexical classes and named entities in a single pass
+        let (lexicalTags, entityTags) = tagText(text: joinedText, wordCount: words.count)
 
         var scores = [Float](repeating: 0.5, count: words.count)
 
@@ -37,7 +34,7 @@ enum WordComplexityAnalyzer {
             }
 
             // Check if word is CJK-dominant — use simplified scoring
-            if isCJKDominant(stripped) {
+            if CJKUtilities.isCJKDominant(stripped) {
                 scores[i] = cjkComplexity(stripped)
                 continue
             }
@@ -75,47 +72,33 @@ enum WordComplexityAnalyzer {
 
     // MARK: - NLTagger
 
-    /// Tags the full text with lexical classes and maps results back to word indices.
-    private nonisolated static func tagLexicalClasses(text: String, wordCount: Int) -> [NLTag?] {
-        let tagger = NLTagger(tagSchemes: [.lexicalClass])
-        tagger.string = text
-        return extractTags(from: tagger, scheme: .lexicalClass, text: text, wordCount: wordCount)
-    }
-
-    /// Tags the full text with name types and maps results back to word indices.
-    private nonisolated static func tagNamedEntities(text: String, wordCount: Int) -> [NLTag?] {
-        let tagger = NLTagger(tagSchemes: [.nameType])
-        tagger.string = text
-        return extractTags(from: tagger, scheme: .nameType, text: text, wordCount: wordCount)
-    }
-
-    /// Walks through the tagger output and assigns one tag per word by matching
-    /// space-separated boundaries in the joined text.
-    private nonisolated static func extractTags(
-        from tagger: NLTagger,
-        scheme: NLTagScheme,
+    /// Tags the full text with both lexical classes and named entities in a
+    /// single pass, halving NLTagger initialization cost.
+    private nonisolated static func tagText(
         text: String,
         wordCount: Int
-    ) -> [NLTag?] {
-        var tags = [NLTag?](repeating: nil, count: wordCount)
+    ) -> (lexical: [NLTag?], entity: [NLTag?]) {
+        let tagger = NLTagger(tagSchemes: [.lexicalClass, .nameType])
+        tagger.string = text
+
+        var lexicalTags = [NLTag?](repeating: nil, count: wordCount)
+        var entityTags = [NLTag?](repeating: nil, count: wordCount)
         var wordIndex = 0
 
         tagger.enumerateTags(
             in: text.startIndex..<text.endIndex,
             unit: .word,
-            scheme: scheme,
+            scheme: .lexicalClass,
             options: [.omitWhitespace, .omitPunctuation]
         ) { tag, range in
-            // Find which word index this range corresponds to by counting spaces
-            // before this range in the original text
-            if wordIndex < wordCount {
-                tags[wordIndex] = tag
-                wordIndex += 1
-            }
-            return wordIndex < wordCount
+            guard wordIndex < wordCount else { return false }
+            lexicalTags[wordIndex] = tag
+            entityTags[wordIndex] = tagger.tag(at: range.lowerBound, unit: .word, scheme: .nameType).0
+            wordIndex += 1
+            return true
         }
 
-        return tags
+        return (lexicalTags, entityTags)
     }
 
     // MARK: - Scoring helpers
@@ -197,24 +180,6 @@ enum WordComplexityAnalyzer {
         }
     }
 
-    /// Returns true if the majority of characters are CJK.
-    private nonisolated static func isCJKDominant(_ word: String) -> Bool {
-        var cjkCount = 0
-        var totalCount = 0
-        for scalar in word.unicodeScalars {
-            totalCount += 1
-            let v = scalar.value
-            if (v >= 0x4E00 && v <= 0x9FFF)
-                || (v >= 0x3400 && v <= 0x4DBF)
-                || (v >= 0xF900 && v <= 0xFAFF)
-                || (v >= 0x20000 && v <= 0x2A6DF)
-                || (v >= 0x3040 && v <= 0x30FF) {
-                cjkCount += 1
-            }
-        }
-        return totalCount > 0 && cjkCount > totalCount / 2
-    }
-
     // MARK: - Common words
 
     /// The ~300 most frequent English words. Words in this set get minimal
@@ -272,7 +237,7 @@ enum WordComplexityAnalyzer {
         "thing", "name", "fact", "point", "end", "home", "line",
         "number", "head", "house", "side", "group", "problem", "word",
         // Other function words
-        "not", "like", "back", "one", "two", "three", "four", "five",
+        "like", "back", "one", "two", "three", "four", "five",
         "able", "may", "might", "else", "however", "though", "perhaps",
     ]
 }

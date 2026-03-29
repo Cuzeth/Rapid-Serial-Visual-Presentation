@@ -368,18 +368,92 @@ enum EPUBTextExtractor {
             output.append(char)
         }
 
-        // Resolve common HTML entities after stripping tags.
-        return output
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&apos;", with: "'")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&#x27;", with: "'")
-            .replacingOccurrences(of: "&#34;", with: "\"")
-            .replacingOccurrences(of: "&#x22;", with: "\"")
+        return resolveHTMLEntities(output)
+    }
+
+    // MARK: - HTML entity resolution
+
+    nonisolated private static let htmlEntityMap: [String: String] = [
+        "&nbsp;": " ",
+        "&amp;": "&",
+        "&lt;": "<",
+        "&gt;": ">",
+        "&quot;": "\"",
+        "&apos;": "'",
+        "&mdash;": "\u{2014}",
+        "&ndash;": "\u{2013}",
+        "&hellip;": "\u{2026}",
+        "&lsquo;": "\u{2018}",
+        "&rsquo;": "\u{2019}",
+        "&ldquo;": "\u{201C}",
+        "&rdquo;": "\u{201D}",
+        "&trade;": "\u{2122}",
+        "&reg;": "\u{00AE}",
+        "&copy;": "\u{00A9}",
+        "&bull;": "\u{2022}",
+        "&deg;": "\u{00B0}",
+        "&times;": "\u{00D7}",
+        "&divide;": "\u{00F7}",
+        "&laquo;": "\u{00AB}",
+        "&raquo;": "\u{00BB}",
+        "&frac12;": "\u{00BD}",
+        "&frac14;": "\u{00BC}",
+        "&frac34;": "\u{00BE}",
+    ]
+
+    /// Resolves named and numeric HTML entities in the given string.
+    nonisolated private static func resolveHTMLEntities(_ text: String) -> String {
+        var result = text
+
+        // Named entities
+        for (entity, replacement) in htmlEntityMap {
+            result = result.replacingOccurrences(of: entity, with: replacement)
+        }
+
+        // Numeric decimal entities: &#123;
+        result = resolveNumericEntities(in: result, hex: false)
+        // Numeric hex entities: &#x1F4A9;
+        result = resolveNumericEntities(in: result, hex: true)
+
+        return result
+    }
+
+    /// Replaces `&#NNN;` (decimal) or `&#xHHH;` (hex) numeric character references.
+    nonisolated private static func resolveNumericEntities(in text: String, hex: Bool) -> String {
+        let prefix = hex ? "&#x" : "&#"
+        guard text.contains(prefix) else { return text }
+
+        var result = ""
+        result.reserveCapacity(text.count)
+        var i = text.startIndex
+
+        while i < text.endIndex {
+            if text[i...].hasPrefix(prefix) {
+                let entityStart = i
+                let digitsStart = text.index(i, offsetBy: prefix.count)
+                var j = digitsStart
+                while j < text.endIndex && text[j] != ";" {
+                    j = text.index(after: j)
+                }
+                if j < text.endIndex && j > digitsStart {
+                    let digits = String(text[digitsStart..<j])
+                    let codePoint = hex ? UInt32(digits, radix: 16) : UInt32(digits)
+                    if let cp = codePoint, let scalar = Unicode.Scalar(cp) {
+                        result.append(Character(scalar))
+                        i = text.index(after: j) // skip past ';'
+                        continue
+                    }
+                }
+                // Not a valid entity — emit the '&' and continue
+                result.append(text[entityStart])
+                i = text.index(after: entityStart)
+            } else {
+                result.append(text[i])
+                i = text.index(after: i)
+            }
+        }
+
+        return result
     }
 }
 
@@ -387,6 +461,9 @@ enum EPUBTextExtractor {
 
 /// Lightweight XML parser that collects all elements into a flat array.
 /// Used for parsing container.xml, OPF manifests, and EPUB 3 nav documents.
+///
+/// `@unchecked Sendable` is safe here: instances are created, used, and discarded
+/// within a single synchronous scope and are never shared across threads.
 private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     struct Element {
         let name: String
@@ -443,6 +520,9 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
 /// Specialized XML parser for EPUB 2 NCX (Navigation Control for XML) files.
 /// Extracts `navPoint` elements up to two levels deep to support
 /// "Part > Chapter" nesting common in non-fiction books.
+///
+/// `@unchecked Sendable` is safe here: instances are created, used, and discarded
+/// within a single synchronous scope and are never shared across threads.
 private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     struct NavPoint {
         var title: String?
