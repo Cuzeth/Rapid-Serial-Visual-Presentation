@@ -18,19 +18,11 @@
 			remoteGlobalIDString = E44F01FA2F4047FB00D04D31;
 			remoteInfo = Strobe;
 		};
-		E44F02172F4047FC00D04D31 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E44F01F32F4047FB00D04D31 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = E44F01FA2F4047FB00D04D31;
-			remoteInfo = Strobe;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		E44F01FB2F4047FB00D04D31 /* Strobe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Strobe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StrobeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E44F02162F4047FC00D04D31 /* StrobeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StrobeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E49D53FA2F6760E300AFC126 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -58,11 +50,6 @@
 			path = StrobeTests;
 			sourceTree = "<group>";
 		};
-		E44F02192F4047FC00D04D31 /* StrobeUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = StrobeUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -80,13 +67,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E44F02132F4047FC00D04D31 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -96,7 +76,6 @@
 				E49D53FA2F6760E300AFC126 /* PrivacyInfo.xcprivacy */,
 				E44F01FD2F4047FB00D04D31 /* Strobe */,
 				E44F020F2F4047FC00D04D31 /* StrobeTests */,
-				E44F02192F4047FC00D04D31 /* StrobeUITests */,
 				E44F01FC2F4047FB00D04D31 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -106,7 +85,6 @@
 			children = (
 				E44F01FB2F4047FB00D04D31 /* Strobe.app */,
 				E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */,
-				E44F02162F4047FC00D04D31 /* StrobeUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -159,29 +137,6 @@
 			productReference = E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		E44F02152F4047FC00D04D31 /* StrobeUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = E44F02272F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "StrobeUITests" */;
-			buildPhases = (
-				E44F02122F4047FC00D04D31 /* Sources */,
-				E44F02132F4047FC00D04D31 /* Frameworks */,
-				E44F02142F4047FC00D04D31 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				E44F02182F4047FC00D04D31 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				E44F02192F4047FC00D04D31 /* StrobeUITests */,
-			);
-			name = StrobeUITests;
-			packageProductDependencies = (
-			);
-			productName = StrobeUITests;
-			productReference = E44F02162F4047FC00D04D31 /* StrobeUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -196,10 +151,6 @@
 						CreatedOnToolsVersion = 26.2;
 					};
 					E44F020B2F4047FC00D04D31 = {
-						CreatedOnToolsVersion = 26.2;
-						TestTargetID = E44F01FA2F4047FB00D04D31;
-					};
-					E44F02152F4047FC00D04D31 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = E44F01FA2F4047FB00D04D31;
 					};
@@ -221,7 +172,6 @@
 			targets = (
 				E44F01FA2F4047FB00D04D31 /* Strobe */,
 				E44F020B2F4047FC00D04D31 /* StrobeTests */,
-				E44F02152F4047FC00D04D31 /* StrobeUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -236,13 +186,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E44F020A2F4047FC00D04D31 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E44F02142F4047FC00D04D31 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -266,13 +209,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E44F02122F4047FC00D04D31 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -280,11 +216,6 @@
 			isa = PBXTargetDependency;
 			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
 			targetProxy = E44F020D2F4047FC00D04D31 /* PBXContainerItemProxy */;
-		};
-		E44F02182F4047FC00D04D31 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
-			targetProxy = E44F02172F4047FC00D04D31 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -584,56 +515,6 @@
 			};
 			name = Release;
 		};
-		E44F02282F4047FC00D04D31 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 38U4X64GHV;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.abdeen.strobeUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Strobe;
-			};
-			name = Debug;
-		};
-		E44F02292F4047FC00D04D31 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 38U4X64GHV;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.abdeen.strobeUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Strobe;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -660,15 +541,6 @@
 			buildConfigurations = (
 				E44F02252F4047FC00D04D31 /* Debug */,
 				E44F02262F4047FC00D04D31 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E44F02272F4047FC00D04D31 /* Build configuration list for PBXNativeTarget "StrobeUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				E44F02282F4047FC00D04D31 /* Debug */,
-				E44F02292F4047FC00D04D31 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
