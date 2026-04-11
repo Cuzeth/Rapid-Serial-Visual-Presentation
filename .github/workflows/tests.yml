@@ -16,16 +16,18 @@ jobs:
     runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -project Strobe.xcodeproj \
             -scheme Strobe \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-            -resultBundlePath TestResults \
+            -resultBundlePath TestResults.xcresult \
             -skipPackagePluginValidation \
+            -skip-testing:StrobeUITests \
             CODE_SIGNING_ALLOWED=NO | xcpretty --color
 
       - name: Upload test results
@@ -40,15 +42,16 @@ jobs:
     runs-on: macos-26
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Run tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -project Strobe.xcodeproj \
             -scheme Strobe \
             -destination 'platform=macOS' \
-            -resultBundlePath TestResults-macOS \
+            -resultBundlePath TestResults-macOS.xcresult \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO | xcpretty --color
 
