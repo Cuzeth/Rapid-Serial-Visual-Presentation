@@ -1,98 +1,70 @@
-# Strobe
-[<img src="https://img.shields.io/itunes/v/6759187873?logo=App-Store&logoColor=white&logoSize=large&label=App%20Store&labelColor=%231CBBFA">](https://apps.apple.com/us/app/strobe-rapid-serial-reader/id6759187873)
-[![Tests](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml/badge.svg)](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml)
+<p align="center">
+  <img src="Assets/banner.svg" alt="Strobe — Rapid Serial Visual Presentation" width="100%" />
+</p>
 
-Strobe is an iOS and macOS rapid-serial-visual-presentation (RSVP) reader for PDF and EPUB files. It presents one word at a time so you can read long material with less eye movement and tighter focus.
+<p align="center">
+  <a href="https://apps.apple.com/us/app/strobe-rapid-serial-reader/id6759187873">
+    <img src="https://img.shields.io/badge/App_Store-Download-blue?style=for-the-badge&logo=apple&logoColor=white" alt="App Store" />
+  </a>
+  <a href="https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Cuzeth/Rapid-Serial-Visual-Presentation/tests.yml?style=for-the-badge&label=Tests" alt="Tests" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-Apache_2.0-green?style=for-the-badge" alt="License" />
+  </a>
+  <img src="https://img.shields.io/badge/Platform-iOS_17+_·_macOS_14+-lightgrey?style=for-the-badge&logo=apple" alt="Platform" />
+</p>
 
-## Features
+<p align="center">
+  A rapid-serial-visual-presentation reader for PDF and EPUB files.<br/>
+  One word at a time. Less eye movement. Tighter focus.
+</p>
 
-- Import PDF and EPUB files from the system file picker.
-- Read with an RSVP interface (one word at a time).
-- Hold to play, release to pause, and swipe to scrub.
-- Adjust reading speed (`100-1000` WPM), text size, and font.
-- Optional Smart Timing, Sentence Pauses, and Complexity Timing.
-- Chapter list navigation with progress tracking.
-- Local persistence with SwiftData and security-scoped file bookmarks.
-- Built-in onboarding tutorial and haptic feedback.
+---
 
-## Tech Stack
+### One-Touch Flow
+Hold to read, release to pause. Swipe to scrub through position.
 
-- Swift 5
-- SwiftUI
-- SwiftData
-- PDFKit
-- NaturalLanguage
-- UniformTypeIdentifiers
-- XCTest + Swift Testing
+### Precision Controls
+Adjust reading speed from 100 to 1000 WPM, text size, and font — all without losing your place.
 
-## Requirements
+### Smart Timing
+Pacing adapts to word length, sentence boundaries, and cognitive complexity so reading feels natural.
 
-- macOS with Xcode 15 or newer
-- iOS deployment target: 17.0
-- macOS deployment target: 14.0
+### ORP Highlighting
+Each word is anchored at its Optimal Recognition Point so your eyes lock on instantly.
 
-## Getting Started
+### PDF + EPUB Support
+Import files from the system picker, drag and drop, or paste raw text for quick reads.
 
-1. Open `Strobe.xcodeproj` in Xcode.
-2. Select the `Strobe` scheme.
-3. Choose an iOS Simulator or a connected iPhone.
-4. Press Run.
+### Chapter Navigation
+Jump between chapters with a full chapter list and progress tracking.
 
-## Build and Test (CLI)
+### 7 Font Choices
+Curated typefaces tuned for single-word display and sustained reading comfort.
 
-Build:
+### Keyboard Shortcuts
+Full keyboard control on Mac and iPad. Space, arrows, escape — no mouse required.
 
-```bash
-xcodebuild \
-  -project Strobe.xcodeproj \
-  -scheme Strobe \
-  -configuration Debug \
-  -destination 'generic/platform=iOS' \
-  build
-```
+### Session Continuity
+Strobe remembers your position, speed, and settings automatically across sessions.
 
-Run tests:
+---
 
-```bash
-xcodebuild test \
-  -project Strobe.xcodeproj \
-  -scheme Strobe \
-  -destination 'platform=iOS Simulator,name=iPhone 16'
-```
+### Privacy
 
-If that simulator is unavailable on your machine, replace `name=iPhone 16` with an installed simulator device.
+Local by design. Your content and reading progress stay on-device. No accounts, no analytics, no cloud sync.
 
-## Usage
+---
 
-1. Launch the app and tap `+` to import a PDF or EPUB.
-2. Open a document card from the library.
-3. If chapters exist, choose a chapter or read from the start.
-4. Hold on the reader screen to play; release to pause.
-5. Use Settings to tune speed, font, text size, and behavior.
+## Building
 
-## Project Structure
-
-- `Strobe/` - app source code
-- `StrobeTests/` - unit/integration tests (Swift Testing)
-- `StrobeUITests/` - UI tests (XCTest)
-- `Strobe.doccarchive/` - generated DocC archive
-- `wiki-md/` - generated Markdown docs for GitHub Wiki
+Open `Strobe.xcodeproj` in Xcode 15+ and build for iOS 17+ or macOS 14+.
 
 ## Documentation
 
-GitHub Wiki:
-
-- https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/wiki
-
-Wiki-ready Markdown files in this repo:
-
-- `wiki-md/`
-
-Regenerate them from the DocC archive with:
-
-```bash
-./wiki-md/.generate-from-docc.sh
-```
+- [GitHub Wiki](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/wiki)
+- Markdown docs: `wiki-md/`
 
 ## Contributing
 
@@ -100,4 +72,4 @@ Issues and pull requests are welcome. Keep changes focused, include tests when p
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
+Licensed under the [Apache License, Version 2.0](LICENSE).

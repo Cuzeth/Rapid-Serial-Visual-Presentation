@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#050505"/>
+      <stop offset="50%" style="stop-color:#0a0a0a"/>
+      <stop offset="100%" style="stop-color:#050505"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF3B30;stop-opacity:0"/>
+      <stop offset="50%" style="stop-color:#FF3B30;stop-opacity:0.25"/>
+      <stop offset="100%" style="stop-color:#FF3B30;stop-opacity:0"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FAFAFA"/>
+      <stop offset="100%" style="stop-color:#E0E0E0"/>
+    </linearGradient>
+    <linearGradient id="rGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF3B30"/>
+      <stop offset="100%" style="stop-color:#FF6B5E"/>
+    </linearGradient>
+    <filter id="blur1">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+    <filter id="blur2">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <clipPath id="roundedClip">
+      <rect width="1200" height="400" rx="16" ry="16"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#roundedClip)">
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="url(#bg)"/>
+
+  <!-- Ambient glow orbs -->
+  <ellipse cx="600" cy="180" rx="200" ry="120" fill="#FF3B30" opacity="0.04" filter="url(#blur1)"/>
+  <ellipse cx="350" cy="200" rx="200" ry="130" fill="#FF3B30" opacity="0.03" filter="url(#blur1)"/>
+  <ellipse cx="850" cy="200" rx="200" ry="130" fill="#FF3B30" opacity="0.03" filter="url(#blur1)"/>
+
+  <!-- Horizontal glow line -->
+  <rect x="0" y="196" width="1200" height="6" fill="url(#glow)" opacity="0.4"/>
+
+  <!-- RSVP word stream (fading words left and right) -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="400">
+    <!-- Left side — fading out words -->
+    <text x="80" y="202" fill="#A0A0A0" opacity="0.08">focus</text>
+    <text x="140" y="202" fill="#A0A0A0" opacity="0.12">read</text>
+    <text x="195" y="202" fill="#A0A0A0" opacity="0.16">faster</text>
+    <text x="262" y="202" fill="#A0A0A0" opacity="0.22">one</text>
+    <text x="305" y="202" fill="#A0A0A0" opacity="0.28">word</text>
+
+    <!-- Right side — fading out words -->
+    <text x="850" y="202" fill="#A0A0A0" opacity="0.28">at</text>
+    <text x="880" y="202" fill="#A0A0A0" opacity="0.22">a</text>
+    <text x="905" y="202" fill="#A0A0A0" opacity="0.16">time</text>
+    <text x="960" y="202" fill="#A0A0A0" opacity="0.12">with</text>
+    <text x="1020" y="202" fill="#A0A0A0" opacity="0.08">precision</text>
+  </g>
+
+  <!-- Speed lines (conveying motion/speed) -->
+  <g opacity="0.15" stroke="#FF3B30" stroke-width="1">
+    <line x1="100" y1="130" x2="300" y2="130" opacity="0.3"/>
+    <line x1="50" y1="155" x2="350" y2="155" opacity="0.2"/>
+    <line x1="150" y1="250" x2="330" y2="250" opacity="0.2"/>
+    <line x1="80" y1="275" x2="280" y2="275" opacity="0.3"/>
+
+    <line x1="900" y1="130" x2="1100" y2="130" opacity="0.3"/>
+    <line x1="850" y1="155" x2="1150" y2="155" opacity="0.2"/>
+    <line x1="870" y1="250" x2="1050" y2="250" opacity="0.2"/>
+    <line x1="920" y1="275" x2="1120" y2="275" opacity="0.3"/>
+  </g>
+
+  <!-- Vertical tick marks (like a timeline/scrubber) -->
+  <g opacity="0.12" stroke="#A0A0A0" stroke-width="1">
+    <line x1="400" y1="290" x2="400" y2="310"/>
+    <line x1="440" y1="295" x2="440" y2="305"/>
+    <line x1="480" y1="290" x2="480" y2="310"/>
+    <line x1="520" y1="295" x2="520" y2="305"/>
+    <line x1="560" y1="290" x2="560" y2="310"/>
+    <line x1="600" y1="285" x2="600" y2="315"/>
+    <line x1="640" y1="290" x2="640" y2="310"/>
+    <line x1="680" y1="295" x2="680" y2="305"/>
+    <line x1="720" y1="290" x2="720" y2="310"/>
+    <line x1="760" y1="295" x2="760" y2="305"/>
+    <line x1="800" y1="290" x2="800" y2="310"/>
+  </g>
+  <!-- Scrubber position indicator -->
+  <circle cx="600" cy="300" r="4" fill="#FF3B30" opacity="0.5"/>
+
+  <!-- WPM indicator (top right area) -->
+  <g opacity="0.15" font-family="-apple-system, BlinkMacSystemFont, 'SF Mono', Menlo, monospace" font-size="11" fill="#A0A0A0">
+    <text x="545" y="340" text-anchor="middle">300 WPM</text>
+  </g>
+
+  <!-- Title: "st r obe" with red r -->
+  <text x="600" y="185" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="-2" fill="url(#textGrad)" filter="url(#blur2)">
+    <tspan>st</tspan><tspan fill="url(#rGrad)">r</tspan><tspan>obe</tspan>
+  </text>
+  <text x="600" y="185" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="-2" fill="url(#textGrad)">
+    <tspan>st</tspan><tspan fill="url(#rGrad)">r</tspan><tspan>obe</tspan>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="600" y="228" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" letter-spacing="6" fill="#A0A0A0" opacity="0.7">RAPID SERIAL VISUAL PRESENTATION</text>
+
+  <!-- Subtle dot grid -->
+  <g opacity="0.05" fill="#A0A0A0">
+    <circle cx="50" cy="50" r="1"/><circle cx="100" cy="50" r="1"/><circle cx="150" cy="50" r="1"/><circle cx="200" cy="50" r="1"/><circle cx="250" cy="50" r="1"/>
+    <circle cx="950" cy="50" r="1"/><circle cx="1000" cy="50" r="1"/><circle cx="1050" cy="50" r="1"/><circle cx="1100" cy="50" r="1"/><circle cx="1150" cy="50" r="1"/>
+    <circle cx="50" cy="350" r="1"/><circle cx="100" cy="350" r="1"/><circle cx="150" cy="350" r="1"/><circle cx="200" cy="350" r="1"/><circle cx="250" cy="350" r="1"/>
+    <circle cx="950" cy="350" r="1"/><circle cx="1000" cy="350" r="1"/><circle cx="1050" cy="350" r="1"/><circle cx="1100" cy="350" r="1"/><circle cx="1150" cy="350" r="1"/>
+  </g>
+
+  </g>
+
+  <!-- Rounded border -->
+  <rect width="1200" height="400" rx="16" ry="16" fill="none" stroke="#FF3B30" stroke-width="1" opacity="0.1"/>
+</svg>
