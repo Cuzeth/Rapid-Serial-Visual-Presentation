@@ -14,6 +14,7 @@ struct ReaderView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("fontSize") private var fontSize: Int = 40
     @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
     @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
@@ -92,7 +93,7 @@ struct ReaderView: View {
 
                 if showCompletion {
                     completionView
-                        .transition(.scale.combined(with: .opacity))
+                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                 } else {
                     WordView(
                         word: engine.currentWord,
@@ -130,8 +131,12 @@ struct ReaderView: View {
             if wasPlaying && !isNowPlaying && engine.isAtEnd {
                 HapticManager.shared.completedReading()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    withAnimation(.spring(duration: 0.6)) {
+                    if reduceMotion {
                         showCompletion = true
+                    } else {
+                        withAnimation(.spring(duration: 0.6)) {
+                            showCompletion = true
+                        }
                     }
                 }
             }
@@ -290,12 +295,9 @@ struct ReaderView: View {
     // MARK: - Top bar
 
     private var topBar: some View {
-        VStack(spacing: 0) {
-            topBarContent
-                .frame(maxWidth: controlsMaxWidth)
-                .frame(maxWidth: .infinity)
-        }
-        .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
+        topBarContent
+            .constrainedAndCentered(maxWidth: controlsMaxWidth)
+            .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
     }
 
     private var topBarContent: some View {
@@ -360,6 +362,9 @@ struct ReaderView: View {
                     }
                 }
                 .tint(StrobeTheme.accent)
+                .frame(minHeight: 44)
+                .accessibilityLabel("Words per minute")
+                .accessibilityValue("\(displayedWPM) words per minute")
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
@@ -412,7 +417,20 @@ struct ReaderView: View {
                         }
                 )
             }
-            .frame(height: 24)
+            .frame(height: 44)
+            .accessibilityElement()
+            .accessibilityLabel("Reading progress")
+            .accessibilityValue("\(Int(engine.progress * 100)) percent, word \(engine.currentIndex + 1) of \(engine.words.count)")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    _ = engine.scrub(by: 1)
+                case .decrement:
+                    _ = engine.scrub(by: -1)
+                @unknown default:
+                    break
+                }
+            }
 
             Text(hintText)
                 .font(StrobeTheme.bodyFont(size: 14))
@@ -421,8 +439,7 @@ struct ReaderView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
-        .frame(maxWidth: controlsMaxWidth)
-        .frame(maxWidth: .infinity)
+        .constrainedAndCentered(maxWidth: controlsMaxWidth)
     }
 
     // MARK: - Completion view
@@ -433,13 +450,13 @@ struct ReaderView: View {
                 Circle()
                     .fill(StrobeTheme.accent.opacity(0.2))
                     .frame(width: 100, height: 100)
-                
+
                 Image(systemName: "checkmark")
                     .font(.system(size: 48, weight: .black))
                     .foregroundStyle(StrobeTheme.accent)
             }
-            .scaleEffect(showCompletion ? 1 : 0.5)
-            .animation(.spring(response: 0.5, dampingFraction: 0.6), value: showCompletion)
+            .scaleEffect(reduceMotion ? 1 : (showCompletion ? 1 : 0.5))
+            .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6), value: showCompletion)
 
             VStack(spacing: 8) {
                 Text("Finished!")

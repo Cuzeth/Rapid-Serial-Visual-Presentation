@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
@@ -86,6 +87,9 @@ struct SettingsView: View {
                                 
                                 Slider(value: $wpmSliderValue, in: 100...1000, step: 10)
                                     .tint(StrobeTheme.accent)
+                                    .frame(minHeight: 44)
+                                    .accessibilityLabel("Default words per minute")
+                                    .accessibilityValue("\(defaultWPM) words per minute")
                                     .onChange(of: wpmSliderValue) { _, newValue in
                                         let snapped = Int(newValue)
                                         if snapped != defaultWPM {
@@ -109,9 +113,12 @@ struct SettingsView: View {
                                         .padding(.bottom, 6)
                                     Spacer()
                                 }
-                                
+
                                 Slider(value: $fontSizeSliderValue, in: 24...72, step: 2)
                                     .tint(StrobeTheme.accent)
+                                    .frame(minHeight: 44)
+                                    .accessibilityLabel("Reader text size")
+                                    .accessibilityValue("\(fontSize) points")
                                     .onChange(of: fontSizeSliderValue) { _, newValue in
                                         let snapped = Int(newValue)
                                         if snapped != fontSize {
@@ -175,9 +182,12 @@ struct SettingsView: View {
                                         }
                                         Slider(value: $smartTimingPercentPerLetter, in: 0...50, step: 1)
                                             .tint(StrobeTheme.accent)
+                                            .frame(minHeight: 44)
+                                            .accessibilityLabel("Slowdown per letter")
+                                            .accessibilityValue("\(Int(smartTimingPercentPerLetter)) percent")
                                     }
                                     .padding(.leading, 4)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                                 }
 
                                 Divider().background(StrobeTheme.surface)
@@ -208,9 +218,12 @@ struct SettingsView: View {
                                         }
                                         Slider(value: $sentencePauseMultiplierValue, in: 1...4, step: 0.1)
                                             .tint(StrobeTheme.accent)
+                                            .frame(minHeight: 44)
+                                            .accessibilityLabel("Sentence pause multiplier")
+                                            .accessibilityValue(String(format: "%.1fx", sentencePauseMultiplierValue))
                                     }
                                     .padding(.leading, 4)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                                 }
                                 Divider().background(StrobeTheme.surface)
 
@@ -240,18 +253,21 @@ struct SettingsView: View {
                                         }
                                         Slider(value: $complexityIntensity, in: 0...1, step: 0.05)
                                             .tint(StrobeTheme.accent)
+                                            .frame(minHeight: 44)
+                                            .accessibilityLabel("Complexity intensity")
+                                            .accessibilityValue("\(Int(complexityIntensity * 100)) percent")
                                         Text("How much to speed up common words and slow down rare ones. Higher = more variation.")
                                             .font(StrobeTheme.bodyFont(size: 11))
                                             .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
                                     }
                                     .padding(.leading, 4)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                                 }
                             }
                             .toggleStyle(.switch)
-                            .animation(.easeInOut(duration: 0.2), value: smartTimingEnabled)
-                            .animation(.easeInOut(duration: 0.2), value: sentencePauseEnabled)
-                            .animation(.easeInOut(duration: 0.2), value: complexityTimingEnabled)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: smartTimingEnabled)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sentencePauseEnabled)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: complexityTimingEnabled)
                         }
 
                         // Text Cleaning
@@ -338,10 +354,10 @@ struct SettingsView: View {
             readerFontSelection = fontOption.rawValue
         } label: {
             Text(fontOption.displayName)
-                .font(fontOption.regularFont(size: 14))
-                .foregroundStyle(isSelected ? .white : StrobeTheme.textSecondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .font(fontOption.regularFont(size: 17))
+                .foregroundStyle(isSelected ? .white : StrobeTheme.textPrimary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
                 .background(isSelected ? StrobeTheme.accent : StrobeTheme.surface)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(

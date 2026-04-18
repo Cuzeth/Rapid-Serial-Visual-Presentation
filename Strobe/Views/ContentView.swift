@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showTutorial = false
     @State private var showTextInput = false
+    @State private var documentPendingDeletion: Document?
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -120,6 +121,25 @@ struct ContentView: View {
             } message: {
                 Text(importError ?? "")
             }
+            .alert(
+                "Delete this document?",
+                isPresented: .init(
+                    get: { documentPendingDeletion != nil },
+                    set: { if !$0 { documentPendingDeletion = nil } }
+                ),
+                presenting: documentPendingDeletion
+            ) { doc in
+                Button("Delete", role: .destructive) {
+                    modelContext.delete(doc)
+                    try? modelContext.save()
+                    documentPendingDeletion = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    documentPendingDeletion = nil
+                }
+            } message: { doc in
+                Text("\"\(doc.title)\" will be permanently removed from your library.")
+            }
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 guard let provider = providers.first else { return false }
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
@@ -216,7 +236,7 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .contextMenu {
                         Button(role: .destructive) {
-                            modelContext.delete(document)
+                            documentPendingDeletion = document
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }

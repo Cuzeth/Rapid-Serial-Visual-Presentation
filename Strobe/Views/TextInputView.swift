@@ -78,6 +78,7 @@ struct TextInputView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 18)
                                 .allowsHitTesting(false)
+                                .accessibilityHidden(true)
                         }
 
                         TextEditor(text: $inputText)
@@ -88,6 +89,8 @@ struct TextInputView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             .focused($editorFocused)
+                            .accessibilityLabel("Text content")
+                            .accessibilityHint(inputText.isEmpty ? "Paste or type your text here" : "")
                     }
                     .frame(maxHeight: .infinity)
                     .background(StrobeTheme.surface)
@@ -152,10 +155,10 @@ struct TextInputView: View {
             } label: {
                 Text("Add")
                     .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                    .foregroundStyle(canSave ? .white : StrobeTheme.textSecondary)
+                    .foregroundStyle(canSave ? Color.white : Color.white.opacity(0.5))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 10)
-                    .background(canSave ? StrobeTheme.accent : StrobeTheme.surface)
+                    .background(canSave ? StrobeTheme.accent : StrobeTheme.accent.opacity(0.35))
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

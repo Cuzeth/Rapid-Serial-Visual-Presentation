@@ -66,13 +66,24 @@ enum ReaderFont: String, CaseIterable, Identifiable {
     }
 
     /// Returns a SwiftUI `Font` for the regular weight at the given size.
-    func regularFont(size: CGFloat) -> Font {
-        .custom(regularPostScriptName, size: size)
+    /// Defaults to scaling with Dynamic Type relative to `.body`. Pass
+    /// `relativeTo: nil` for fixed-size contexts such as the RSVP word display,
+    /// where the user already controls font size directly.
+    func regularFont(size: CGFloat, relativeTo style: Font.TextStyle? = .body) -> Font {
+        if let style {
+            return .custom(regularPostScriptName, size: size, relativeTo: style)
+        }
+        return .custom(regularPostScriptName, size: size)
     }
 
     /// Returns a SwiftUI `Font` for the bold weight at the given size.
-    func boldFont(size: CGFloat) -> Font {
-        .custom(boldPostScriptName, size: size)
+    /// Defaults to scaling with Dynamic Type relative to `.body`. Pass
+    /// `relativeTo: nil` to opt out of scaling.
+    func boldFont(size: CGFloat, relativeTo style: Font.TextStyle? = .body) -> Font {
+        if let style {
+            return .custom(boldPostScriptName, size: size, relativeTo: style)
+        }
+        return .custom(boldPostScriptName, size: size)
     }
 
     /// Returns a platform-native font (`UIFont` on iOS, `NSFont` on macOS),

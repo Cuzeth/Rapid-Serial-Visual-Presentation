@@ -75,7 +75,10 @@ struct WordView: View, Equatable {
     /// color is changed to avoid breaking cursive glyph connections.
     private func attributedWord(fontSize: CGFloat) -> AttributedString {
         var attributed = AttributedString(word)
-        attributed.font = readerFont.regularFont(size: fontSize)
+        // The reader's font size is user-controlled via a slider, so we opt out
+        // of Dynamic Type scaling here — otherwise accessibility sizes would
+        // compound with the chosen size and overflow the fitted layout.
+        attributed.font = readerFont.regularFont(size: fontSize, relativeTo: nil)
         attributed.foregroundColor = .primary
 
         guard redIndex < word.count else { return attributed }
@@ -87,7 +90,7 @@ struct WordView: View, Equatable {
             attributed[attrStart..<attrEnd].foregroundColor = .red
             // Bold breaks Arabic cursive shaping — only apply for non-Arabic.
             if !isArabic {
-                attributed[attrStart..<attrEnd].font = readerFont.boldFont(size: fontSize)
+                attributed[attrStart..<attrEnd].font = readerFont.boldFont(size: fontSize, relativeTo: nil)
             }
         }
 
@@ -125,6 +128,8 @@ struct WordView: View, Equatable {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(height: max(120, fontSize * 2.3))
+        .accessibilityElement()
+        .accessibilityLabel(word)
     }
 
     /// Scales the font size down if the word would exceed the available width.
