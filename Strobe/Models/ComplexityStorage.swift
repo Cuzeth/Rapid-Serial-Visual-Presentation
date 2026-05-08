@@ -14,14 +14,14 @@ enum ComplexityStorage {
 
     /// Decodes raw binary data back into a complexity score array.
     ///
-    /// Uses `load(fromByteOffset:as:)` instead of `bindMemory` to handle
-    /// potentially unaligned data safely.
+    /// `Data` from SwiftData's external blob store isn't guaranteed to be
+    /// 4-byte aligned, so `loadUnaligned` is required — `load` would trap.
     static func decode(_ data: Data) -> [Float] {
         guard !data.isEmpty else { return [] }
         let count = data.count / MemoryLayout<Float>.size
         return data.withUnsafeBytes { buffer in
             (0..<count).map { i in
-                buffer.load(fromByteOffset: i * MemoryLayout<Float>.size, as: Float.self)
+                buffer.loadUnaligned(fromByteOffset: i * MemoryLayout<Float>.size, as: Float.self)
             }
         }
     }
