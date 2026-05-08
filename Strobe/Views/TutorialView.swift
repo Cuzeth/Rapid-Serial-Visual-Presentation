@@ -67,7 +67,7 @@ struct TutorialView: View {
         #if os(macOS)
         "Press Space to read, Space to pause. Use arrow keys or trackpad to scrub through text."
         #else
-        "Hold to read, release to pause. Swipe left or right to scrub through text."
+        "Hold to read, release to pause. Swipe left or right to scrub. Prefer hands-free? Switch to tap-to-read in Settings."
         #endif
     }
 

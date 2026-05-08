@@ -67,7 +67,7 @@ Strobe/
 - **Logging**: `os.Logger` with subsystem/category
 - **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
 - **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `noReadableText`)
-- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `readerFontSelection`, `textCleaningLevel`
+- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `readerFontSelection`, `textCleaningLevel`
 - **Platform conditionals**: `#if os(iOS)` / `#if os(macOS)` for UIKit/AppKit imports, haptics, presentation modifiers, and hint text. Engine, import pipeline, and models are fully cross-platform.
 - **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader) — via `.onKeyPress`, also works on iPad with hardware keyboard
 - **macOS haptics**: `HapticManager` is no-op on macOS (all methods are empty stubs)

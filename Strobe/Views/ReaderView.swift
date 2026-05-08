@@ -3,9 +3,10 @@ import SwiftData
 
 /// The RSVP reading interface — displays words one at a time.
 ///
-/// Gesture-driven: hold to play, release to pause, swipe to scrub.
-/// Includes a WPM slider, progress bar scrubber, and completion overlay.
-/// Persists reading state on disappear and scene phase changes.
+/// Gesture-driven: hold to play (or tap to toggle, when `holdToReadEnabled`
+/// is off), release to pause, swipe to scrub. Includes a WPM slider, chapter
+/// navigation (when chapters exist), progress bar scrubber, and completion
+/// overlay. Persists reading state on disappear and scene phase changes.
 struct ReaderView: View {
     private let navFadeDuration: Double = 0.3
     private let playIntentDelay: TimeInterval = 0.12
@@ -22,6 +23,7 @@ struct ReaderView: View {
     @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
     @AppStorage("complexityTimingEnabled") private var complexityTimingEnabled: Bool = false
     @AppStorage("complexityIntensity") private var complexityIntensity: Double = 0.5
+    @AppStorage("holdToReadEnabled") private var holdToReadEnabled: Bool = true
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
@@ -229,7 +231,9 @@ struct ReaderView: View {
                     isTouching = true
                     touchMode = .undecided
                     scrubAccumulator = 0
-                    schedulePlayIntent()
+                    if holdToReadEnabled {
+                        schedulePlayIntent()
+                    }
                 }
 
                 if touchMode == .undecided {
@@ -261,10 +265,22 @@ struct ReaderView: View {
                 }
             }
             .onEnded { _ in
+                let wasScrubbing = touchMode == .scrubbing
                 isTouching = false
                 cancelPlayIntent()
-                if engine.isPlaying {
-                    engine.pause()
+                if holdToReadEnabled {
+                    if engine.isPlaying {
+                        engine.pause()
+                        HapticManager.shared.playPause()
+                    }
+                } else if !wasScrubbing && !showCompletion {
+                    // Tap-to-toggle mode: a release without a horizontal swipe
+                    // counts as a tap. Toggle playback.
+                    if engine.isPlaying {
+                        engine.pause()
+                    } else if !engine.isAtEnd {
+                        engine.play()
+                    }
                     HapticManager.shared.playPause()
                 }
                 scrubAccumulator = 0
@@ -380,6 +396,10 @@ struct ReaderView: View {
 
     private var bottomBar: some View {
         VStack(spacing: 16) {
+            if !document.chapters.isEmpty {
+                chapterNavigation
+            }
+
             // Progress Scrubber
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -442,6 +462,131 @@ struct ReaderView: View {
         .constrainedAndCentered(maxWidth: controlsMaxWidth)
     }
 
+    // MARK: - Chapter navigation
+
+    /// Index of the chapter containing the current word (largest chapter whose
+    /// `wordIndex` is at or before `engine.currentIndex`). Nil if no chapters.
+    private var currentChapterIndex: Int? {
+        let chapters = document.chapters
+        guard !chapters.isEmpty else { return nil }
+        var result = 0
+        for (i, chapter) in chapters.enumerated() {
+            if chapter.wordIndex <= engine.currentIndex {
+                result = i
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    private var canGoPreviousChapter: Bool {
+        let chapters = document.chapters
+        guard let idx = currentChapterIndex else { return false }
+        return engine.currentIndex > chapters[idx].wordIndex + 2 || idx > 0
+    }
+
+    private var canGoNextChapter: Bool {
+        guard let idx = currentChapterIndex else { return false }
+        return idx + 1 < document.chapters.count
+    }
+
+    private var chapterNavigation: some View {
+        let chapters = document.chapters
+        let idx = currentChapterIndex ?? 0
+        let title = chapters.indices.contains(idx) ? chapters[idx].title : ""
+
+        return HStack(spacing: 10) {
+            Button {
+                jumpToPreviousChapter()
+            } label: {
+                Image(systemName: "backward.end.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(canGoPreviousChapter ? StrobeTheme.textSecondary : StrobeTheme.textSecondary.opacity(0.35))
+                    .frame(width: 36, height: 36)
+                    .background(StrobeTheme.surface)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canGoPreviousChapter)
+            .accessibilityLabel("Previous chapter")
+
+            Menu {
+                ForEach(Array(chapters.enumerated()), id: \.element.id) { i, chapter in
+                    Button {
+                        jumpToChapter(i)
+                    } label: {
+                        if i == currentChapterIndex {
+                            Label(chapter.title, systemImage: "checkmark")
+                        } else {
+                            Text(chapter.title)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(readerFont.boldFont(size: 13))
+                        .foregroundStyle(StrobeTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                }
+                .padding(.horizontal, 14)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(StrobeTheme.surface)
+                .clipShape(Capsule())
+            }
+            .menuStyle(.borderlessButton)
+            .accessibilityLabel("Chapter")
+            .accessibilityValue(title)
+            .accessibilityHint("Pick a chapter to jump to")
+
+            Button {
+                jumpToNextChapter()
+            } label: {
+                Image(systemName: "forward.end.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(canGoNextChapter ? StrobeTheme.textSecondary : StrobeTheme.textSecondary.opacity(0.35))
+                    .frame(width: 36, height: 36)
+                    .background(StrobeTheme.surface)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canGoNextChapter)
+            .accessibilityLabel("Next chapter")
+        }
+    }
+
+    private func jumpToChapter(_ index: Int) {
+        let chapters = document.chapters
+        guard chapters.indices.contains(index) else { return }
+        if engine.isPlaying { engine.pause() }
+        if showCompletion {
+            withAnimation { showCompletion = false }
+        }
+        engine.seek(to: chapters[index].wordIndex)
+        HapticManager.shared.scrubBoundary()
+    }
+
+    private func jumpToPreviousChapter() {
+        let chapters = document.chapters
+        guard let idx = currentChapterIndex else { return }
+        let chapterStart = chapters[idx].wordIndex
+        if engine.currentIndex > chapterStart + 2 {
+            jumpToChapter(idx)
+        } else if idx > 0 {
+            jumpToChapter(idx - 1)
+        }
+    }
+
+    private func jumpToNextChapter() {
+        guard let idx = currentChapterIndex, idx + 1 < document.chapters.count else { return }
+        jumpToChapter(idx + 1)
+    }
+
     // MARK: - Completion view
 
     private var completionView: some View {
@@ -500,8 +645,13 @@ struct ReaderView: View {
         if engine.isPlaying { return "Press Space to pause" }
         return "Press Space to read, arrows to scrub"
         #else
-        if engine.isPlaying { return "Release to pause" }
-        return "Hold to read"
+        if holdToReadEnabled {
+            if engine.isPlaying { return "Release to pause" }
+            return "Hold to read"
+        } else {
+            if engine.isPlaying { return "Tap to pause" }
+            return "Tap to read"
+        }
         #endif
     }
 

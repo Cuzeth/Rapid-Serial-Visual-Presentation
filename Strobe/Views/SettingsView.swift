@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
     @AppStorage("complexityTimingEnabled") private var complexityTimingEnabled: Bool = false
     @AppStorage("complexityIntensity") private var complexityIntensity: Double = 0.5
+    @AppStorage("holdToReadEnabled") private var holdToReadEnabled: Bool = true
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -263,6 +264,25 @@ struct SettingsView: View {
                                     .padding(.leading, 4)
                                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                                 }
+
+                                #if os(iOS)
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $holdToReadEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Hold to Read")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text(holdToReadEnabled
+                                             ? "Hold the screen to read, release to pause"
+                                             : "Tap once to play, tap again to pause — hands-free")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+                                #endif
                             }
                             .toggleStyle(.switch)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: smartTimingEnabled)
