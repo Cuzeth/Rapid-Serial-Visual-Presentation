@@ -35,6 +35,7 @@ struct ReaderView: View {
     @State private var isAdjustingWPM = false
     @State private var isBarScrubbing = false
     @State private var showCompletion = false
+    @State private var showChapterPicker = false
     @State private var persistenceError: String?
 
     private let startingWordIndex: Int?
@@ -511,18 +512,8 @@ struct ReaderView: View {
             .disabled(!canGoPreviousChapter)
             .accessibilityLabel("Previous chapter")
 
-            Menu {
-                ForEach(Array(chapters.enumerated()), id: \.element.id) { i, chapter in
-                    Button {
-                        jumpToChapter(i)
-                    } label: {
-                        if i == currentChapterIndex {
-                            Label(chapter.title, systemImage: "checkmark")
-                        } else {
-                            Text(chapter.title)
-                        }
-                    }
-                }
+            Button {
+                showChapterPicker = true
             } label: {
                 HStack(spacing: 6) {
                     Text(title)
@@ -539,7 +530,10 @@ struct ReaderView: View {
                 .background(StrobeTheme.surface)
                 .clipShape(Capsule())
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(.plain)
+            .popover(isPresented: $showChapterPicker, arrowEdge: .bottom) {
+                chapterPickerContent
+            }
             .accessibilityLabel("Chapter")
             .accessibilityValue(title)
             .accessibilityHint("Pick a chapter to jump to")
@@ -558,6 +552,62 @@ struct ReaderView: View {
             .disabled(!canGoNextChapter)
             .accessibilityLabel("Next chapter")
         }
+    }
+
+    @ViewBuilder
+    private var chapterPickerContent: some View {
+        let chapters = document.chapters
+        let activeIndex = currentChapterIndex
+
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(chapters.enumerated()), id: \.element.id) { i, chapter in
+                        Button {
+                            showChapterPicker = false
+                            jumpToChapter(i)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(chapter.title)
+                                    .font(StrobeTheme.bodyFont(size: 15, bold: i == activeIndex))
+                                    .foregroundStyle(i == activeIndex ? StrobeTheme.accent : StrobeTheme.textPrimary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 8)
+                                if i == activeIndex {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(StrobeTheme.accent)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .id(chapter.id)
+
+                        if i < chapters.count - 1 {
+                            Divider()
+                                .background(StrobeTheme.surface)
+                                .padding(.leading, 16)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            .background(StrobeTheme.background)
+            .onAppear {
+                guard let idx = activeIndex, chapters.indices.contains(idx) else { return }
+                // Defer one runloop so LazyVStack rows are registered before we scroll.
+                DispatchQueue.main.async {
+                    proxy.scrollTo(chapters[idx].id, anchor: .center)
+                }
+            }
+        }
+        .frame(idealWidth: 360, idealHeight: 480)
+        .presentationDetents([.medium, .large])
     }
 
     private func jumpToChapter(_ index: Int) {
