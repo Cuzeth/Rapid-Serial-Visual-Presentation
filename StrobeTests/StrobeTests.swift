@@ -868,4 +868,148 @@ struct StrobeTests {
 
         return zip
     }
+
+    // MARK: - PassageView chunk math
+
+    @Test func chunkCountIsZeroForEmptyDocument() {
+        #expect(PassageView.chunkCount(wordCount: 0) == 0)
+    }
+
+    @Test func chunkCountIsOneForPartialChunk() {
+        #expect(PassageView.chunkCount(wordCount: 1, chunkSize: 200) == 1)
+        #expect(PassageView.chunkCount(wordCount: 199, chunkSize: 200) == 1)
+    }
+
+    @Test func chunkCountRoundsUpForFullAndExtraWords() {
+        #expect(PassageView.chunkCount(wordCount: 200, chunkSize: 200) == 1)
+        #expect(PassageView.chunkCount(wordCount: 201, chunkSize: 200) == 2)
+        #expect(PassageView.chunkCount(wordCount: 1000, chunkSize: 200) == 5)
+        #expect(PassageView.chunkCount(wordCount: 1001, chunkSize: 200) == 6)
+    }
+
+    @Test func chunkIndexAtBoundaries() {
+        // First and last word of each chunk land in that chunk.
+        #expect(PassageView.chunkIndex(for: 0, wordCount: 1000, chunkSize: 200) == 0)
+        #expect(PassageView.chunkIndex(for: 199, wordCount: 1000, chunkSize: 200) == 0)
+        #expect(PassageView.chunkIndex(for: 200, wordCount: 1000, chunkSize: 200) == 1)
+        #expect(PassageView.chunkIndex(for: 999, wordCount: 1000, chunkSize: 200) == 4)
+    }
+
+    @Test func chunkIndexClampsOutOfRangeInputs() {
+        // Past-the-end word indices clamp to the last chunk, not crash.
+        #expect(PassageView.chunkIndex(for: 5000, wordCount: 1000, chunkSize: 200) == 4)
+        // Empty document always reports chunk 0.
+        #expect(PassageView.chunkIndex(for: 0, wordCount: 0, chunkSize: 200) == 0)
+        #expect(PassageView.chunkIndex(for: 42, wordCount: 0, chunkSize: 200) == 0)
+    }
+
+    @Test func chunkRangeCoversChunkSlice() {
+        let range = PassageView.chunkRange(chunkIndex: 1, wordCount: 1000, chunkSize: 200)
+        #expect(range == 200..<400)
+    }
+
+    @Test func chunkRangeTruncatesFinalChunkToWordCount() {
+        // Last chunk on a non-multiple total length stops at wordCount.
+        let range = PassageView.chunkRange(chunkIndex: 4, wordCount: 950, chunkSize: 200)
+        #expect(range == 800..<950)
+    }
+
+    @Test func chunkRangeIsEmptyForOutOfBoundsIndex() {
+        let range = PassageView.chunkRange(chunkIndex: 10, wordCount: 500, chunkSize: 200)
+        #expect(range.isEmpty)
+    }
+
+    // MARK: - PassageView search
+
+    @Test func findMatchesReturnsEmptyForEmptyQuery() {
+        let words = ["hello", "world", "hello"]
+        #expect(PassageView.findMatches(query: "", in: words).isEmpty)
+        #expect(PassageView.findMatches(query: "   ", in: words).isEmpty)
+        #expect(PassageView.findMatches(query: "\n\t ", in: words).isEmpty)
+    }
+
+    @Test func findMatchesReturnsAscendingIndices() {
+        let words = ["alpha", "beta", "alpha", "gamma", "alpha"]
+        let matches = PassageView.findMatches(query: "alpha", in: words)
+        #expect(matches == [0, 2, 4])
+    }
+
+    @Test func findMatchesIsCaseInsensitive() {
+        let words = ["Hello", "WORLD", "hello"]
+        #expect(PassageView.findMatches(query: "HELLO", in: words) == [0, 2])
+        #expect(PassageView.findMatches(query: "world", in: words) == [1])
+    }
+
+    @Test func findMatchesAcceptsSubstrings() {
+        // Should match anywhere inside a word, not just whole-word equality.
+        let words = ["recovery", "recovered", "discovery", "cover"]
+        let matches = PassageView.findMatches(query: "cover", in: words)
+        #expect(matches == [0, 1, 2, 3])
+    }
+
+    @Test func findMatchesTrimsWhitespaceAroundQuery() {
+        let words = ["the", "quick", "brown", "fox"]
+        #expect(PassageView.findMatches(query: "  quick  ", in: words) == [1])
+    }
+
+    @Test func findMatchesHandlesPunctuationInWords() {
+        // Words come from the tokenizer with attached punctuation; substring
+        // search should still find the bare query inside them.
+        let words = ["don't", "end.", "\"hello\""]
+        #expect(PassageView.findMatches(query: "don", in: words) == [0])
+        #expect(PassageView.findMatches(query: "end", in: words) == [1])
+        #expect(PassageView.findMatches(query: "hello", in: words) == [2])
+    }
+
+    @Test func findMatchesSupportsCJKSubstrings() {
+        let words = ["你好", "世界", "你好啊"]
+        #expect(PassageView.findMatches(query: "你好", in: words) == [0, 2])
+    }
+
+    @Test func findMatchesReturnsEmptyWhenNoWordMatches() {
+        let words = ["alpha", "beta", "gamma"]
+        #expect(PassageView.findMatches(query: "delta", in: words).isEmpty)
+    }
+
+    // MARK: - PassageView nearest-match
+
+    @Test func nearestMatchPositionIsZeroForEmptyMatches() {
+        #expect(PassageView.nearestMatchPosition(to: 50, in: []) == 0)
+    }
+
+    @Test func nearestMatchPositionHandlesSingleMatch() {
+        #expect(PassageView.nearestMatchPosition(to: 0, in: [42]) == 0)
+        #expect(PassageView.nearestMatchPosition(to: 100, in: [42]) == 0)
+    }
+
+    @Test func nearestMatchPositionLandsOnExactHit() {
+        let matches = [10, 30, 50, 70]
+        #expect(PassageView.nearestMatchPosition(to: 30, in: matches) == 1)
+        #expect(PassageView.nearestMatchPosition(to: 70, in: matches) == 3)
+    }
+
+    @Test func nearestMatchPositionClampsBelowFirstAndAboveLast() {
+        let matches = [10, 30, 50, 70]
+        // Target before all matches → first match (index 0)
+        #expect(PassageView.nearestMatchPosition(to: 0, in: matches) == 0)
+        #expect(PassageView.nearestMatchPosition(to: -100, in: matches) == 0)
+        // Target after all matches → last match
+        #expect(PassageView.nearestMatchPosition(to: 100, in: matches) == 3)
+    }
+
+    @Test func nearestMatchPositionPicksCloserNeighbor() {
+        let matches = [10, 30, 50, 70]
+        // 14 is closer to 10 than 30 → index 0
+        #expect(PassageView.nearestMatchPosition(to: 14, in: matches) == 0)
+        // 28 is closer to 30 than 10 → index 1
+        #expect(PassageView.nearestMatchPosition(to: 28, in: matches) == 1)
+        // 60 is closer to 50 than 70 → index 2
+        #expect(PassageView.nearestMatchPosition(to: 60, in: matches) == 2)
+    }
+
+    @Test func nearestMatchPositionBreaksTieTowardEarlierMatch() {
+        // 20 is equidistant between 10 and 30 — tie breaks to the earlier (10).
+        let matches = [10, 30]
+        #expect(PassageView.nearestMatchPosition(to: 20, in: matches) == 0)
+    }
 }

@@ -16,7 +16,8 @@ struct PassageView: View {
 
     /// Number of words bundled into a single `WordChunkView`. Chunks live in a
     /// `LazyVStack` so very long documents only render visible regions.
-    private static let chunkSize = 200
+    /// Internal access lets `@testable` cover the chunk math helpers below.
+    static let chunkSize = 200
 
     @State private var searchQuery: String = ""
     @State private var matchIndices: [Int] = []
@@ -46,20 +47,15 @@ struct PassageView: View {
     }
 
     private var chunkCount: Int {
-        let count = words.count
-        guard count > 0 else { return 0 }
-        return (count + Self.chunkSize - 1) / Self.chunkSize
+        Self.chunkCount(wordCount: words.count)
     }
 
     private func chunkRange(_ chunkIndex: Int) -> Range<Int> {
-        let start = chunkIndex * Self.chunkSize
-        let end = min(start + Self.chunkSize, words.count)
-        return start..<end
+        Self.chunkRange(chunkIndex: chunkIndex, wordCount: words.count)
     }
 
     private func chunkIndex(for wordIndex: Int) -> Int {
-        guard chunkCount > 0 else { return 0 }
-        return max(0, min(wordIndex / Self.chunkSize, chunkCount - 1))
+        Self.chunkIndex(for: wordIndex, wordCount: words.count)
     }
 
     /// Stable scroll id for an individual word. Distinct namespace from the
@@ -394,31 +390,73 @@ struct PassageView: View {
     }
 
     private func runSearch() {
-        let trimmed = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            matchIndices = []
+        let results = Self.findMatches(query: searchQuery, in: words)
+        matchIndices = results
+        if results.isEmpty {
             currentMatchPosition = 0
             return
         }
+        // Land on the match closest to the user's current reading position so
+        // they don't get yanked far away from where they were.
+        currentMatchPosition = Self.nearestMatchPosition(to: engine.currentIndex, in: results)
+        scrollIntent = .matchPosition(currentMatchPosition)
+    }
+
+    private func stepMatch(by delta: Int) {
+        guard !matchIndices.isEmpty else { return }
+        let n = matchIndices.count
+        currentMatchPosition = (currentMatchPosition + delta + n) % n
+        scrollIntent = .matchPosition(currentMatchPosition)
+        HapticManager.shared.scrubTick()
+    }
+
+    // MARK: - Pure helpers (testable)
+
+    /// Total number of word chunks needed to hold `wordCount` words at the
+    /// given chunk size. Returns 0 for empty input.
+    static func chunkCount(wordCount: Int, chunkSize: Int = PassageView.chunkSize) -> Int {
+        guard wordCount > 0, chunkSize > 0 else { return 0 }
+        return (wordCount + chunkSize - 1) / chunkSize
+    }
+
+    /// Half-open range of word indices contained in `chunkIndex`, clamped to
+    /// `wordCount`. Empty range if the chunk index is out of bounds.
+    static func chunkRange(chunkIndex: Int, wordCount: Int, chunkSize: Int = PassageView.chunkSize) -> Range<Int> {
+        guard chunkIndex >= 0, chunkSize > 0 else { return 0..<0 }
+        let start = chunkIndex * chunkSize
+        guard start < wordCount else { return wordCount..<wordCount }
+        let end = min(start + chunkSize, wordCount)
+        return start..<end
+    }
+
+    /// Chunk index that contains `wordIndex`, clamped to `[0, chunkCount-1]`.
+    /// Returns 0 when there are no chunks.
+    static func chunkIndex(for wordIndex: Int, wordCount: Int, chunkSize: Int = PassageView.chunkSize) -> Int {
+        let count = chunkCount(wordCount: wordCount, chunkSize: chunkSize)
+        guard count > 0, chunkSize > 0 else { return 0 }
+        return max(0, min(wordIndex / chunkSize, count - 1))
+    }
+
+    /// Case-insensitive substring search over `words`. Whitespace is trimmed
+    /// from the query, and empty/whitespace-only queries yield no matches.
+    /// Returned indices are sorted ascending by construction.
+    static func findMatches(query: String, in words: [String]) -> [Int] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
         let needle = trimmed.lowercased()
         var results: [Int] = []
         results.reserveCapacity(min(words.count, 256))
         for (i, word) in words.enumerated() where word.lowercased().contains(needle) {
             results.append(i)
         }
-        matchIndices = results
-        if results.isEmpty {
-            currentMatchPosition = 0
-        } else {
-            // Land on the match closest to the user's current reading position
-            // so they don't get yanked far away from where they were.
-            currentMatchPosition = nearestMatchPosition(to: engine.currentIndex, in: results)
-            scrollIntent = .matchPosition(currentMatchPosition)
-        }
+        return results
     }
 
-    private func nearestMatchPosition(to wordIndex: Int, in matches: [Int]) -> Int {
-        // matches is sorted ascending by construction.
+    /// Position into `matches` of the entry closest to `wordIndex`. Ties
+    /// break toward the earlier (smaller-index) match. `matches` must be
+    /// sorted ascending. Returns 0 for an empty array.
+    static func nearestMatchPosition(to wordIndex: Int, in matches: [Int]) -> Int {
+        guard !matches.isEmpty else { return 0 }
         var lo = 0
         var hi = matches.count
         while lo < hi {
@@ -430,14 +468,6 @@ struct PassageView: View {
         let prevDelta = abs(matches[lo - 1] - wordIndex)
         let nextDelta = abs(matches[lo] - wordIndex)
         return prevDelta <= nextDelta ? lo - 1 : lo
-    }
-
-    private func stepMatch(by delta: Int) {
-        guard !matchIndices.isEmpty else { return }
-        let n = matchIndices.count
-        currentMatchPosition = (currentMatchPosition + delta + n) % n
-        scrollIntent = .matchPosition(currentMatchPosition)
-        HapticManager.shared.scrubTick()
     }
 }
 
