@@ -36,6 +36,7 @@ struct ReaderView: View {
     @State private var isBarScrubbing = false
     @State private var showCompletion = false
     @State private var showChapterPicker = false
+    @State private var showPassage = false
     @State private var persistenceError: String?
 
     private let startingWordIndex: Int?
@@ -170,6 +171,16 @@ struct ReaderView: View {
         } message: {
             Text(persistenceError ?? "")
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showPassage) {
+            PassageView(document: document, engine: engine)
+        }
+        #elseif os(macOS)
+        .sheet(isPresented: $showPassage) {
+            PassageView(document: document, engine: engine)
+                .frame(minWidth: 600, minHeight: 700)
+        }
+        #endif
         .preferredColorScheme(.dark)
         .focusable()
         .focusEffectDisabled()
@@ -351,12 +362,24 @@ struct ReaderView: View {
 
                 Spacer()
 
-                // Placeholder for symmetry or settings
-                Color.clear.frame(width: 44, height: 44)
+                Button {
+                    showPassage = true
+                } label: {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                        .padding(12)
+                        .background(StrobeTheme.surface)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("View text")
+                .accessibilityHint("Shows the full passage with your current word highlighted")
             }
             .padding(.horizontal)
             .padding(.top, 8)
             .opacity(engine.isPlaying ? 0.0 : 1.0)
+            .allowsHitTesting(!engine.isPlaying)
             
             Spacer().frame(height: 20)
             
