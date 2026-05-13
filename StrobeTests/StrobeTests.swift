@@ -469,6 +469,94 @@ struct StrobeTests {
         #expect(!FileManager.default.fileExists(atPath: extractedFile.path))
     }
 
+    // MARK: - ZIP central directory
+
+    @Test func zipExtractorReadsAllEntriesViaCentralDirectory() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            ("META-INF/container.xml", Data("<container/>".utf8), false),
+            ("OEBPS/content.opf", Data("<package/>".utf8), false),
+            ("OEBPS/chapter1.xhtml", Data("first chapter body".utf8), false),
+        ]
+        let zip = buildZIPWithCentralDirectory(entries: entries)
+        let zipURL = tempDir.appendingPathComponent("test.zip")
+        try zip.write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("extracted")
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        for entry in entries {
+            let extracted = try Data(contentsOf: extractDir.appendingPathComponent(entry.name))
+            #expect(extracted == entry.content, "entry \(entry.name) round-trips through extraction")
+        }
+    }
+
+    /// Reproduces the App Store bug where EPUBs produced by tools that stream
+    /// the archive (Sigil, Calibre, Pages) failed to extract. Those tools set
+    /// GP-flag bit 3, zero out the size fields in the local header, and place
+    /// the real sizes in a data descriptor after the payload. Walking local
+    /// headers blindly stops at the first such entry; parsing the central
+    /// directory recovers the authoritative sizes.
+    @Test func zipExtractorHandlesEntriesWithDataDescriptors() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            // container.xml uses a data descriptor — this is the entry the
+            // original bug reporter's EPUB was failing to extract.
+            ("META-INF/container.xml", Data("<container/>".utf8), true),
+            ("OEBPS/content.opf", Data("<package/>".utf8), true),
+        ]
+        let zip = buildZIPWithCentralDirectory(entries: entries)
+        let zipURL = tempDir.appendingPathComponent("test.zip")
+        try zip.write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("extracted")
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        for entry in entries {
+            let extractedURL = extractDir.appendingPathComponent(entry.name)
+            #expect(
+                FileManager.default.fileExists(atPath: extractedURL.path),
+                "entry \(entry.name) was extracted"
+            )
+            let extracted = try Data(contentsOf: extractedURL)
+            #expect(extracted == entry.content, "entry \(entry.name) extracted with correct bytes")
+        }
+    }
+
+    /// The EOCD record can be followed by a comment of up to 65535 bytes.
+    /// `findEOCD` must locate the record even when the file doesn't end
+    /// exactly at the EOCD's fixed-size portion.
+    @Test func zipExtractorLocatesEOCDWithTrailingComment() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("README.txt", Data("hello".utf8), false),
+        ]
+        let comment = Data(repeating: 0x21, count: 128) // 128 bytes of '!'
+        let zip = buildZIPWithCentralDirectory(entries: entries, comment: comment)
+        let zipURL = tempDir.appendingPathComponent("test.zip")
+        try zip.write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("extracted")
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        let extracted = try Data(contentsOf: extractDir.appendingPathComponent("README.txt"))
+        #expect(extracted == Data("hello".utf8))
+    }
+
     // MARK: - PDF error propagation
 
     @Test func pdfExtractionThrowsForInvalidFile() {
@@ -611,6 +699,98 @@ struct StrobeTests {
     }
 
     // MARK: - ZIP test helpers
+
+    /// Builds a ZIP archive with stored (uncompressed) entries, a full central
+    /// directory, and an EOCD record. Each entry may optionally use a data
+    /// descriptor (GP-flag bit 3): the local header's size fields are zeroed
+    /// and the real sizes are written after the payload, mirroring the layout
+    /// produced by streaming EPUB tools like Sigil and Calibre.
+    private func buildZIPWithCentralDirectory(
+        entries: [(name: String, content: Data, useDataDescriptor: Bool)],
+        comment: Data = Data()
+    ) -> Data {
+        var zip = Data()
+        var localHeaderOffsets: [Int] = []
+        localHeaderOffsets.reserveCapacity(entries.count)
+
+        // Local file headers + stored data (+ optional data descriptors)
+        for entry in entries {
+            localHeaderOffsets.append(zip.count)
+            let nameData = Data(entry.name.utf8)
+            let gpFlag: UInt16 = entry.useDataDescriptor ? 0x0008 : 0
+            let headerCompressedSize: UInt32 = entry.useDataDescriptor ? 0 : UInt32(entry.content.count)
+            let headerUncompressedSize: UInt32 = entry.useDataDescriptor ? 0 : UInt32(entry.content.count)
+
+            zip.append(uint32LE(0x04034b50))            // local file header signature
+            zip.append(uint16LE(20))                    // version needed
+            zip.append(uint16LE(gpFlag))                // general purpose bit flag
+            zip.append(uint16LE(0))                     // compression: stored
+            zip.append(uint16LE(0))                     // mod time
+            zip.append(uint16LE(0))                     // mod date
+            zip.append(uint32LE(0))                     // crc-32 (extractor doesn't validate)
+            zip.append(uint32LE(headerCompressedSize))
+            zip.append(uint32LE(headerUncompressedSize))
+            zip.append(uint16LE(UInt16(nameData.count)))
+            zip.append(uint16LE(0))                     // extra length
+            zip.append(nameData)
+            zip.append(entry.content)
+
+            if entry.useDataDescriptor {
+                zip.append(uint32LE(0x08074b50))         // optional descriptor signature
+                zip.append(uint32LE(0))                  // crc-32
+                zip.append(uint32LE(UInt32(entry.content.count)))
+                zip.append(uint32LE(UInt32(entry.content.count)))
+            }
+        }
+
+        // Central directory
+        let cdOffset = zip.count
+        for (i, entry) in entries.enumerated() {
+            let nameData = Data(entry.name.utf8)
+            let gpFlag: UInt16 = entry.useDataDescriptor ? 0x0008 : 0
+
+            zip.append(uint32LE(0x02014b50))            // central directory signature
+            zip.append(uint16LE(20))                    // version made by
+            zip.append(uint16LE(20))                    // version needed
+            zip.append(uint16LE(gpFlag))
+            zip.append(uint16LE(0))                     // compression: stored
+            zip.append(uint16LE(0))                     // mod time
+            zip.append(uint16LE(0))                     // mod date
+            zip.append(uint32LE(0))                     // crc-32
+            zip.append(uint32LE(UInt32(entry.content.count)))  // compressed size
+            zip.append(uint32LE(UInt32(entry.content.count)))  // uncompressed size
+            zip.append(uint16LE(UInt16(nameData.count)))
+            zip.append(uint16LE(0))                     // extra length
+            zip.append(uint16LE(0))                     // comment length
+            zip.append(uint16LE(0))                     // disk number start
+            zip.append(uint16LE(0))                     // internal attributes
+            zip.append(uint32LE(0))                     // external attributes
+            zip.append(uint32LE(UInt32(localHeaderOffsets[i])))
+            zip.append(nameData)
+        }
+        let cdSize = zip.count - cdOffset
+
+        // End of central directory record
+        zip.append(uint32LE(0x06054b50))                // EOCD signature
+        zip.append(uint16LE(0))                          // disk number
+        zip.append(uint16LE(0))                          // disk with CD start
+        zip.append(uint16LE(UInt16(entries.count)))      // entries on this disk
+        zip.append(uint16LE(UInt16(entries.count)))      // total entries
+        zip.append(uint32LE(UInt32(cdSize)))
+        zip.append(uint32LE(UInt32(cdOffset)))
+        zip.append(uint16LE(UInt16(comment.count)))
+        zip.append(comment)
+
+        return zip
+    }
+
+    private func uint16LE(_ value: UInt16) -> Data {
+        withUnsafeBytes(of: value.littleEndian) { Data($0) }
+    }
+
+    private func uint32LE(_ value: UInt32) -> Data {
+        withUnsafeBytes(of: value.littleEndian) { Data($0) }
+    }
 
     /// Builds a minimal valid ZIP archive containing a single stored (uncompressed) entry.
     private func buildMinimalZIP(name: String, content: Data) -> Data {
