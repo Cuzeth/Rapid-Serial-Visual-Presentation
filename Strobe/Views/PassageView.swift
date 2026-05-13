@@ -22,7 +22,16 @@ struct PassageView: View {
     @State private var matchIndices: [Int] = []
     @State private var currentMatchPosition: Int = 0
     @State private var renderedChunks: Set<Int> = []
+    @State private var pendingWordScroll: PendingWordScroll?
     @FocusState private var searchFocused: Bool
+
+    /// A word-center scroll that's waiting for its containing chunk to be
+    /// realized. Consumed by the `renderedChunks` `onChange` handler in the
+    /// passage scroll body.
+    private struct PendingWordScroll {
+        let target: Int
+        let animated: Bool
+    }
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
@@ -294,6 +303,12 @@ struct PassageView: View {
                     performScroll(intent, proxy: proxy, animated: true)
                     scrollIntent = nil
                 }
+                .onChange(of: renderedChunks) { _, newChunks in
+                    guard let pending = pendingWordScroll,
+                          newChunks.contains(chunkIndex(for: pending.target)) else { return }
+                    pendingWordScroll = nil
+                    scrollToWord(pending.target, proxy: proxy, animated: pending.animated)
+                }
             }
 
             floatingFocusButton
@@ -335,32 +350,37 @@ struct PassageView: View {
             targetWord = matchIndices[pos]
         }
         let chunk = chunkIndex(for: targetWord)
-        let wordID = Self.wordScrollID(targetWord)
-
-        let scrollToWord = {
-            if animated {
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(wordID, anchor: .center)
-                }
-            } else {
-                proxy.scrollTo(wordID, anchor: .center)
-            }
-        }
 
         if renderedChunks.contains(chunk) {
-            // The chunk is already in the view hierarchy, so the word-level id
-            // resolves immediately. Single scrollTo avoids the chunk-then-word
-            // bounce that's visible when scrolling to an already-centered word.
-            scrollToWord()
+            // Chunk is in the hierarchy — the word-level id resolves now.
+            scrollToWord(targetWord, proxy: proxy, animated: animated)
         } else {
-            // Pre-scroll to the chunk so `LazyVStack` realizes its WordTokens;
-            // the word-level id isn't resolvable until its chunk is built. The
-            // async hop lets the flow layout place the WordToken before we
-            // fine-tune to center it.
-            proxy.scrollTo(chunk, anchor: .center)
-            DispatchQueue.main.async {
-                scrollToWord()
+            // Off-screen target: pre-scroll to the chunk using an anchor that
+            // approximates the word's vertical position within the chunk. That
+            // way the pre-scroll lands close to the final centered position,
+            // so the word-level fine-tune (consumed by the renderedChunks
+            // onChange below) is a small smooth adjustment rather than a jump.
+            pendingWordScroll = PendingWordScroll(target: targetWord, animated: animated)
+            let posInChunk = CGFloat(targetWord % Self.chunkSize) / CGFloat(max(1, Self.chunkSize))
+            let approxAnchor = UnitPoint(x: 0.5, y: posInChunk)
+            if animated {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(chunk, anchor: approxAnchor)
+                }
+            } else {
+                proxy.scrollTo(chunk, anchor: approxAnchor)
             }
+        }
+    }
+
+    private func scrollToWord(_ wordIndex: Int, proxy: ScrollViewProxy, animated: Bool) {
+        let wordID = Self.wordScrollID(wordIndex)
+        if animated {
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo(wordID, anchor: .center)
+            }
+        } else {
+            proxy.scrollTo(wordID, anchor: .center)
         }
     }
 
