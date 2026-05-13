@@ -4,9 +4,12 @@ import os
 
 /// Extracts files from ZIP archives without external dependencies.
 ///
-/// Parses local file headers directly from the binary data and supports
-/// stored (method 0) and deflate (method 8) compression using Apple's
-/// Compression framework. Used internally for EPUB extraction.
+/// Parses the End-of-Central-Directory record at the tail of the archive
+/// to find authoritative entry metadata, then reads each entry's compressed
+/// payload via its local file header. Falls back to scanning local file
+/// headers from the start for archives without a discoverable central
+/// directory. Supports stored (method 0) and deflate (method 8) compression
+/// using Apple's Compression framework. Used internally for EPUB extraction.
 enum ZIPExtractor {
 
     nonisolated private static let logger = Logger(
@@ -17,8 +20,20 @@ enum ZIPExtractor {
     /// ZIP local file header signature (`PK\x03\x04`).
     nonisolated private static let localFileHeaderSignature: UInt32 = 0x04034b50
 
+    /// Central directory file header signature (`PK\x01\x02`).
+    nonisolated private static let centralDirectorySignature: UInt32 = 0x02014b50
+
+    /// End of central directory record signature (`PK\x05\x06`).
+    nonisolated private static let eocdSignature: UInt32 = 0x06054b50
+
     /// Fixed-size portion of the ZIP local file header (30 bytes).
     nonisolated private static let localFileHeaderSize = 30
+
+    /// Fixed-size portion of the central directory file header (46 bytes).
+    nonisolated private static let centralFileHeaderSize = 46
+
+    /// Fixed-size portion of the end-of-central-directory record (22 bytes).
+    nonisolated private static let eocdRecordSize = 22
 
     /// Maximum decompression buffer size (100 MB) to prevent ZIP bombs.
     nonisolated private static let maxDecompressionSize = 100 * 1024 * 1024
@@ -39,73 +54,209 @@ enum ZIPExtractor {
             let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
             let size = rawBuffer.count
 
-            var offset = 0
-            while offset + localFileHeaderSize <= size {
-                let sig = readUInt32(bytes, at: offset)
-                guard sig == localFileHeaderSignature else { break }
-
-                let compressionMethod = readUInt16(bytes, at: offset + 8)
-                let compressedSize = Int(readUInt32(bytes, at: offset + 18))
-                let uncompressedSize = Int(readUInt32(bytes, at: offset + 22))
-                let nameLength = Int(readUInt16(bytes, at: offset + 26))
-                let extraLength = Int(readUInt16(bytes, at: offset + 28))
-
-                let nameStart = offset + localFileHeaderSize
-                guard nameStart + nameLength <= size else { break }
-                let nameData = Data(bytes: bytes + nameStart, count: nameLength)
-                guard let name = String(data: nameData, encoding: .utf8), !name.isEmpty else {
-                    offset = nameStart + nameLength + extraLength + compressedSize
-                    continue
-                }
-
-                let dataStart = nameStart + nameLength + extraLength
-                guard dataStart + compressedSize <= size else { break }
-
-                let fileURL = destination.appendingPathComponent(name)
-
-                // Prevent Zip Slip path traversal
-                guard fileURL.standardizedFileURL.path
-                    .hasPrefix(destination.standardizedFileURL.path + "/") else {
-                    logger.warning("Skipping ZIP entry with path traversal: \(name, privacy: .public)")
-                    offset = dataStart + compressedSize
-                    continue
-                }
-
-                if name.hasSuffix("/") {
-                    // Directory entry
-                    try fm.createDirectory(at: fileURL, withIntermediateDirectories: true)
-                } else {
-                    // File entry
-                    let parentDir = fileURL.deletingLastPathComponent()
-                    if !fm.fileExists(atPath: parentDir.path) {
-                        try fm.createDirectory(at: parentDir, withIntermediateDirectories: true)
-                    }
-
-                    let fileData: Data
-                    if compressionMethod == 0 {
-                        // Stored (no compression)
-                        fileData = Data(bytes: bytes + dataStart, count: compressedSize)
-                    } else if compressionMethod == 8 {
-                        // Deflate
-                        let compressed = Data(bytes: bytes + dataStart, count: compressedSize)
-                        guard let decompressed = inflate(compressed, expectedSize: uncompressedSize) else {
-                            logger.warning("Deflate decompression failed for entry: \(name, privacy: .public)")
-                            offset = dataStart + compressedSize
-                            continue
-                        }
-                        fileData = decompressed
-                    } else {
-                        logger.warning("Unsupported compression method \(compressionMethod) for entry: \(name, privacy: .public)")
-                        offset = dataStart + compressedSize
-                        continue
-                    }
-
-                    try fileData.write(to: fileURL)
-                }
-
-                offset = dataStart + compressedSize
+            if let eocdOffset = findEOCD(bytes: bytes, size: size) {
+                try extractFromCentralDirectory(
+                    bytes: bytes,
+                    size: size,
+                    eocdOffset: eocdOffset,
+                    destination: destination,
+                    fm: fm
+                )
+            } else {
+                try extractByLocalHeaders(
+                    bytes: bytes,
+                    size: size,
+                    destination: destination,
+                    fm: fm
+                )
             }
         }
+    }
+
+    // MARK: - Central directory path
+
+    /// Locates the End of Central Directory record by scanning backwards from
+    /// the file's tail. The EOCD comment field can be up to 65535 bytes, so
+    /// the search window is bounded at `eocdRecordSize + 65535` bytes.
+    nonisolated private static func findEOCD(bytes: UnsafePointer<UInt8>, size: Int) -> Int? {
+        guard size >= eocdRecordSize else { return nil }
+        let maxCommentLength = 65535
+        let searchFloor = max(0, size - eocdRecordSize - maxCommentLength)
+        var i = size - eocdRecordSize
+        while i >= searchFloor {
+            if readUInt32(bytes, at: i) == eocdSignature {
+                let declaredCommentLength = Int(readUInt16(bytes, at: i + 20))
+                if i + eocdRecordSize + declaredCommentLength == size {
+                    return i
+                }
+            }
+            i -= 1
+        }
+        return nil
+    }
+
+    /// Walks the central directory entries and extracts each one using the
+    /// authoritative sizes recorded there (avoiding the data-descriptor
+    /// ambiguity present in local file headers).
+    nonisolated private static func extractFromCentralDirectory(
+        bytes: UnsafePointer<UInt8>,
+        size: Int,
+        eocdOffset: Int,
+        destination: URL,
+        fm: FileManager
+    ) throws {
+        let totalEntries = Int(readUInt16(bytes, at: eocdOffset + 10))
+        let cdSize = Int(readUInt32(bytes, at: eocdOffset + 12))
+        let cdOffset = Int(readUInt32(bytes, at: eocdOffset + 16))
+
+        guard cdOffset >= 0,
+              cdSize >= 0,
+              cdOffset + cdSize <= size else { return }
+
+        let cdEnd = cdOffset + cdSize
+        var entryOffset = cdOffset
+        var entriesRead = 0
+
+        while entryOffset + centralFileHeaderSize <= cdEnd, entriesRead < totalEntries {
+            guard readUInt32(bytes, at: entryOffset) == centralDirectorySignature else { break }
+
+            let compressionMethod = readUInt16(bytes, at: entryOffset + 10)
+            let compressedSize = Int(readUInt32(bytes, at: entryOffset + 20))
+            let uncompressedSize = Int(readUInt32(bytes, at: entryOffset + 24))
+            let nameLength = Int(readUInt16(bytes, at: entryOffset + 28))
+            let extraLength = Int(readUInt16(bytes, at: entryOffset + 30))
+            let commentLength = Int(readUInt16(bytes, at: entryOffset + 32))
+            let localHeaderOffset = Int(readUInt32(bytes, at: entryOffset + 42))
+
+            let nameStart = entryOffset + centralFileHeaderSize
+            guard nameStart + nameLength <= cdEnd else { break }
+            let nameData = Data(bytes: bytes + nameStart, count: nameLength)
+
+            entryOffset = nameStart + nameLength + extraLength + commentLength
+            entriesRead += 1
+
+            guard let name = String(data: nameData, encoding: .utf8), !name.isEmpty else { continue }
+
+            // Locate the actual compressed payload via the local file header.
+            // The local header's name/extra lengths may differ from the central
+            // directory's, so they must be re-read here rather than reused.
+            guard localHeaderOffset >= 0,
+                  localHeaderOffset + localFileHeaderSize <= size,
+                  readUInt32(bytes, at: localHeaderOffset) == localFileHeaderSignature else {
+                continue
+            }
+            let lhNameLength = Int(readUInt16(bytes, at: localHeaderOffset + 26))
+            let lhExtraLength = Int(readUInt16(bytes, at: localHeaderOffset + 28))
+            let dataStart = localHeaderOffset + localFileHeaderSize + lhNameLength + lhExtraLength
+            guard dataStart + compressedSize <= size else { continue }
+
+            try writeEntry(
+                bytes: bytes,
+                name: name,
+                dataStart: dataStart,
+                compressedSize: compressedSize,
+                uncompressedSize: uncompressedSize,
+                compressionMethod: compressionMethod,
+                destination: destination,
+                fm: fm
+            )
+        }
+    }
+
+    // MARK: - Local header fallback
+
+    /// Sequentially walks local file headers from the start of the archive.
+    /// Used only when the End of Central Directory record cannot be found.
+    /// Does not support entries that use data descriptors (GP-flag bit 3).
+    nonisolated private static func extractByLocalHeaders(
+        bytes: UnsafePointer<UInt8>,
+        size: Int,
+        destination: URL,
+        fm: FileManager
+    ) throws {
+        var offset = 0
+        while offset + localFileHeaderSize <= size {
+            guard readUInt32(bytes, at: offset) == localFileHeaderSignature else { break }
+
+            let compressionMethod = readUInt16(bytes, at: offset + 8)
+            let compressedSize = Int(readUInt32(bytes, at: offset + 18))
+            let uncompressedSize = Int(readUInt32(bytes, at: offset + 22))
+            let nameLength = Int(readUInt16(bytes, at: offset + 26))
+            let extraLength = Int(readUInt16(bytes, at: offset + 28))
+
+            let nameStart = offset + localFileHeaderSize
+            guard nameStart + nameLength <= size else { break }
+            let nameData = Data(bytes: bytes + nameStart, count: nameLength)
+
+            let dataStart = nameStart + nameLength + extraLength
+            guard dataStart + compressedSize <= size else { break }
+
+            if let name = String(data: nameData, encoding: .utf8), !name.isEmpty {
+                try writeEntry(
+                    bytes: bytes,
+                    name: name,
+                    dataStart: dataStart,
+                    compressedSize: compressedSize,
+                    uncompressedSize: uncompressedSize,
+                    compressionMethod: compressionMethod,
+                    destination: destination,
+                    fm: fm
+                )
+            }
+
+            offset = dataStart + compressedSize
+        }
+    }
+
+    // MARK: - Entry writing
+
+    /// Materializes a single entry to disk, applying decompression and the
+    /// Zip-Slip path-traversal guard.
+    nonisolated private static func writeEntry(
+        bytes: UnsafePointer<UInt8>,
+        name: String,
+        dataStart: Int,
+        compressedSize: Int,
+        uncompressedSize: Int,
+        compressionMethod: UInt16,
+        destination: URL,
+        fm: FileManager
+    ) throws {
+        let fileURL = destination.appendingPathComponent(name)
+
+        // Prevent Zip Slip path traversal
+        guard fileURL.standardizedFileURL.path
+            .hasPrefix(destination.standardizedFileURL.path + "/") else {
+            logger.warning("Skipping ZIP entry with path traversal: \(name, privacy: .public)")
+            return
+        }
+
+        if name.hasSuffix("/") {
+            try fm.createDirectory(at: fileURL, withIntermediateDirectories: true)
+            return
+        }
+
+        let parentDir = fileURL.deletingLastPathComponent()
+        if !fm.fileExists(atPath: parentDir.path) {
+            try fm.createDirectory(at: parentDir, withIntermediateDirectories: true)
+        }
+
+        let fileData: Data
+        if compressionMethod == 0 {
+            fileData = Data(bytes: bytes + dataStart, count: compressedSize)
+        } else if compressionMethod == 8 {
+            let compressed = Data(bytes: bytes + dataStart, count: compressedSize)
+            guard let decompressed = inflate(compressed, expectedSize: uncompressedSize) else {
+                logger.warning("Deflate decompression failed for entry: \(name, privacy: .public)")
+                return
+            }
+            fileData = decompressed
+        } else {
+            logger.warning("Unsupported compression method \(compressionMethod) for entry: \(name, privacy: .public)")
+            return
+        }
+
+        try fileData.write(to: fileURL)
     }
 
     // MARK: - Helpers
