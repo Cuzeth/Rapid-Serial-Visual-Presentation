@@ -557,6 +557,60 @@ struct StrobeTests {
         #expect(extracted == Data("hello".utf8))
     }
 
+    @Test func epubExtractionReadsContainerXMLFromDataDescriptorArchive() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let containerXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0">
+          <rootfiles>
+            <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+          </rootfiles>
+        </container>
+        """
+
+        let opf = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <package version="3.0">
+          <metadata>
+            <dc:title>Review EPUB</dc:title>
+          </metadata>
+          <manifest>
+            <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+          </manifest>
+          <spine>
+            <itemref idref="chapter1"/>
+          </spine>
+        </package>
+        """
+
+        let chapter = """
+        <html>
+          <body>
+            <p>Hello review reader.</p>
+          </body>
+        </html>
+        """
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            ("META-INF/container.xml", Data(containerXML.utf8), true),
+            ("OEBPS/content.opf", Data(opf.utf8), true),
+            ("OEBPS/chapter1.xhtml", Data(chapter.utf8), true),
+        ]
+
+        let epubURL = tempDir.appendingPathComponent("review.epub")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: epubURL)
+
+        let result = try EPUBTextExtractor.extractWordsAndChapters(from: epubURL)
+        #expect(result.words.contains("Hello"))
+        #expect(result.words.contains("review"))
+        #expect(result.words.contains("reader."))
+    }
+
     // MARK: - PDF error propagation
 
     @Test func pdfExtractionThrowsForInvalidFile() {
