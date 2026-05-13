@@ -21,6 +21,7 @@ struct PassageView: View {
     @State private var searchQuery: String = ""
     @State private var matchIndices: [Int] = []
     @State private var currentMatchPosition: Int = 0
+    @State private var renderedChunks: Set<Int> = []
     @FocusState private var searchFocused: Bool
 
     private var readerFont: ReaderFont {
@@ -98,58 +99,53 @@ struct PassageView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(StrobeTheme.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .background(StrobeTheme.surface)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close text view")
-
-            Spacer()
-
-            VStack(spacing: 2) {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(document.title)
-                    .font(readerFont.boldFont(size: 16))
+                    .font(readerFont.boldFont(size: 18))
                     .foregroundStyle(StrobeTheme.textPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text("\(engine.currentIndex + 1) / \(words.count)")
-                    .font(readerFont.regularFont(size: 11))
+                    .font(readerFont.regularFont(size: 12))
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
 
             Spacer()
 
-            scrollToCurrentButton
+            Button {
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(readerFont.boldFont(size: 16))
+                    .foregroundStyle(StrobeTheme.accent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Done")
+            .accessibilityHint("Close text view")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
     }
 
-    /// Right-side header button that scrolls back to the current reading
-    /// position. Publishes via `scrollIntent` so the actual `scrollTo` runs
+    /// Circular floating action button overlaid on the lower-right of the
+    /// scroll. Publishes via `scrollIntent` so the actual `scrollTo` runs
     /// inside the `ScrollViewReader` closure that owns the proxy.
-    private var scrollToCurrentButton: some View {
+    private var floatingFocusButton: some View {
         Button {
             scrollIntent = .currentWord
         } label: {
             Image(systemName: "scope")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(StrobeTheme.accent)
-                .frame(width: 36, height: 36)
-                .background(StrobeTheme.surface)
-                .clipShape(Circle())
+                .frame(width: 48, height: 48)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(StrobeTheme.accent.opacity(0.35), lineWidth: 1))
+                .shadow(color: .black.opacity(0.4), radius: 8, x: 0, y: 3)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Scroll to current word")
+        .accessibilityLabel("Center on current word")
     }
 
     // MARK: - Search
@@ -266,35 +262,43 @@ struct PassageView: View {
 
     @ViewBuilder
     private var passageScroll: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(0..<chunkCount, id: \.self) { idx in
-                        WordChunkView(
-                            words: words,
-                            range: chunkRange(idx),
-                            currentIndex: engine.currentIndex,
-                            matchSet: matchSet,
-                            currentMatchWord: currentMatchWord,
-                            font: readerFont,
-                            onTap: handleWordTap
-                        )
-                        .id(idx)
-                        .padding(.horizontal, 18)
+        ZStack(alignment: .bottomTrailing) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(0..<chunkCount, id: \.self) { idx in
+                            WordChunkView(
+                                words: words,
+                                range: chunkRange(idx),
+                                currentIndex: engine.currentIndex,
+                                matchSet: matchSet,
+                                currentMatchWord: currentMatchWord,
+                                font: readerFont,
+                                onTap: handleWordTap
+                            )
+                            .id(idx)
+                            .padding(.horizontal, 18)
+                            .onAppear { renderedChunks.insert(idx) }
+                            .onDisappear { renderedChunks.remove(idx) }
+                        }
                     }
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .mask(edgeFadeMask)
+                .onAppear {
+                    performScroll(.currentWord, proxy: proxy, animated: false)
+                }
+                .onChange(of: scrollIntent) { _, intent in
+                    guard let intent else { return }
+                    performScroll(intent, proxy: proxy, animated: true)
+                    scrollIntent = nil
+                }
             }
-            .mask(edgeFadeMask)
-            .onAppear {
-                performScroll(.currentWord, proxy: proxy, animated: false)
-            }
-            .onChange(of: scrollIntent) { _, intent in
-                guard let intent else { return }
-                performScroll(intent, proxy: proxy, animated: true)
-                scrollIntent = nil
-            }
+
+            floatingFocusButton
+                .padding(.trailing, 20)
+                .padding(.bottom, 24)
         }
     }
 
@@ -333,18 +337,29 @@ struct PassageView: View {
         let chunk = chunkIndex(for: targetWord)
         let wordID = Self.wordScrollID(targetWord)
 
-        // Pre-scroll to the chunk so `LazyVStack` realizes its WordTokens; the
-        // word-level id isn't resolvable until its chunk has been built. Then
-        // defer one runloop so the flow layout can place the WordToken before
-        // we fine-tune to center it.
-        proxy.scrollTo(chunk, anchor: .center)
-        DispatchQueue.main.async {
+        let scrollToWord = {
             if animated {
                 withAnimation(.easeOut(duration: 0.25)) {
                     proxy.scrollTo(wordID, anchor: .center)
                 }
             } else {
                 proxy.scrollTo(wordID, anchor: .center)
+            }
+        }
+
+        if renderedChunks.contains(chunk) {
+            // The chunk is already in the view hierarchy, so the word-level id
+            // resolves immediately. Single scrollTo avoids the chunk-then-word
+            // bounce that's visible when scrolling to an already-centered word.
+            scrollToWord()
+        } else {
+            // Pre-scroll to the chunk so `LazyVStack` realizes its WordTokens;
+            // the word-level id isn't resolvable until its chunk is built. The
+            // async hop lets the flow layout place the WordToken before we
+            // fine-tune to center it.
+            proxy.scrollTo(chunk, anchor: .center)
+            DispatchQueue.main.async {
+                scrollToWord()
             }
         }
     }
@@ -354,6 +369,7 @@ struct PassageView: View {
     private func handleWordTap(_ index: Int) {
         guard index >= 0, index < words.count else { return }
         engine.seek(to: index)
+        scrollIntent = .currentWord
         HapticManager.shared.scrubTick()
     }
 
