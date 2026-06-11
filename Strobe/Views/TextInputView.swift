@@ -5,7 +5,7 @@ import SwiftData
 struct TextInputView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("defaultWPM") private var defaultWPM: Int = 300
+    @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
 
     @State private var title: String = ""
     @State private var inputText: String = ""

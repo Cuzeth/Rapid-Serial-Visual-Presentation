@@ -10,7 +10,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
-    @AppStorage("defaultWPM") private var defaultWPM: Int = 300
+    @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false

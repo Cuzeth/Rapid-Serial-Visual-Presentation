@@ -16,14 +16,14 @@ struct ReaderView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("fontSize") private var fontSize: Int = 40
-    @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
-    @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
-    @AppStorage("smartTimingPercentPerLetter") private var smartTimingPercentPerLetter: Double = 4.0
-    @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
-    @AppStorage("complexityTimingEnabled") private var complexityTimingEnabled: Bool = false
-    @AppStorage("complexityIntensity") private var complexityIntensity: Double = 0.5
-    @AppStorage("holdToReadEnabled") private var holdToReadEnabled: Bool = true
+    @AppStorage(ReaderSettings.Keys.fontSize) private var fontSize: Int = ReaderSettings.Defaults.fontSize
+    @AppStorage(ReaderSettings.Keys.smartTimingEnabled) private var smartTimingEnabled: Bool = ReaderSettings.Defaults.smartTimingEnabled
+    @AppStorage(ReaderSettings.Keys.sentencePauseEnabled) private var sentencePauseEnabled: Bool = ReaderSettings.Defaults.sentencePauseEnabled
+    @AppStorage(ReaderSettings.Keys.smartTimingPercentPerLetter) private var smartTimingPercentPerLetter: Double = ReaderSettings.Defaults.smartTimingPercentPerLetter
+    @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
+    @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
+    @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
+    @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
@@ -56,25 +56,20 @@ struct ReaderView: View {
         self.startingWordIndex = startingWordIndex
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
         let words = document.readingWords
-        // Read settings via UserDefaults because @AppStorage properties aren't
-        // accessible before `self` is fully initialized. Keys and defaults must
-        // match the @AppStorage declarations above.
-        let usesSmartTiming = UserDefaults.standard.bool(forKey: "smartTimingEnabled")
-        let usesSentencePause = UserDefaults.standard.bool(forKey: "sentencePauseEnabled")
-        let percentPerLetter = UserDefaults.standard.object(forKey: "smartTimingPercentPerLetter") as? Double ?? 4.0
-        let pauseMultiplier = UserDefaults.standard.object(forKey: "sentencePauseMultiplier") as? Double ?? 1.5
-        let usesComplexityTiming = UserDefaults.standard.bool(forKey: "complexityTimingEnabled")
-        let complexityIntensityValue = UserDefaults.standard.object(forKey: "complexityIntensity") as? Double ?? 0.5
+        // Read settings via the shared snapshot because @AppStorage properties
+        // aren't accessible before `self` is fully initialized. ReaderSettings
+        // owns the keys and defaults the @AppStorage declarations above use.
+        let timing = ReaderSettings.timingSnapshot()
         self._engine = State(initialValue: RSVPEngine(
             words: words,
             currentIndex: effectiveIndex,
             wordsPerMinute: document.wordsPerMinute,
-            smartTimingEnabled: usesSmartTiming,
-            sentencePauseEnabled: usesSentencePause,
-            smartTimingPercentPerLetter: percentPerLetter,
-            sentencePauseMultiplier: pauseMultiplier,
-            complexityTimingEnabled: usesComplexityTiming,
-            complexityIntensity: complexityIntensityValue,
+            smartTimingEnabled: timing.smartTimingEnabled,
+            sentencePauseEnabled: timing.sentencePauseEnabled,
+            smartTimingPercentPerLetter: timing.smartTimingPercentPerLetter,
+            sentencePauseMultiplier: timing.sentencePauseMultiplier,
+            complexityTimingEnabled: timing.complexityTimingEnabled,
+            complexityIntensity: timing.complexityIntensity,
             complexityScores: document.complexityScores
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))

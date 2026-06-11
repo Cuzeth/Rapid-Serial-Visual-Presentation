@@ -361,6 +361,43 @@ struct StrobeTests {
         #expect(multiplier > 1.0)
     }
 
+    /// ReaderSettings.timingSnapshot seeds RSVPEngine before @AppStorage is
+    /// usable; its fallback defaults must match the engine's own initializer
+    /// defaults or a fresh install would behave differently depending on the
+    /// code path that created the engine.
+    @Test func readerSettingsSnapshotDefaultsMatchEngineDefaults() throws {
+        let suiteName = "ReaderSettingsTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let snapshot = ReaderSettings.timingSnapshot(from: defaults)
+        let engine = RSVPEngine(words: ["word"])
+
+        #expect(snapshot.smartTimingEnabled == engine.smartTimingEnabled)
+        #expect(snapshot.sentencePauseEnabled == engine.sentencePauseEnabled)
+        #expect(snapshot.smartTimingPercentPerLetter == engine.smartTimingPercentPerLetter)
+        #expect(snapshot.sentencePauseMultiplier == engine.sentencePauseMultiplier)
+        #expect(snapshot.complexityTimingEnabled == engine.complexityTimingEnabled)
+        #expect(snapshot.complexityIntensity == engine.complexityIntensity)
+    }
+
+    @Test func readerSettingsSnapshotReadsStoredValues() throws {
+        let suiteName = "ReaderSettingsTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(true, forKey: ReaderSettings.Keys.smartTimingEnabled)
+        defaults.set(7.0, forKey: ReaderSettings.Keys.smartTimingPercentPerLetter)
+        defaults.set(2.5, forKey: ReaderSettings.Keys.sentencePauseMultiplier)
+
+        let snapshot = ReaderSettings.timingSnapshot(from: defaults)
+        #expect(snapshot.smartTimingEnabled == true)
+        #expect(snapshot.smartTimingPercentPerLetter == 7.0)
+        #expect(snapshot.sentencePauseMultiplier == 2.5)
+        // Unset keys still fall back to defaults.
+        #expect(snapshot.complexityTimingEnabled == ReaderSettings.Defaults.complexityTimingEnabled)
+    }
+
     @Test func complexityMultiplierAtZeroIntensityIsUnity() {
         let low = RSVPEngine.complexityMultiplier(score: 0.0, intensity: 0.0)
         let high = RSVPEngine.complexityMultiplier(score: 1.0, intensity: 0.0)

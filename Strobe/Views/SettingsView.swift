@@ -2,15 +2,15 @@ import SwiftUI
 
 /// App settings sheet for configuring reading speed, font, text size, and behavior.
 struct SettingsView: View {
-    @AppStorage("defaultWPM") private var defaultWPM: Int = 300
-    @AppStorage("fontSize") private var fontSize: Int = 40
-    @AppStorage("smartTimingEnabled") private var smartTimingEnabled: Bool = false
-    @AppStorage("sentencePauseEnabled") private var sentencePauseEnabled: Bool = false
-    @AppStorage("smartTimingPercentPerLetter") private var smartTimingPercentPerLetter: Double = 4.0
-    @AppStorage("sentencePauseMultiplier") private var sentencePauseMultiplierValue: Double = 1.5
-    @AppStorage("complexityTimingEnabled") private var complexityTimingEnabled: Bool = false
-    @AppStorage("complexityIntensity") private var complexityIntensity: Double = 0.5
-    @AppStorage("holdToReadEnabled") private var holdToReadEnabled: Bool = true
+    @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
+    @AppStorage(ReaderSettings.Keys.fontSize) private var fontSize: Int = ReaderSettings.Defaults.fontSize
+    @AppStorage(ReaderSettings.Keys.smartTimingEnabled) private var smartTimingEnabled: Bool = ReaderSettings.Defaults.smartTimingEnabled
+    @AppStorage(ReaderSettings.Keys.sentencePauseEnabled) private var sentencePauseEnabled: Bool = ReaderSettings.Defaults.sentencePauseEnabled
+    @AppStorage(ReaderSettings.Keys.smartTimingPercentPerLetter) private var smartTimingPercentPerLetter: Double = ReaderSettings.Defaults.smartTimingPercentPerLetter
+    @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
+    @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
+    @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
+    @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
