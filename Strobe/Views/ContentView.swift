@@ -179,6 +179,7 @@ struct ContentView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
@@ -274,6 +275,8 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .disabled(isProcessingImport)
+        .accessibilityLabel("Add document")
+        .accessibilityHint("Import a PDF or EPUB, or enter text")
     }
 
     @ViewBuilder
