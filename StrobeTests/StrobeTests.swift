@@ -474,6 +474,39 @@ struct StrobeTests {
         }
     }
 
+    /// The ORP centering offset shifts the word sideways after it has been
+    /// fitted; unclamped, long words ran off the trailing screen edge.
+    @Test func orpAnchorOffsetIsClampedToAvailableWidth() {
+        // Plenty of slack: the ideal offset passes through unchanged.
+        #expect(WordView.clampedAnchorOffset(idealOffset: 30, wordWidth: 200, availableWidth: 400) == 30)
+        #expect(WordView.clampedAnchorOffset(idealOffset: -30, wordWidth: 200, availableWidth: 400) == -30)
+
+        // Offset would push the word past the edge: clamped to the slack.
+        #expect(WordView.clampedAnchorOffset(idealOffset: 150, wordWidth: 300, availableWidth: 400) == 50)
+        #expect(WordView.clampedAnchorOffset(idealOffset: -150, wordWidth: 300, availableWidth: 400) == -50)
+
+        // Word as wide as (or wider than) the space: plain centering.
+        #expect(WordView.clampedAnchorOffset(idealOffset: 80, wordWidth: 400, availableWidth: 400) == 0)
+        #expect(WordView.clampedAnchorOffset(idealOffset: 80, wordWidth: 500, availableWidth: 400) == 0)
+    }
+
+    /// A clamped offset must keep both word edges inside the view for any
+    /// word narrower than the available width.
+    @Test func clampedOffsetKeepsWordWithinBounds() {
+        let availableWidth: CGFloat = 393
+        for wordWidth in stride(from: CGFloat(50), through: 392, by: 38) {
+            for ideal in stride(from: CGFloat(-300), through: 300, by: 60) {
+                let offset = WordView.clampedAnchorOffset(
+                    idealOffset: ideal, wordWidth: wordWidth, availableWidth: availableWidth
+                )
+                let leftEdge = availableWidth / 2 - wordWidth / 2 + offset
+                let rightEdge = availableWidth / 2 + wordWidth / 2 + offset
+                #expect(leftEdge >= 0, "left edge out of bounds for width \(wordWidth), ideal \(ideal)")
+                #expect(rightEdge <= availableWidth, "right edge out of bounds for width \(wordWidth), ideal \(ideal)")
+            }
+        }
+    }
+
     @Test func complexityStorageRoundTrip() {
         let scores: [Float] = [0.1, 0.5, 0.9, 0.0, 1.0]
         let encoded = ComplexityStorage.encode(scores)

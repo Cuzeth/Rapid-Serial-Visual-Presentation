@@ -122,22 +122,35 @@ struct WordView: View, Equatable {
         return String(word.suffix(word.count - redIndex - 1))
     }
 
+    private var anchor: String {
+        guard redIndex < word.count else { return "" }
+        return String(word[word.index(word.startIndex, offsetBy: redIndex)])
+    }
+
+    /// Horizontal breathing room kept between the word and the view edges.
+    /// Must match the `Text`'s horizontal padding below.
+    private static let horizontalTextMargin: CGFloat = 6
+
+    /// Hard floor for the fitted font size. Below this, the clamped offset
+    /// falls back to plain centering and `minimumScaleFactor` takes over.
+    private static let minimumDisplayFontSize: CGFloat = 12
+
     var body: some View {
         GeometryReader { geo in
-            let displayFontSize = fittedFontSize(for: geo.size.width * 0.8)
+            let metrics = layoutMetrics(for: geo.size.width)
 
             ZStack {
                 ZStack {
                     // Subtle vertical guide line at the anchor position
                     Rectangle()
                         .fill(Color.red.opacity(0.12))
-                        .frame(width: 1.5, height: displayFontSize * 1.6)
+                        .frame(width: 1.5, height: metrics.fontSize * 1.6)
 
-                    Text(attributedWord(fontSize: displayFontSize))
-                        .offset(x: orpAnchorOffset(fontSize: displayFontSize))
+                    Text(attributedWord(fontSize: metrics.fontSize))
+                        .offset(x: metrics.anchorOffset)
                         .lineLimit(1)
                         .minimumScaleFactor(0.58)
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, Self.horizontalTextMargin)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,33 +160,69 @@ struct WordView: View, Equatable {
         .accessibilityLabel(word)
     }
 
-    /// Scales the font size down if the word would exceed the available width.
-    private func fittedFontSize(for availableWidth: CGFloat) -> CGFloat {
-        guard availableWidth > 0 else { return fontSize }
-        // Approximate average character width as a fraction of font size.
-        // Tuned empirically for the default monospaced/serif reader fonts.
-        let estimatedCharacterWidth = fontSize * 0.62
-        let estimatedWordWidth = CGFloat(max(word.count, 1)) * estimatedCharacterWidth
-        guard estimatedWordWidth > availableWidth else { return fontSize }
-
-        let scaled = fontSize * (availableWidth / estimatedWordWidth)
-        return max(fontSize * 0.58, scaled)
+    private struct LayoutMetrics {
+        let fontSize: CGFloat
+        let anchorOffset: CGFloat
     }
 
-    /// Calculates the horizontal offset to center the ORP anchor letter on screen.
-    /// For Arabic the visual layout is mirrored, so the offset is negated.
-    private func orpAnchorOffset(fontSize: CGFloat) -> CGFloat {
+    /// Computes the fitted font size and the ORP centering offset together.
+    ///
+    /// The anchor letter sits at screen center, so each half of the word must
+    /// fit within half the available width — fitting the *total* width isn't
+    /// enough, because the centering offset shifts the wider (usually
+    /// trailing) half toward the edge. The offset is then clamped so the
+    /// shifted word can never extend past the view bounds.
+    private func layoutMetrics(for availableWidth: CGFloat) -> LayoutMetrics {
+        let textAreaWidth = availableWidth - 2 * Self.horizontalTextMargin
+        guard textAreaWidth > 0, !word.isEmpty else {
+            return LayoutMetrics(fontSize: fontSize, anchorOffset: 0)
+        }
+
+        // Measure once at the base size; glyph widths scale linearly with
+        // font size. The anchor is measured bold to match its rendering.
         let beforeWidth = textWidth(before, fontSize: fontSize)
         let afterWidth = textWidth(after, fontSize: fontSize)
-        let offset = (afterWidth - beforeWidth) / 2
-        return isArabic ? -offset : offset
+        let anchorWidth = textWidth(anchor, fontSize: fontSize, bold: !isArabic)
+
+        let neededHalfWidth = max(beforeWidth, afterWidth) + anchorWidth / 2
+        let availableHalfWidth = textAreaWidth / 2
+
+        var scale: CGFloat = 1
+        if neededHalfWidth > availableHalfWidth {
+            scale = availableHalfWidth / neededHalfWidth
+        }
+        let displayFontSize = max(Self.minimumDisplayFontSize, fontSize * scale)
+        let appliedScale = displayFontSize / fontSize
+
+        let idealOffset = (afterWidth - beforeWidth) / 2 * appliedScale
+        let wordWidth = (beforeWidth + anchorWidth + afterWidth) * appliedScale
+        let anchorOffset = Self.clampedAnchorOffset(
+            idealOffset: isArabic ? -idealOffset : idealOffset,
+            wordWidth: wordWidth,
+            availableWidth: textAreaWidth
+        )
+
+        return LayoutMetrics(fontSize: displayFontSize, anchorOffset: anchorOffset)
+    }
+
+    /// Clamps the ORP centering offset so the shifted word stays inside the
+    /// available width. When the word is at least as wide as the space (the
+    /// minimum font size was reached), falls back to plain centering.
+    nonisolated static func clampedAnchorOffset(
+        idealOffset: CGFloat,
+        wordWidth: CGFloat,
+        availableWidth: CGFloat
+    ) -> CGFloat {
+        let slack = (availableWidth - wordWidth) / 2
+        guard slack > 0 else { return 0 }
+        return min(max(idealOffset, -slack), slack)
     }
 
     /// Measures the rendered width of a text string using the current reader font.
-    private func textWidth(_ text: String, fontSize: CGFloat) -> CGFloat {
+    private func textWidth(_ text: String, fontSize: CGFloat, bold: Bool = false) -> CGFloat {
         guard !text.isEmpty else { return 0 }
 
-        let font = readerFont.platformFont(size: fontSize)
+        let font = readerFont.platformFont(size: fontSize, bold: bold)
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         return ceil((text as NSString).size(withAttributes: attributes).width)
     }
