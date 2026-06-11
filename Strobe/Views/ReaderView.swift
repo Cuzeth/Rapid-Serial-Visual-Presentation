@@ -135,6 +135,9 @@ struct ReaderView: View {
             if wasPlaying && !isNowPlaying && engine.isAtEnd {
                 HapticManager.shared.completedReading()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    // The user may have scrubbed away or resumed during the
+                    // delay — re-check before showing the overlay.
+                    guard engine.isAtEnd, !engine.isPlaying else { return }
                     if reduceMotion {
                         showCompletion = true
                     } else {
