@@ -1124,6 +1124,20 @@ struct StrobeTests {
         #expect(PassageView.findMatches(query: "delta", in: words).isEmpty)
     }
 
+    /// The per-keystroke search path uses a cached lowercased copy of the
+    /// words; the pre-lowered overload must agree with the general one.
+    @Test func findMatchesLowercasedOverloadAgreesWithGeneralOverload() {
+        let words = ["Hello", "WORLD", "hello", "don't", "end.", "你好啊"]
+        let lowered = words.map { $0.lowercased() }
+        for query in ["HELLO", "world", "don", "end", "你好", "missing", "  quick  ", ""] {
+            #expect(
+                PassageView.findMatches(query: query, inLowercasedWords: lowered)
+                    == PassageView.findMatches(query: query, in: words),
+                "overloads disagree for query '\(query)'"
+            )
+        }
+    }
+
     // MARK: - PassageView nearest-match
 
     @Test func nearestMatchPositionIsZeroForEmptyMatches() {

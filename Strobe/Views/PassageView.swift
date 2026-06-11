@@ -21,9 +21,16 @@ struct PassageView: View {
 
     @State private var searchQuery: String = ""
     @State private var matchIndices: [Int] = []
+    /// Mirror of `matchIndices` for O(1) per-word lookups; kept in sync wherever
+    /// `matchIndices` is assigned so chunk renders don't rebuild a Set.
+    @State private var matchSet: Set<Int> = []
     @State private var currentMatchPosition: Int = 0
     @State private var renderedChunks: Set<Int> = []
     @State private var pendingWordScroll: PendingWordScroll?
+    /// Lazily-built lowercased copy of `words`, computed off-main on first
+    /// search so each keystroke doesn't re-lowercase the whole document.
+    @State private var lowercasedWords: [String]?
+    @State private var searchTask: Task<Void, Never>?
     @FocusState private var searchFocused: Bool
 
     /// A word-center scroll that's waiting for its containing chunk to be
@@ -62,10 +69,6 @@ struct PassageView: View {
     /// `LazyVStack` chunk ids (plain `Int`) so they can't collide.
     fileprivate static func wordScrollID(_ wordIndex: Int) -> String {
         "word-\(wordIndex)"
-    }
-
-    private var matchSet: Set<Int> {
-        Set(matchIndices)
     }
 
     private var currentMatchWord: Int? {
@@ -182,8 +185,10 @@ struct PassageView: View {
 
             if !searchQuery.isEmpty {
                 Button {
+                    searchTask?.cancel()
                     searchQuery = ""
                     matchIndices = []
+                    matchSet = []
                     currentMatchPosition = 0
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -390,16 +395,47 @@ struct PassageView: View {
     }
 
     private func runSearch() {
-        let results = Self.findMatches(query: searchQuery, in: words)
-        matchIndices = results
-        if results.isEmpty {
+        searchTask?.cancel()
+        let query = searchQuery
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            matchIndices = []
+            matchSet = []
             currentMatchPosition = 0
             return
         }
-        // Land on the match closest to the user's current reading position so
-        // they don't get yanked far away from where they were.
-        currentMatchPosition = Self.nearestMatchPosition(to: engine.currentIndex, in: results)
-        scrollIntent = .matchPosition(currentMatchPosition)
+
+        // Debounced: scanning (and on first search, lowercasing) every word of
+        // a long document per keystroke would jank typing on the main thread.
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+
+            let lowered: [String]
+            if let cached = lowercasedWords {
+                lowered = cached
+            } else {
+                let snapshot = words
+                lowered = await Task.detached(priority: .userInitiated) {
+                    snapshot.map { $0.lowercased() }
+                }.value
+                guard !Task.isCancelled else { return }
+                lowercasedWords = lowered
+            }
+
+            let results = Self.findMatches(query: query, inLowercasedWords: lowered)
+            guard !Task.isCancelled, query == searchQuery else { return }
+            matchIndices = results
+            matchSet = Set(results)
+            if results.isEmpty {
+                currentMatchPosition = 0
+                return
+            }
+            // Land on the match closest to the user's current reading position
+            // so they don't get yanked far away from where they were.
+            currentMatchPosition = Self.nearestMatchPosition(to: engine.currentIndex, in: results)
+            scrollIntent = .matchPosition(currentMatchPosition)
+        }
     }
 
     private func stepMatch(by delta: Int) {
@@ -441,12 +477,19 @@ struct PassageView: View {
     /// from the query, and empty/whitespace-only queries yield no matches.
     /// Returned indices are sorted ascending by construction.
     static func findMatches(query: String, in words: [String]) -> [Int] {
+        findMatches(query: query, inLowercasedWords: words.map { $0.lowercased() })
+    }
+
+    /// Variant of ``findMatches(query:in:)`` over pre-lowercased words, so the
+    /// per-keystroke search path can reuse a cached lowercased copy instead of
+    /// re-lowercasing the whole document each time.
+    static func findMatches(query: String, inLowercasedWords words: [String]) -> [Int] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let needle = trimmed.lowercased()
         var results: [Int] = []
         results.reserveCapacity(min(words.count, 256))
-        for (i, word) in words.enumerated() where word.lowercased().contains(needle) {
+        for (i, word) in words.enumerated() where word.contains(needle) {
             results.append(i)
         }
         return results
