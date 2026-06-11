@@ -15,11 +15,8 @@ enum WordComplexityAnalyzer {
     nonisolated static func analyzeComplexity(_ words: [String]) -> [Float] {
         guard !words.isEmpty else { return [] }
 
-        // Reconstruct text for NLTagger context
-        let joinedText = words.joined(separator: " ")
-
         // Tag lexical classes and named entities in a single pass
-        let (lexicalTags, entityTags) = tagText(text: joinedText, wordCount: words.count)
+        let (lexicalTags, entityTags) = tagText(words: words)
 
         var scores = [Float](repeating: 0.5, count: words.count)
 
@@ -74,16 +71,37 @@ enum WordComplexityAnalyzer {
 
     /// Tags the full text with both lexical classes and named entities in a
     /// single pass, halving NLTagger initialization cost.
-    private nonisolated static func tagText(
-        text: String,
-        wordCount: Int
+    ///
+    /// Tagger tokens are mapped back to entries of `words` by character offset:
+    /// NLTagger splits tokens the app's whitespace tokenizer keeps whole (e.g.
+    /// the em-dash compound "stop—go" becomes two tagger tokens), so counting
+    /// tokens would shift the alignment of every subsequent word. Each word
+    /// keeps the tag of its first contained token.
+    internal nonisolated static func tagText(
+        words: [String]
     ) -> (lexical: [NLTag?], entity: [NLTag?]) {
+        let text = words.joined(separator: " ")
         let tagger = NLTagger(tagSchemes: [.lexicalClass, .nameType])
         tagger.string = text
 
-        var lexicalTags = [NLTag?](repeating: nil, count: wordCount)
-        var entityTags = [NLTag?](repeating: nil, count: wordCount)
+        var lexicalTags = [NLTag?](repeating: nil, count: words.count)
+        var entityTags = [NLTag?](repeating: nil, count: words.count)
+
+        // Character offset where each word starts in `text` (words are joined
+        // by single spaces, so offsets are exact by construction).
+        var wordStarts: [Int] = []
+        wordStarts.reserveCapacity(words.count)
+        var offset = 0
+        for word in words {
+            wordStarts.append(offset)
+            offset += word.count + 1
+        }
+
+        // Tokens arrive in document order, so a forward cursor over both the
+        // string indices and the word-start table keeps the mapping O(n).
         var wordIndex = 0
+        var cursorOffset = 0
+        var cursorIndex = text.startIndex
 
         tagger.enumerateTags(
             in: text.startIndex..<text.endIndex,
@@ -91,10 +109,15 @@ enum WordComplexityAnalyzer {
             scheme: .lexicalClass,
             options: [.omitWhitespace, .omitPunctuation]
         ) { tag, range in
-            guard wordIndex < wordCount else { return false }
-            lexicalTags[wordIndex] = tag
-            entityTags[wordIndex] = tagger.tag(at: range.lowerBound, unit: .word, scheme: .nameType).0
-            wordIndex += 1
+            cursorOffset += text.distance(from: cursorIndex, to: range.lowerBound)
+            cursorIndex = range.lowerBound
+            while wordIndex + 1 < words.count && cursorOffset >= wordStarts[wordIndex + 1] {
+                wordIndex += 1
+            }
+            if lexicalTags[wordIndex] == nil {
+                lexicalTags[wordIndex] = tag
+                entityTags[wordIndex] = tagger.tag(at: range.lowerBound, unit: .word, scheme: .nameType).0
+            }
             return true
         }
 

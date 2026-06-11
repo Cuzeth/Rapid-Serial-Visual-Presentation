@@ -387,6 +387,32 @@ struct StrobeTests {
         #expect(scores.isEmpty)
     }
 
+    /// NLTagger splits tokens the app tokenizer keeps whole (e.g. the em-dash
+    /// compound "stop—go"). Tags must stay aligned to the word array by
+    /// character offset, not by token count — a counting bug shifted every
+    /// tag after the first split token.
+    @Test func complexityTagsStayAlignedAcrossTaggerSplitTokens() {
+        let words = ["He", "said", "stop—go", "now", "please", "tomorrow"]
+        let (lexical, entity) = WordComplexityAnalyzer.tagText(words: words)
+
+        #expect(lexical.count == words.count)
+        #expect(entity.count == words.count)
+        // "said" and the words after the split compound keep their own tags.
+        #expect(lexical[1] == .verb)
+        #expect(lexical[3] == .adverb)
+        // The last word still receives a tag (the counting bug ran past the
+        // end of the array and left trailing words untagged).
+        #expect(lexical[5] != nil)
+    }
+
+    @Test func complexityTagsAlignForPlainText() {
+        let words = ["The", "quick", "brown", "fox", "jumps"]
+        let (lexical, _) = WordComplexityAnalyzer.tagText(words: words)
+        #expect(lexical[0] == .determiner)
+        #expect(lexical[1] == .adjective)
+        #expect(lexical[3] == .noun)
+    }
+
     @Test func complexityStorageRoundTrip() {
         let scores: [Float] = [0.1, 0.5, 0.9, 0.0, 1.0]
         let encoded = ComplexityStorage.encode(scores)
