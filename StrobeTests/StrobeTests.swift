@@ -582,6 +582,38 @@ struct StrobeTests {
         }
     }
 
+    /// The per-entry decompression cap doesn't stop an archive packed with
+    /// many entries from exhausting temp storage; the cumulative budget must
+    /// abort the whole extraction.
+    @Test func zipExtractorAbortsWhenTotalExtractionBudgetExceeded() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("a.txt", Data(repeating: 0x41, count: 10), false),
+            ("b.txt", Data(repeating: 0x42, count: 10), false),
+            ("c.txt", Data(repeating: 0x43, count: 10), false),
+        ]
+        let zipURL = tempDir.appendingPathComponent("test.zip")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: zipURL)
+
+        // Budget covers only the first two entries — extraction must throw.
+        let cappedDir = tempDir.appendingPathComponent("capped")
+        #expect(throws: DocumentImportError.epubExtractionFailed) {
+            try ZIPExtractor.extract(zipAt: zipURL, to: cappedDir, maxTotalBytes: 25)
+        }
+
+        // A sufficient budget extracts everything.
+        let fullDir = tempDir.appendingPathComponent("full")
+        try ZIPExtractor.extract(zipAt: zipURL, to: fullDir, maxTotalBytes: 30)
+        for entry in entries {
+            let extracted = try Data(contentsOf: fullDir.appendingPathComponent(entry.name))
+            #expect(extracted == entry.content)
+        }
+    }
+
     /// The EOCD record can be followed by a comment of up to 65535 bytes.
     /// `findEOCD` must locate the record even when the file doesn't end
     /// exactly at the EOCD's fixed-size portion.

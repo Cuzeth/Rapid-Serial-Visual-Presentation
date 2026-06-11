@@ -38,12 +38,24 @@ enum ZIPExtractor {
     /// Maximum decompression buffer size (100 MB) to prevent ZIP bombs.
     nonisolated private static let maxDecompressionSize = 100 * 1024 * 1024
 
+    /// Maximum cumulative bytes written for one archive (500 MB). The per-entry
+    /// cap alone doesn't stop an archive packed with many large entries from
+    /// exhausting temp storage.
+    nonisolated private static let maxTotalExtractionSize = 500 * 1024 * 1024
+
     /// Extracts all files from a ZIP archive to a destination directory.
     /// - Parameters:
     ///   - source: The file URL of the ZIP archive.
     ///   - destination: The directory to extract files into (created if needed).
-    /// - Throws: File system errors if directories cannot be created or files written.
-    nonisolated static func extract(zipAt source: URL, to destination: URL) throws {
+    ///   - maxTotalBytes: Cumulative extraction budget across all entries.
+    /// - Throws: File system errors if directories cannot be created or files
+    ///   written, or ``DocumentImportError/epubExtractionFailed`` when the
+    ///   archive expands past `maxTotalBytes`.
+    nonisolated static func extract(
+        zipAt source: URL,
+        to destination: URL,
+        maxTotalBytes: Int = maxTotalExtractionSize
+    ) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
 
@@ -53,6 +65,7 @@ enum ZIPExtractor {
             guard let baseAddress = rawBuffer.baseAddress else { return }
             let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
             let size = rawBuffer.count
+            var budget = ExtractionBudget(remainingBytes: maxTotalBytes)
 
             if let eocdOffset = findEOCD(bytes: bytes, size: size) {
                 try extractFromCentralDirectory(
@@ -60,16 +73,29 @@ enum ZIPExtractor {
                     size: size,
                     eocdOffset: eocdOffset,
                     destination: destination,
-                    fm: fm
+                    fm: fm,
+                    budget: &budget
                 )
             } else {
                 try extractByLocalHeaders(
                     bytes: bytes,
                     size: size,
                     destination: destination,
-                    fm: fm
+                    fm: fm,
+                    budget: &budget
                 )
             }
+        }
+    }
+
+    /// Tracks the cumulative bytes a single archive is allowed to materialize.
+    private struct ExtractionBudget {
+        var remainingBytes: Int
+
+        mutating func charge(_ byteCount: Int) -> Bool {
+            guard byteCount <= remainingBytes else { return false }
+            remainingBytes -= byteCount
+            return true
         }
     }
 
@@ -103,7 +129,8 @@ enum ZIPExtractor {
         size: Int,
         eocdOffset: Int,
         destination: URL,
-        fm: FileManager
+        fm: FileManager,
+        budget: inout ExtractionBudget
     ) throws {
         let totalEntries = Int(readUInt16(bytes, at: eocdOffset + 10))
         let cdSize = Int(readUInt32(bytes, at: eocdOffset + 12))
@@ -158,7 +185,8 @@ enum ZIPExtractor {
                 uncompressedSize: uncompressedSize,
                 compressionMethod: compressionMethod,
                 destination: destination,
-                fm: fm
+                fm: fm,
+                budget: &budget
             )
         }
     }
@@ -172,7 +200,8 @@ enum ZIPExtractor {
         bytes: UnsafePointer<UInt8>,
         size: Int,
         destination: URL,
-        fm: FileManager
+        fm: FileManager,
+        budget: inout ExtractionBudget
     ) throws {
         var offset = 0
         while offset + localFileHeaderSize <= size {
@@ -200,7 +229,8 @@ enum ZIPExtractor {
                     uncompressedSize: uncompressedSize,
                     compressionMethod: compressionMethod,
                     destination: destination,
-                    fm: fm
+                    fm: fm,
+                    budget: &budget
                 )
             }
 
@@ -210,8 +240,8 @@ enum ZIPExtractor {
 
     // MARK: - Entry writing
 
-    /// Materializes a single entry to disk, applying decompression and the
-    /// Zip-Slip path-traversal guard.
+    /// Materializes a single entry to disk, applying decompression, the
+    /// Zip-Slip path-traversal guard, and the cumulative extraction budget.
     nonisolated private static func writeEntry(
         bytes: UnsafePointer<UInt8>,
         name: String,
@@ -220,7 +250,8 @@ enum ZIPExtractor {
         uncompressedSize: Int,
         compressionMethod: UInt16,
         destination: URL,
-        fm: FileManager
+        fm: FileManager,
+        budget: inout ExtractionBudget
     ) throws {
         let fileURL = destination.appendingPathComponent(name)
 
@@ -254,6 +285,11 @@ enum ZIPExtractor {
         } else {
             logger.warning("Unsupported compression method \(compressionMethod) for entry: \(name, privacy: .public)")
             return
+        }
+
+        guard budget.charge(fileData.count) else {
+            logger.warning("Archive exceeds total extraction budget at entry: \(name, privacy: .public) — possible ZIP bomb")
+            throw DocumentImportError.epubExtractionFailed
         }
 
         try fileData.write(to: fileURL)
