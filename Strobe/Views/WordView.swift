@@ -52,8 +52,23 @@ struct WordView: View, Equatable {
             return letterIndices[letterCount / 2]
         }
 
-        let letterPos = letterCount <= 1 ? 0 : max(1, letterCount / 2)
-        return letterIndices[letterPos]
+        return letterIndices[Self.orpLetterPosition(letterCount: letterCount)]
+    }
+
+    /// Letter position (index into the word's letters) of the ORP anchor.
+    ///
+    /// The classic RSVP mapping: the eye's optimal fixation point sits left of
+    /// center, around the 1/3 mark — 2nd letter for short words, drifting one
+    /// letter rightward as words get longer (1 → 1st, 2–5 → 2nd, 6–9 → 3rd,
+    /// 10–13 → 4th, 14+ → 5th).
+    nonisolated static func orpLetterPosition(letterCount: Int) -> Int {
+        switch letterCount {
+        case ..<2: return 0
+        case 2...5: return 1
+        case 6...9: return 2
+        case 10...13: return 3
+        default: return 4
+        }
     }
 
     /// Whether the word contains Arabic script. Arabic is cursive — changing

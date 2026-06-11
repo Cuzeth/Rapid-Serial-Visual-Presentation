@@ -413,6 +413,29 @@ struct StrobeTests {
         #expect(lexical[3] == .noun)
     }
 
+    // MARK: - ORP anchor position
+
+    /// The Optimal Recognition Point sits left of center, around the 1/3 mark.
+    /// Pins the classic mapping so the anchor never regresses to dead center.
+    @Test func orpLetterPositionFollowsClassicMapping() {
+        #expect(WordView.orpLetterPosition(letterCount: 1) == 0)
+        #expect(WordView.orpLetterPosition(letterCount: 2) == 1)
+        #expect(WordView.orpLetterPosition(letterCount: 5) == 1)
+        #expect(WordView.orpLetterPosition(letterCount: 6) == 2)
+        #expect(WordView.orpLetterPosition(letterCount: 9) == 2)
+        #expect(WordView.orpLetterPosition(letterCount: 10) == 3)
+        #expect(WordView.orpLetterPosition(letterCount: 13) == 3)
+        #expect(WordView.orpLetterPosition(letterCount: 14) == 4)
+        #expect(WordView.orpLetterPosition(letterCount: 20) == 4)
+    }
+
+    @Test func orpLetterPositionStaysLeftOfCenterForLongWords() {
+        for letterCount in 4...30 {
+            let pos = WordView.orpLetterPosition(letterCount: letterCount)
+            #expect(pos < letterCount / 2, "ORP for \(letterCount)-letter word should sit left of center")
+        }
+    }
+
     @Test func complexityStorageRoundTrip() {
         let scores: [Float] = [0.1, 0.5, 0.9, 0.0, 1.0]
         let encoded = ComplexityStorage.encode(scores)
