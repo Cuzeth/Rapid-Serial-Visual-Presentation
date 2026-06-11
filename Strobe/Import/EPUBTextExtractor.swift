@@ -221,7 +221,9 @@ enum EPUBTextExtractor {
         // Nav documents use <a href="...">Title</a> inside <li> elements
         for element in parser.elements where element.name == "a" {
             guard let href = element.attributes["href"],
-                  let title = element.text, !title.isEmpty else { continue }
+                  let rawTitle = element.text else { continue }
+            let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
 
             let fileHref = href.components(separatedBy: "#").first ?? href
             guard !fileHref.isEmpty else { continue }
@@ -230,7 +232,7 @@ enum EPUBTextExtractor {
                 href: fileHref, referenceDir: navDir, opfDir: opfDir,
                 spineWordOffsets: spineWordOffsets
             ) {
-                chapters.append(Chapter(title: title.trimmingCharacters(in: .whitespacesAndNewlines), wordIndex: wordIndex))
+                chapters.append(Chapter(title: title, wordIndex: wordIndex))
             }
         }
 
@@ -462,6 +464,11 @@ enum EPUBTextExtractor {
 /// Lightweight XML parser that collects all elements into a flat array.
 /// Used for parsing container.xml, OPF manifests, and EPUB 3 nav documents.
 ///
+/// Character data is attributed to every currently-open element, so an
+/// element's `text` includes its descendants' text — nav-document titles
+/// wrapped in child elements (`<a><span>Chapter 1</span></a>`) resolve to
+/// the `<a>` element instead of being dropped.
+///
 /// `@unchecked Sendable` is safe here: instances are created, used, and discarded
 /// within a single synchronous scope and are never shared across threads.
 private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sendable {
@@ -472,8 +479,7 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
     }
 
     nonisolated(unsafe) private(set) var elements: [Element] = []
-    nonisolated(unsafe) private var currentText: String?
-    nonisolated(unsafe) private var currentElementIndex: Int?
+    nonisolated(unsafe) private var openElementIndices: [Int] = []
 
     nonisolated override init() { super.init() }
 
@@ -493,12 +499,13 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
     ) {
         let localName = elementName.components(separatedBy: ":").last ?? elementName
         elements.append(Element(name: localName, attributes: attributes))
-        currentElementIndex = elements.count - 1
-        currentText = ""
+        openElementIndices.append(elements.count - 1)
     }
 
     nonisolated func parser(_ parser: XMLParser, foundCharacters string: String) {
-        currentText?.append(string)
+        for index in openElementIndices {
+            elements[index].text = (elements[index].text ?? "") + string
+        }
     }
 
     nonisolated func parser(
@@ -507,11 +514,9 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
         namespaceURI: String?,
         qualifiedName: String?
     ) {
-        if let index = currentElementIndex, let text = currentText, !text.isEmpty {
-            elements[index].text = text
+        if !openElementIndices.isEmpty {
+            openElementIndices.removeLast()
         }
-        currentElementIndex = nil
-        currentText = nil
     }
 }
 

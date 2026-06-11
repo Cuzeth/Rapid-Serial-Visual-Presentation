@@ -660,6 +660,78 @@ struct StrobeTests {
         #expect(result.words.contains("reader."))
     }
 
+    /// Real-world EPUB 3 nav documents often wrap link text in child elements
+    /// (`<a><span>Chapter 1</span></a>`). The nav parser must read descendant
+    /// text instead of dropping those chapters.
+    @Test func epubNavChapterTitlesSurviveNestedSpans() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let containerXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0">
+          <rootfiles>
+            <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+          </rootfiles>
+        </container>
+        """
+
+        let opf = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <package version="3.0">
+          <metadata>
+            <dc:title>Nested Nav EPUB</dc:title>
+          </metadata>
+          <manifest>
+            <item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>
+            <item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+            <item id="c2" href="chapter2.xhtml" media-type="application/xhtml+xml"/>
+          </manifest>
+          <spine>
+            <itemref idref="c1"/>
+            <itemref idref="c2"/>
+          </spine>
+        </package>
+        """
+
+        let nav = """
+        <html xmlns="http://www.w3.org/1999/xhtml">
+          <body>
+            <nav epub:type="toc">
+              <ol>
+                <li><a href="chapter1.xhtml"><span>Chapter One</span></a></li>
+                <li><a href="chapter2.xhtml">Chapter <em>Two</em></a></li>
+              </ol>
+            </nav>
+          </body>
+        </html>
+        """
+
+        let chapter1 = "<html><body><p>First chapter words here.</p></body></html>"
+        let chapter2 = "<html><body><p>Second chapter words here.</p></body></html>"
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            ("META-INF/container.xml", Data(containerXML.utf8), false),
+            ("OEBPS/content.opf", Data(opf.utf8), false),
+            ("OEBPS/nav.xhtml", Data(nav.utf8), false),
+            ("OEBPS/chapter1.xhtml", Data(chapter1.utf8), false),
+            ("OEBPS/chapter2.xhtml", Data(chapter2.utf8), false),
+        ]
+
+        let epubURL = tempDir.appendingPathComponent("nested-nav.epub")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: epubURL)
+
+        let result = try EPUBTextExtractor.extractWordsAndChapters(from: epubURL)
+        #expect(result.title == "Nested Nav EPUB")
+        #expect(result.chapters.count == 2)
+        #expect(result.chapters.first?.title == "Chapter One")
+        #expect(result.chapters.last?.title == "Chapter Two")
+        #expect(result.chapters.first?.wordIndex == 0)
+    }
+
     // MARK: - PDF error propagation
 
     @Test func pdfExtractionThrowsForInvalidFile() {
