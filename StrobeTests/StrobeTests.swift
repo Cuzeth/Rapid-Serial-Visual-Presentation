@@ -6,6 +6,7 @@
 //
 
 import Testing
+import NaturalLanguage
 @testable import Strobe
 internal import UniformTypeIdentifiers
 

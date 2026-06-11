@@ -92,7 +92,7 @@ enum ZIPExtractor {
     private struct ExtractionBudget {
         var remainingBytes: Int
 
-        mutating func charge(_ byteCount: Int) -> Bool {
+        nonisolated mutating func charge(_ byteCount: Int) -> Bool {
             guard byteCount <= remainingBytes else { return false }
             remainingBytes -= byteCount
             return true
