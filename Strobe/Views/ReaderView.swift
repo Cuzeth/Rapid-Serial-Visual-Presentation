@@ -772,6 +772,16 @@ struct ReaderView: View {
             cancelPlayIntent()
             engine.pause()
         }
+        // The furthest-read marker only ever advances — leaving the reader
+        // after navigating backward (chapter peek, passage tap, scrubbing,
+        // "Read Again") must not erase display progress. The outgoing
+        // currentWordIndex is folded in so documents saved before the marker
+        // existed adopt their old position as the floor.
+        document.furthestWordIndex = max(
+            document.furthestWordIndex,
+            document.currentWordIndex,
+            engine.currentIndex
+        )
         document.currentWordIndex = engine.currentIndex
         document.wordsPerMinute = engine.wordsPerMinute
         if touchLastReadDate {
