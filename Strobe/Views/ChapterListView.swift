@@ -9,11 +9,6 @@ struct ChapterListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Bindable var document: Document
-    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
-
-    private var readerFont: ReaderFont {
-        ReaderFont.resolve(readerFontSelection)
-    }
 
     private var contentMaxWidth: CGFloat {
         horizontalSizeClass == .regular ? 720 : .infinity
@@ -45,7 +40,7 @@ struct ChapterListView: View {
                         // Chapters
                         LazyVStack(spacing: 12) {
                             ForEach(Array(document.chapters.enumerated()), id: \.element.id) { index, chapter in
-                                NavigationLink(destination: ReaderView(document: document, startingWordIndex: chapter.wordIndex)) {
+                                NavigationLink(destination: ReaderView(document: document, startingWordIndex: startingWordIndex(forChapterAt: index))) {
                                     chapterRow(chapter: chapter, index: index)
                                 }
                                 .buttonStyle(StrobeCardButtonStyle())
@@ -67,7 +62,6 @@ struct ChapterListView: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            #if os(iOS)
             Button {
                 dismiss()
             } label: {
@@ -79,7 +73,7 @@ struct ChapterListView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
-            #endif
+            .accessibilityLabel("Back")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(document.title)
@@ -173,6 +167,19 @@ struct ChapterListView: View {
 
     private enum ChapterStatus {
         case notStarted, inProgress, completed
+    }
+
+    /// Where the reader should start when a chapter row is tapped.
+    ///
+    /// An in-progress chapter resumes at the user's current position instead of
+    /// restarting at the chapter's first word — otherwise tapping the chapter
+    /// you're partway through (and then leaving the reader) would overwrite
+    /// your saved position with the chapter start.
+    private func startingWordIndex(forChapterAt index: Int) -> Int {
+        if chapterStatus(at: index) == .inProgress {
+            return document.currentWordIndex
+        }
+        return document.chapters[index].wordIndex
     }
 
     private func chapterWordCount(at index: Int) -> Int {

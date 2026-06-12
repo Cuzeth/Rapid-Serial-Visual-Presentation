@@ -568,6 +568,9 @@ private struct WordToken: View {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(backgroundColor)
                 )
+                // Expand the tap target beyond the visible token — word rows
+                // are otherwise well under the 44pt minimum touch size.
+                .contentShape(Rectangle().inset(by: -4))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(text)

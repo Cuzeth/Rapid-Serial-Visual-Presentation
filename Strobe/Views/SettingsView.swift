@@ -19,14 +19,11 @@ struct SettingsView: View {
 
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
+    @State private var showTutorial = false
 
     /// On iPad (regular width), constrain the settings content to a readable column width.
     private var contentMaxWidth: CGFloat {
         horizontalSizeClass == .regular ? 640 : .infinity
-    }
-
-    private var readerFont: ReaderFont {
-        ReaderFont.resolve(readerFontSelection)
     }
 
     private var currentCleaningLevel: TextCleaningLevel {
@@ -49,7 +46,7 @@ struct SettingsView: View {
                 // Header
                 HStack {
                     Text("Settings")
-                        .font(readerFont.boldFont(size: 24))
+                        .font(StrobeTheme.titleFont(size: 24))
                         .foregroundStyle(StrobeTheme.textPrimary)
 
                     Spacer()
@@ -77,16 +74,23 @@ struct SettingsView: View {
                             VStack(spacing: 16) {
                                 HStack {
                                     Text("\(defaultWPM)")
-                                        .font(readerFont.boldFont(size: 32))
+                                        .font(StrobeTheme.bodyFont(size: 32, bold: true))
                                         .foregroundStyle(StrobeTheme.accent)
                                     Text("WPM")
-                                        .font(readerFont.regularFont(size: 16))
+                                        .font(StrobeTheme.bodyFont(size: 16))
                                         .foregroundStyle(StrobeTheme.textSecondary)
                                         .padding(.bottom, 6)
                                     Spacer()
                                 }
-                                
-                                Slider(value: $wpmSliderValue, in: 100...1000, step: 10)
+
+                                VStack(spacing: 4) {
+                                    // Haptic fires once on release rather than on
+                                    // every tick of the drag.
+                                    Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
+                                        if !editing {
+                                            HapticManager.shared.wpmChanged()
+                                        }
+                                    }
                                     .tint(StrobeTheme.accent)
                                     .frame(minHeight: 44)
                                     .accessibilityLabel("Default words per minute")
@@ -95,9 +99,16 @@ struct SettingsView: View {
                                         let snapped = Int(newValue)
                                         if snapped != defaultWPM {
                                             defaultWPM = snapped
-                                            HapticManager.shared.wpmChanged()
                                         }
                                     }
+
+                                    sliderRangeLabels(min: "100", max: "1000")
+                                }
+
+                                Text("Applies to newly added documents — each document keeps its own speed afterward.")
+                                    .font(StrobeTheme.bodyFont(size: 11))
+                                    .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
 
@@ -115,7 +126,12 @@ struct SettingsView: View {
                                     Spacer()
                                 }
 
-                                Slider(value: $fontSizeSliderValue, in: 24...72, step: 2)
+                                VStack(spacing: 4) {
+                                    Slider(value: $fontSizeSliderValue, in: 24...72, step: 2) { editing in
+                                        if !editing {
+                                            HapticManager.shared.wpmChanged()
+                                        }
+                                    }
                                     .tint(StrobeTheme.accent)
                                     .frame(minHeight: 44)
                                     .accessibilityLabel("Reader text size")
@@ -124,9 +140,11 @@ struct SettingsView: View {
                                         let snapped = Int(newValue)
                                         if snapped != fontSize {
                                             fontSize = snapped
-                                            HapticManager.shared.wpmChanged()
                                         }
                                     }
+
+                                    sliderRangeLabels(min: "24", max: "72")
+                                }
                             }
                         }
 
@@ -292,20 +310,50 @@ struct SettingsView: View {
 
                         // Text Cleaning
                         settingCard(title: "Text Processing") {
-                            Toggle(isOn: textCleaningEnabled) {
-                                VStack(alignment: .leading) {
-                                    Text("Text Cleaning")
-                                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                                        .foregroundStyle(StrobeTheme.textPrimary)
-                                    Text("Removes page numbers, headers, footers, and common boilerplate")
-                                        .font(StrobeTheme.bodyFont(size: 12))
-                                        .foregroundStyle(StrobeTheme.textSecondary)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Toggle(isOn: textCleaningEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Text Cleaning")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Removes page numbers, headers, footers, and common boilerplate")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .tint(StrobeTheme.accent)
+                                .toggleStyle(.switch)
+
+                                Text("Applies to new imports only — existing documents aren't re-processed.")
+                                    .font(StrobeTheme.bodyFont(size: 11))
+                                    .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
                             }
-                            .tint(StrobeTheme.accent)
-                            .toggleStyle(.switch)
                         }
+
+                        // Replay Tutorial
+                        Button {
+                            showTutorial = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 16))
+                                Text("Replay Tutorial")
+                                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(StrobeTheme.textPrimary)
+                            .padding(16)
+                            .background(StrobeTheme.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
 
                         // Source Code
                         Link(destination: URL(string: "https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation")!) {
@@ -345,14 +393,35 @@ struct SettingsView: View {
             wpmSliderValue = Double(defaultWPM)
             fontSizeSliderValue = Double(fontSize)
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showTutorial) {
+            TutorialView()
+        }
+        #else
+        .sheet(isPresented: $showTutorial) {
+            TutorialView()
+                .frame(minWidth: 600, minHeight: 500)
+        }
+        #endif
     }
 
     // MARK: - Components
 
+    private func sliderRangeLabels(min: String, max: String) -> some View {
+        HStack {
+            Text(min)
+            Spacer()
+            Text(max)
+        }
+        .font(StrobeTheme.bodyFont(size: 11))
+        .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+        .accessibilityHidden(true)
+    }
+
     private func settingCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(title)
-                .font(readerFont.boldFont(size: 14))
+                .font(StrobeTheme.bodyFont(size: 14, bold: true))
                 .foregroundStyle(StrobeTheme.textSecondary)
                 .textCase(.uppercase)
                 .tracking(1)

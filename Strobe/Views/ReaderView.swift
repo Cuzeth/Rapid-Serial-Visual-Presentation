@@ -24,7 +24,6 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
-    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -38,12 +37,9 @@ struct ReaderView: View {
     @State private var showChapterPicker = false
     @State private var showPassage = false
     @State private var persistenceError: String?
+    @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
-
-    private var readerFont: ReaderFont {
-        ReaderFont.resolve(readerFontSelection)
-    }
 
     /// On iPad (regular width) we constrain controls to a comfortable column so
     /// sliders and buttons don't stretch the full width of a 12.9" display.
@@ -101,6 +97,13 @@ struct ReaderView: View {
                     .equatable()
                     .id("wordview") // stabilize identity
                     .transition(.opacity)
+                    // The word display sits above the gesture layer; without
+                    // this, holding directly on the word would swallow the
+                    // hold-to-read gesture.
+                    .allowsHitTesting(false)
+                    .accessibilityAction(named: engine.isPlaying ? "Pause" : "Play") {
+                        togglePlayback()
+                    }
                 }
 
                 Spacer()
@@ -117,6 +120,15 @@ struct ReaderView: View {
         #endif
         .onAppear {
             if engine.isAtEnd { showCompletion = true }
+            readerFocused = true
+        }
+        // Re-assert keyboard focus after the passage view or chapter picker
+        // closes, so Space/arrow shortcuts keep working on macOS.
+        .onChange(of: showPassage) { _, isShowing in
+            if !isShowing { readerFocused = true }
+        }
+        .onChange(of: showChapterPicker) { _, isShowing in
+            if !isShowing { readerFocused = true }
         }
         .onDisappear {
             persistState(pauseEngine: true, touchLastReadDate: true)
@@ -182,15 +194,10 @@ struct ReaderView: View {
         .preferredColorScheme(.dark)
         .focusable()
         .focusEffectDisabled()
+        .focused($readerFocused)
         .onKeyPress(.space) {
             guard !showCompletion else { return .ignored }
-            if engine.isPlaying {
-                engine.pause()
-                HapticManager.shared.playPause()
-            } else {
-                engine.play()
-                HapticManager.shared.playPause()
-            }
+            togglePlayback()
             return .handled
         }
         .onKeyPress(.leftArrow) {
@@ -318,6 +325,18 @@ struct ReaderView: View {
         pendingPlayWorkItem = nil
     }
 
+    /// Shared play/pause toggle used by the Space key and the VoiceOver
+    /// custom action, so playback isn't gesture-only.
+    private func togglePlayback() {
+        if engine.isPlaying {
+            engine.pause()
+        } else {
+            guard !engine.isAtEnd else { return }
+            engine.play()
+        }
+        HapticManager.shared.playPause()
+    }
+
     // MARK: - Top bar
 
     private var topBar: some View {
@@ -330,7 +349,6 @@ struct ReaderView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                #if os(iOS)
                 Button {
                     dismiss()
                 } label: {
@@ -342,19 +360,19 @@ struct ReaderView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                #endif
+                .accessibilityLabel("Back")
 
                 Spacer()
 
                 VStack(spacing: 2) {
                     Text(document.title)
-                        .font(readerFont.boldFont(size: 16))
+                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
                         .foregroundStyle(StrobeTheme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Text("\(engine.currentIndex + 1) / \(engine.words.count)")
-                        .font(readerFont.regularFont(size: 12))
+                        .font(StrobeTheme.bodyFont(size: 12))
                         .foregroundStyle(StrobeTheme.textSecondary)
                 }
 
@@ -384,12 +402,12 @@ struct ReaderView: View {
             // WPM Control
             HStack {
                 Text("\(displayedWPM)")
-                    .font(readerFont.boldFont(size: 24))
+                    .font(StrobeTheme.bodyFont(size: 24, bold: true))
                     .foregroundStyle(StrobeTheme.accent)
                     .frame(width: 80)
-                
+
                 Text("wpm")
-                    .font(readerFont.regularFont(size: 14))
+                    .font(StrobeTheme.bodyFont(size: 14))
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .padding(.bottom, 4)
                 
@@ -538,7 +556,7 @@ struct ReaderView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(readerFont.boldFont(size: 13))
+                        .font(StrobeTheme.bodyFont(size: 13, bold: true))
                         .foregroundStyle(StrobeTheme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -684,21 +702,37 @@ struct ReaderView: View {
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
 
-            Button {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    showCompletion = false
+            HStack(spacing: 12) {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 16)
+                        .background(Color.white.opacity(0.08))
+                        .foregroundStyle(StrobeTheme.textPrimary)
+                        .clipShape(Capsule())
                 }
-                engine.restart()
-            } label: {
-                Text("Read Again")
-                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                    .padding(.horizontal, 32)
-                    .padding(.vertical, 16)
-                    .background(StrobeTheme.accent)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
+                .buttonStyle(.plain)
+                .accessibilityHint("Return to the previous screen")
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showCompletion = false
+                    }
+                    engine.restart()
+                } label: {
+                    Text("Read Again")
+                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 16)
+                        .background(StrobeTheme.accent)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .padding(.top, 16)
         }
         .padding(40)
@@ -709,20 +743,15 @@ struct ReaderView: View {
 
     // MARK: - Hint text
 
+    // The hint lives in the bottom bar, which is hidden during playback —
+    // so only paused-state hints exist.
     private var hintText: String {
         if showCompletion { return "Completed" }
         if isBarScrubbing { return "Seeking..." }
         #if os(macOS)
-        if engine.isPlaying { return "Press Space to pause" }
         return "Press Space to read, arrows to scrub"
         #else
-        if holdToReadEnabled {
-            if engine.isPlaying { return "Release to pause" }
-            return "Hold to read"
-        } else {
-            if engine.isPlaying { return "Tap to pause" }
-            return "Tap to read"
-        }
+        return holdToReadEnabled ? "Hold to read" : "Tap to read"
         #endif
     }
 

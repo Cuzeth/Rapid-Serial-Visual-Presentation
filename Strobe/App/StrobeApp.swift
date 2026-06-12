@@ -31,6 +31,15 @@ struct StrobeApp: App {
         .defaultSize(width: 900, height: 700)
         .windowStyle(.hiddenTitleBar)
         #endif
+
+        #if os(macOS)
+        // Standard macOS Settings window, reachable via Cmd+, from anywhere.
+        Settings {
+            SettingsView()
+                .frame(minWidth: 560, minHeight: 620)
+                .preferredColorScheme(.dark)
+        }
+        #endif
     }
 
     private struct BootstrapResult {

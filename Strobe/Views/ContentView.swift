@@ -11,9 +11,9 @@ struct ContentView: View {
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
     @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
-    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
+    @AppStorage(LibrarySortOrder.storageKey) private var librarySortOrderRaw = LibrarySortOrder.defaultValue.rawValue
 
     @State private var isImporting = false
     @State private var isProcessingImport = false
@@ -23,6 +23,10 @@ struct ContentView: View {
     @State private var showTutorial = false
     @State private var showTextInput = false
     @State private var documentPendingDeletion: Document?
+    @State private var documentPendingRename: Document?
+    @State private var renameText = ""
+    @State private var searchText = ""
+    @State private var isDropTargeted = false
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -32,8 +36,25 @@ struct ContentView: View {
         return [GridItem(.adaptive(minimum: minWidth), spacing: 16)]
     }
 
-    private var readerFont: ReaderFont {
-        ReaderFont.resolve(readerFontSelection)
+    private var sortOrder: LibrarySortOrder {
+        LibrarySortOrder(rawValue: librarySortOrderRaw) ?? LibrarySortOrder.defaultValue
+    }
+
+    /// Documents re-sorted by the user's chosen order and filtered by the
+    /// search query. The base `@Query` is already newest-first by date added.
+    private var displayedDocuments: [Document] {
+        var result = documents
+        switch sortOrder {
+        case .dateAdded:
+            break
+        case .lastRead:
+            result.sort { ($0.lastReadDate ?? .distantPast) > ($1.lastReadDate ?? .distantPast) }
+        case .title:
+            result.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return result }
+        return result.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -45,13 +66,20 @@ struct ContentView: View {
 
                 VStack(spacing: 0) {
                     customHeader
-                    
+
                     if documents.isEmpty {
                         Spacer()
                         emptyState
                         Spacer()
                     } else {
-                        documentGrid
+                        searchBar
+                        if displayedDocuments.isEmpty {
+                            Spacer()
+                            noSearchResults
+                            Spacer()
+                        } else {
+                            documentGrid
+                        }
                     }
                 }
 
@@ -65,19 +93,34 @@ struct ContentView: View {
                             .padding(.bottom, 24)
                     }
                 }
+
+                if isDropTargeted {
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(StrobeTheme.accent, lineWidth: 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(StrobeTheme.accent.opacity(0.06))
+                        )
+                        .padding(8)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
             #if os(iOS)
             .toolbar(.hidden, for: .navigationBar)
             #endif
+            #if os(iOS)
+            // On macOS, settings open in the standard Settings window (Cmd+,)
+            // via SettingsLink instead of a sheet.
             .sheet(isPresented: $showSettings) {
                 SettingsView()
-                    #if os(iOS)
                     // On iPad (regular width) the medium detent is too small;
                     // offer large only so settings fills the sheet properly.
                     .presentationDetents(horizontalSizeClass == .regular ? [.large] : [.medium, .large])
                     .presentationCornerRadius(24)
-                    #endif
             }
+            #endif
             #if os(iOS)
             .fullScreenCover(isPresented: $showTutorial) {
                 TutorialView()
@@ -113,13 +156,34 @@ struct ContentView: View {
                     importOverlay
                 }
             }
-            .alert("Error", isPresented: .init(
+            .alert("Couldn't Import File", isPresented: .init(
                 get: { importError != nil },
                 set: { if !$0 { importError = nil } }
             )) {
                 Button("OK") { importError = nil }
             } message: {
                 Text(importError ?? "")
+            }
+            .alert(
+                "Rename Document",
+                isPresented: .init(
+                    get: { documentPendingRename != nil },
+                    set: { if !$0 { documentPendingRename = nil } }
+                ),
+                presenting: documentPendingRename
+            ) { doc in
+                TextField("Title", text: $renameText)
+                Button("Save") {
+                    let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        doc.title = trimmed
+                        try? modelContext.save()
+                    }
+                    documentPendingRename = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    documentPendingRename = nil
+                }
             }
             .alert(
                 "Delete this document?",
@@ -140,14 +204,19 @@ struct ContentView: View {
             } message: { doc in
                 Text("\"\(doc.title)\" will be permanently removed from your library.")
             }
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                 guard let provider = providers.first else { return false }
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
                     guard let data = data as? Data,
                           let path = String(data: data, encoding: .utf8),
                           let url = URL(string: path) else { return }
                     let ext = url.pathExtension.lowercased()
-                    guard ext == "pdf" || ext == "epub" else { return }
+                    guard ext == "pdf" || ext == "epub" else {
+                        Task { @MainActor in
+                            importError = "\"\(url.lastPathComponent)\" isn't a supported file type. Drop a PDF or EPUB."
+                        }
+                        return
+                    }
                     Task { @MainActor in
                         importDocument(from: url)
                     }
@@ -161,33 +230,119 @@ struct ContentView: View {
     // MARK: - Custom Header
 
     private var customHeader: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text("Strobe")
                 .font(StrobeTheme.titleFont(size: 32))
                 .foregroundStyle(StrobeTheme.textPrimary)
 
             Spacer()
 
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(StrobeTheme.textSecondary)
-                    .padding(10)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(Circle())
+            if !documents.isEmpty {
+                Menu {
+                    Picker("Sort By", selection: $librarySortOrderRaw) {
+                        ForEach(LibrarySortOrder.allCases) { order in
+                            Text(order.displayName).tag(order.rawValue)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                        .padding(11)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Sort library")
+                .accessibilityValue(sortOrder.displayName)
+            }
+
+            #if os(macOS)
+            SettingsLink {
+                settingsButtonLabel
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Settings")
+            #else
+            Button {
+                showSettings = true
+            } label: {
+                settingsButtonLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Settings")
+            #endif
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .padding(.bottom, 16)
         .background(
-            StrobeTheme.background.opacity(0.8)
+            StrobeTheme.background
                 .ignoresSafeArea()
         )
+    }
+
+    private var settingsButtonLabel: some View {
+        Image(systemName: "gearshape.fill")
+            .font(.system(size: 20))
+            .foregroundStyle(StrobeTheme.textSecondary)
+            .padding(10)
+            .background(Color.white.opacity(0.05))
+            .clipShape(Circle())
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(StrobeTheme.textSecondary)
+                .font(.system(size: 14, weight: .semibold))
+
+            TextField("Search library", text: $searchText)
+                .font(StrobeTheme.bodyFont(size: 15))
+                .foregroundStyle(StrobeTheme.textPrimary)
+                .tint(StrobeTheme.accent)
+                .textFieldStyle(.plain)
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                #endif
+
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(StrobeTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 24)
+        .padding(.bottom, 4)
+        .frame(maxWidth: horizontalSizeClass == .regular ? 1024 : .infinity)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var noSearchResults: some View {
+        VStack(spacing: 8) {
+            Text("No Results")
+                .font(StrobeTheme.titleFont(size: 24))
+                .foregroundStyle(StrobeTheme.textPrimary)
+
+            Text("No documents match \"\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                .font(StrobeTheme.bodyFont(size: 16))
+                .foregroundStyle(StrobeTheme.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 24)
     }
 
     private var emptyStateSubtitle: Text {
@@ -230,12 +385,21 @@ struct ContentView: View {
     private var documentGrid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(documents) { document in
+                ForEach(displayedDocuments) { document in
                     NavigationLink(destination: destination(for: document)) {
-                        DocumentCard(document: document, readerFont: readerFont)
+                        DocumentCard(
+                            document: document,
+                            onRename: { beginRename(document) },
+                            onDelete: { documentPendingDeletion = document }
+                        )
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
+                        Button {
+                            beginRename(document)
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
                         Button(role: .destructive) {
                             documentPendingDeletion = document
                         } label: {
@@ -288,6 +452,33 @@ struct ContentView: View {
         }
     }
 
+    private func beginRename(_ document: Document) {
+        renameText = document.title
+        documentPendingRename = document
+    }
+
+}
+
+// MARK: - Library sort order
+
+/// User-selectable sort orders for the library grid, persisted in UserDefaults.
+enum LibrarySortOrder: String, CaseIterable, Identifiable {
+    static let storageKey = "librarySortOrder"
+    static let defaultValue: LibrarySortOrder = .dateAdded
+
+    case dateAdded
+    case lastRead
+    case title
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .dateAdded: "Recently Added"
+        case .lastRead: "Recently Read"
+        case .title: "Title"
+        }
+    }
 }
 
 // MARK: - Import Logic
@@ -398,7 +589,7 @@ extension ContentView {
                     .tint(.white)
 
                 Text("Importing \(importFileName)...")
-                    .font(readerFont.regularFont(size: 16))
+                    .font(StrobeTheme.bodyFont(size: 16))
                     .foregroundStyle(.white)
             }
             .padding(32)
@@ -410,41 +601,75 @@ extension ContentView {
 
 // MARK: - Document Card Component
 
-/// A grid card displaying a document's title, progress percentage, and word count.
+/// A grid card displaying a document's title, progress percentage, and word count,
+/// with a visible options menu for rename/delete (the context menu still works too).
 struct DocumentCard: View {
     let document: Document
-    let readerFont: ReaderFont
-    
+    var onRename: () -> Void = {}
+    var onDelete: () -> Void = {}
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Icon / Cover placeholder
-            ZStack {
-                Circle()
-                    .fill(StrobeTheme.accent.opacity(0.1))
-                    .frame(width: 48, height: 48)
-                
-                Image(systemName: "text.book.closed.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(StrobeTheme.accent)
-            }
-            
-            Spacer()
-            
-            Text(document.title)
-                .font(StrobeTheme.titleFont(size: 18))
-                .foregroundStyle(StrobeTheme.textPrimary)
-                .lineLimit(3)
-                .minimumScaleFactor(0.9)
-                .multilineTextAlignment(.leading)
-            
-            HStack {
-                Text("\(document.progressPercentage)%")
-                    .foregroundStyle(StrobeTheme.accent)
+            HStack(alignment: .top) {
+                // Icon / Cover placeholder
+                ZStack {
+                    Circle()
+                        .fill(StrobeTheme.accent.opacity(0.1))
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: "text.book.closed.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(StrobeTheme.accent)
+                }
+                .accessibilityHidden(true)
+
                 Spacer()
-                Text("\(document.wordCount) words")
-                    .foregroundStyle(StrobeTheme.textSecondary)
+
+                Menu {
+                    Button {
+                        onRename()
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Document options")
             }
-            .font(StrobeTheme.bodyFont(size: 12))
+
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(document.title)
+                    .font(StrobeTheme.titleFont(size: 18))
+                    .foregroundStyle(StrobeTheme.textPrimary)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.9)
+                    .multilineTextAlignment(.leading)
+
+                HStack {
+                    Text("\(document.progressPercentage)%")
+                        .foregroundStyle(StrobeTheme.accent)
+                    Spacer()
+                    Text("\(document.wordCount) words")
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                }
+                .font(StrobeTheme.bodyFont(size: 12))
+            }
+            // Read the card as one element ("Title, 45%, 12,000 words")
+            // instead of three fragments.
+            .accessibilityElement(children: .combine)
         }
         .padding(16)
         .frame(height: 180)
