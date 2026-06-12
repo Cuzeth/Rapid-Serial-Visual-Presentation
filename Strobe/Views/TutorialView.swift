@@ -4,16 +4,11 @@ import SwiftUI
 /// A paged walkthrough introducing import, reading controls, chapters, and settings.
 struct TutorialView: View {
     @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
-    @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var currentPage = 0
 
     private let pageCount = 5
-
-    private var readerFont: ReaderFont {
-        ReaderFont.resolve(readerFontSelection)
-    }
 
     var body: some View {
         ZStack {
@@ -38,6 +33,29 @@ struct TutorialView: View {
             }
             #endif
         }
+        .overlay(alignment: .topTrailing) {
+            if currentPage < pageCount - 1 {
+                skipButton
+                    .padding(20)
+            }
+        }
+    }
+
+    private var skipButton: some View {
+        Button {
+            hasSeenTutorial = true
+            dismiss()
+        } label: {
+            Text("Skip")
+                .font(StrobeTheme.bodyFont(size: 15, bold: true))
+                .foregroundStyle(StrobeTheme.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.05))
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Skip tutorial")
     }
 
     // MARK: - Page data
@@ -49,7 +67,7 @@ struct TutorialView: View {
                  description: "Speed read one word at a time, faster than ever.")
         case 1:
             page(icon: "plus.circle.fill", title: "Import Your Books",
-                 description: "Click the + button to import PDFs and EPUBs, or enter text directly.")
+                 description: importDescription)
         case 2:
             page(icon: "hand.tap.fill", title: "Reading Controls",
                  description: controlsDescription)
@@ -61,6 +79,14 @@ struct TutorialView: View {
                  description: "Adjust reading speed, font, text size, and smart timing in Settings.",
                  showButton: true)
         }
+    }
+
+    private var importDescription: String {
+        #if os(macOS)
+        "Click the + button to import PDFs and EPUBs, or enter text directly."
+        #else
+        "Tap the + button to import PDFs and EPUBs, or enter text directly."
+        #endif
     }
 
     private var controlsDescription: String {

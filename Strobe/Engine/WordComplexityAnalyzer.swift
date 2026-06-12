@@ -87,14 +87,17 @@ enum WordComplexityAnalyzer {
         var lexicalTags = [NLTag?](repeating: nil, count: words.count)
         var entityTags = [NLTag?](repeating: nil, count: words.count)
 
-        // Character offset where each word starts in `text` (words are joined
-        // by single spaces, so offsets are exact by construction).
+        // Unicode-scalar offset where each word starts in `text`. Scalar counts
+        // are used instead of Character counts because joining can merge
+        // graphemes across the separator (a word starting with a combining
+        // mark merges with the preceding space into one Character), which
+        // would desync a Character-based table for every following word.
         var wordStarts: [Int] = []
         wordStarts.reserveCapacity(words.count)
         var offset = 0
         for word in words {
             wordStarts.append(offset)
-            offset += word.count + 1
+            offset += word.unicodeScalars.count + 1
         }
 
         // Tokens arrive in document order, so a forward cursor over both the
@@ -109,7 +112,7 @@ enum WordComplexityAnalyzer {
             scheme: .lexicalClass,
             options: [.omitWhitespace, .omitPunctuation]
         ) { tag, range in
-            cursorOffset += text.distance(from: cursorIndex, to: range.lowerBound)
+            cursorOffset += text.unicodeScalars.distance(from: cursorIndex, to: range.lowerBound)
             cursorIndex = range.lowerBound
             while wordIndex + 1 < words.count && cursorOffset >= wordStarts[wordIndex + 1] {
                 wordIndex += 1

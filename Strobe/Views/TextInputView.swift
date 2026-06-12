@@ -10,7 +10,15 @@ struct TextInputView: View {
     @State private var title: String = ""
     @State private var inputText: String = ""
     @State private var saveError: String?
+    @State private var isSaving = false
+    @State private var showDiscardConfirmation = false
     @FocusState private var editorFocused: Bool
+
+    /// Whether the user has typed anything worth protecting from accidental dismissal.
+    private var hasUnsavedInput: Bool {
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     /// Approximate word count for display.
     /// Counts CJK ideographs individually and whitespace-splits Latin text.
@@ -58,6 +66,7 @@ struct TextInputView: View {
                 VStack(spacing: 12) {
                     // Title field
                     TextField("Title (optional)", text: $title)
+                        .disabled(isSaving)
                         .font(StrobeTheme.bodyFont(size: 16))
                         .foregroundStyle(StrobeTheme.textPrimary)
                         .tint(StrobeTheme.accent)
@@ -82,6 +91,10 @@ struct TextInputView: View {
                         }
 
                         TextEditor(text: $inputText)
+                            // Locked during save: the save uses a snapshot of
+                            // the text, so edits made mid-save would be
+                            // silently lost when the sheet dismisses.
+                            .disabled(isSaving)
                             .scrollContentBackground(.hidden)
                             .font(StrobeTheme.bodyFont(size: 16))
                             .foregroundStyle(StrobeTheme.textPrimary)
@@ -116,6 +129,15 @@ struct TextInputView: View {
         .onAppear {
             editorFocused = true
         }
+        .interactiveDismissDisabled(hasUnsavedInput || isSaving)
+        .confirmationDialog(
+            "Discard this text?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard", role: .destructive) { dismiss() }
+            Button("Keep Editing", role: .cancel) {}
+        }
         .alert("Save Error", isPresented: .init(
             get: { saveError != nil },
             set: { if !$0 { saveError = nil } }
@@ -131,7 +153,11 @@ struct TextInputView: View {
     private var header: some View {
         HStack {
             Button {
-                dismiss()
+                if hasUnsavedInput {
+                    showDiscardConfirmation = true
+                } else {
+                    dismiss()
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))
@@ -141,6 +167,8 @@ struct TextInputView: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .disabled(isSaving)
+            .accessibilityLabel("Close")
 
             Spacer()
 
@@ -153,16 +181,23 @@ struct TextInputView: View {
             Button {
                 save()
             } label: {
-                Text("Add")
-                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                    .foregroundStyle(canSave ? Color.white : Color.white.opacity(0.5))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(canSave ? StrobeTheme.accent : StrobeTheme.accent.opacity(0.35))
-                    .clipShape(Capsule())
+                HStack(spacing: 8) {
+                    if isSaving {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    }
+                    Text(isSaving ? "Adding…" : "Add")
+                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                        .foregroundStyle(canSave ? Color.white : Color.white.opacity(0.5))
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(canSave ? StrobeTheme.accent : StrobeTheme.accent.opacity(0.35))
+                .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(!canSave)
+            .disabled(!canSave || isSaving)
             .animation(.easeInOut(duration: 0.15), value: canSave)
         }
     }
@@ -170,41 +205,58 @@ struct TextInputView: View {
     // MARK: - Save
 
     private func save() {
+        guard !isSaving else { return }
         let trimmedText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else { return }
 
-        let words = Tokenizer.tokenize(trimmedText)
-        guard !words.isEmpty else { return }
-
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        isSaving = true
 
-        let resolvedTitle: String
-        if trimmedTitle.isEmpty {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            resolvedTitle = "Text — \(formatter.string(from: Date()))"
-        } else {
-            resolvedTitle = trimmedTitle
-        }
-        let complexityScores = WordComplexityAnalyzer.analyzeComplexity(words)
-        let document = Document(
-            title: resolvedTitle,
-            fileName: resolvedTitle,
-            bookmarkData: Data(),
-            words: words,
-            complexityScores: complexityScores,
-            wordsPerMinute: defaultWPM
-        )
-        modelContext.insert(document)
-        do {
-            try modelContext.save()
-        } catch {
-            modelContext.delete(document)
-            saveError = "Could not save: \(error.localizedDescription)"
-            return
-        }
+        Task {
+            defer { isSaving = false }
 
-        dismiss()
+            // Tokenizing and complexity analysis (NLTagger) are expensive on
+            // long pasted texts — run them off the main thread so the sheet
+            // stays responsive.
+            let (words, complexityScores) = await Task.detached(priority: .userInitiated) {
+                let words = Tokenizer.tokenize(trimmedText)
+                let scores = words.isEmpty ? [] : WordComplexityAnalyzer.analyzeComplexity(words)
+                return (words, scores)
+            }.value
+
+            guard !words.isEmpty else {
+                saveError = "No readable text found."
+                return
+            }
+
+            let resolvedTitle: String
+            if trimmedTitle.isEmpty {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                resolvedTitle = "Text — \(formatter.string(from: Date()))"
+            } else {
+                resolvedTitle = trimmedTitle
+            }
+
+            let document = Document(
+                title: resolvedTitle,
+                fileName: resolvedTitle,
+                bookmarkData: Data(),
+                words: words,
+                complexityScores: complexityScores,
+                wordsPerMinute: defaultWPM
+            )
+            modelContext.insert(document)
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.delete(document)
+                saveError = "Could not save: \(error.localizedDescription)"
+                return
+            }
+
+            dismiss()
+        }
     }
 }
