@@ -357,16 +357,7 @@ struct SettingsView: View {
             wpmSliderValue = Double(defaultWPM)
             fontSizeSliderValue = Double(fontSize)
         }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showTutorial) {
-            TutorialView()
-        }
-        #else
-        .sheet(isPresented: $showTutorial) {
-            TutorialView()
-                .frame(minWidth: 600, minHeight: 500)
-        }
-        #endif
+        .tutorialCover(isPresented: $showTutorial)
     }
 
     // MARK: - Components

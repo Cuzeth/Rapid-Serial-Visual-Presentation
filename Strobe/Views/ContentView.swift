@@ -121,16 +121,7 @@ struct ContentView: View {
                     .presentationCornerRadius(24)
             }
             #endif
-            #if os(iOS)
-            .fullScreenCover(isPresented: $showTutorial) {
-                TutorialView()
-            }
-            #else
-            .sheet(isPresented: $showTutorial) {
-                TutorialView()
-                    .frame(minWidth: 600, minHeight: 500)
-            }
-            #endif
+            .tutorialCover(isPresented: $showTutorial)
             .sheet(isPresented: $showTextInput) {
                 TextInputView()
                     #if os(iOS)
