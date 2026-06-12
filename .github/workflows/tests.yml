@@ -18,13 +18,57 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Runner images don't always ship the same pre-created simulators
+      # (hardcoding a device name broke when an image update dropped it),
+      # so pick any available iPhone — and create one if none exist.
+      - name: Select iOS simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl list devices available
+          UDID=$(python3 - <<'EOF'
+          import json
+          import subprocess
+
+          def simctl(*args):
+              return json.loads(subprocess.check_output(["xcrun", "simctl", "list", *args, "--json"]))
+
+          devices = simctl("devices", "available")["devices"]
+          iphones = [
+              device
+              for runtime_devices in devices.values()
+              for device in runtime_devices
+              if device.get("isAvailable") and device["name"].startswith("iPhone")
+          ]
+          if iphones:
+              print(iphones[0]["udid"])
+          else:
+              device_types = [
+                  t["identifier"]
+                  for t in simctl("devicetypes")["devicetypes"]
+                  if t["identifier"].rsplit(".", 1)[-1].startswith("iPhone")
+              ]
+              runtimes = [
+                  r["identifier"]
+                  for r in simctl("runtimes")["runtimes"]
+                  if r.get("isAvailable") and ".iOS-" in r["identifier"]
+              ]
+              udid = subprocess.check_output(
+                  ["xcrun", "simctl", "create", "CI iPhone", device_types[-1], runtimes[-1]]
+              ).decode().strip()
+              print(udid)
+          EOF
+          )
+          echo "Selected simulator: $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
       - name: Run tests
         run: |
           set -o pipefail
           xcodebuild test \
             -project Strobe.xcodeproj \
             -scheme Strobe \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -resultBundlePath TestResults.xcresult \
             -skipPackagePluginValidation \
             -skip-testing:StrobeUITests \
