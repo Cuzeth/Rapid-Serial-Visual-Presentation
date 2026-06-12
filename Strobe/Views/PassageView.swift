@@ -21,8 +21,9 @@ struct PassageView: View {
 
     @State private var searchQuery: String = ""
     @State private var matchIndices: [Int] = []
-    /// Mirror of `matchIndices` for O(1) per-word lookups; kept in sync wherever
-    /// `matchIndices` is assigned so chunk renders don't rebuild a Set.
+    /// Mirror of `matchIndices` for O(1) per-word lookups so chunk renders
+    /// don't rebuild a Set. Only ever assigned through ``setMatches(_:precomputedSet:)``
+    /// so it can't drift from `matchIndices`.
     @State private var matchSet: Set<Int> = []
     @State private var currentMatchPosition: Int = 0
     @State private var renderedChunks: Set<Int> = []
@@ -172,8 +173,7 @@ struct PassageView: View {
             onClear: {
                 searchTask?.cancel()
                 searchQuery = ""
-                matchIndices = []
-                matchSet = []
+                setMatches([])
                 currentMatchPosition = 0
                 lastCompletedQuery = nil
             }
@@ -390,13 +390,20 @@ struct PassageView: View {
         HapticManager.shared.scrubTick()
     }
 
+    /// Single funnel for updating the search results: assigns `matchIndices`
+    /// and its `matchSet` mirror together. `precomputedSet` lets the search
+    /// task reuse the Set it already built off the main thread.
+    private func setMatches(_ indices: [Int], precomputedSet: Set<Int>? = nil) {
+        matchIndices = indices
+        matchSet = precomputedSet ?? Set(indices)
+    }
+
     private func runSearch(immediate: Bool = false) {
         searchTask?.cancel()
         let query = searchQuery
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            matchIndices = []
-            matchSet = []
+            setMatches([])
             currentMatchPosition = 0
             lastCompletedQuery = nil
             return
@@ -419,8 +426,7 @@ struct PassageView: View {
                 return (matches, Set(matches))
             }.value
             guard !Task.isCancelled, query == searchQuery else { return }
-            matchIndices = results
-            matchSet = resultSet
+            setMatches(results, precomputedSet: resultSet)
             lastCompletedQuery = query
             if results.isEmpty {
                 currentMatchPosition = 0
