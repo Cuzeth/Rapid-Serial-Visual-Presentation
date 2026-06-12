@@ -165,15 +165,20 @@ struct PassageView: View {
     // MARK: - Search
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(StrobeTheme.textSecondary)
-                .font(.system(size: 14, weight: .semibold))
-
-            TextField("Search text", text: $searchQuery)
-                .font(readerFont.regularFont(size: 15))
-                .foregroundStyle(StrobeTheme.textPrimary)
-                .textFieldStyle(.plain)
+        StrobeSearchBar(
+            placeholder: "Search text",
+            text: $searchQuery,
+            font: readerFont.regularFont(size: 15),
+            onClear: {
+                searchTask?.cancel()
+                searchQuery = ""
+                matchIndices = []
+                matchSet = []
+                currentMatchPosition = 0
+                lastCompletedQuery = nil
+            }
+        ) { field in
+            field
                 .focused($searchFocused)
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
@@ -193,28 +198,7 @@ struct PassageView: View {
                 .onChange(of: searchQuery) { _, _ in
                     runSearch()
                 }
-
-            if !searchQuery.isEmpty {
-                Button {
-                    searchTask?.cancel()
-                    searchQuery = ""
-                    matchIndices = []
-                    matchSet = []
-                    currentMatchPosition = 0
-                    lastCompletedQuery = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(StrobeTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 16)
         .padding(.bottom, 6)
     }

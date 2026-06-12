@@ -285,37 +285,18 @@ struct ContentView: View {
     // MARK: - Search
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(StrobeTheme.textSecondary)
-                .font(.system(size: 14, weight: .semibold))
-
-            TextField("Search library", text: $searchText)
-                .font(StrobeTheme.bodyFont(size: 15))
-                .foregroundStyle(StrobeTheme.textPrimary)
+        StrobeSearchBar(
+            placeholder: "Search library",
+            text: $searchText,
+            font: StrobeTheme.bodyFont(size: 15)
+        ) { field in
+            field
                 .tint(StrobeTheme.accent)
-                .textFieldStyle(.plain)
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
                 #endif
-
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(StrobeTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 24)
         .padding(.bottom, 4)
         .frame(maxWidth: horizontalSizeClass == .regular ? 1024 : .infinity)
