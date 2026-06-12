@@ -790,7 +790,7 @@ struct ReaderView: View {
         engine.wordsPerMinute = clamped
         document.wordsPerMinute = value
         if withHaptic {
-            HapticManager.shared.wpmChanged()
+            HapticManager.shared.selectionTick()
         }
     }
 }

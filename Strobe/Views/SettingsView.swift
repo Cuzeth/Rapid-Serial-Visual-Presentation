@@ -94,7 +94,7 @@ struct SettingsView: View {
                                     // every tick of the drag.
                                     Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
                                         if !editing {
-                                            HapticManager.shared.wpmChanged()
+                                            HapticManager.shared.selectionTick()
                                         }
                                     }
                                     .tint(StrobeTheme.accent)
@@ -135,7 +135,7 @@ struct SettingsView: View {
                                 VStack(spacing: 4) {
                                     Slider(value: $fontSizeSliderValue, in: 24...72, step: 2) { editing in
                                         if !editing {
-                                            HapticManager.shared.wpmChanged()
+                                            HapticManager.shared.selectionTick()
                                         }
                                     }
                                     .tint(StrobeTheme.accent)

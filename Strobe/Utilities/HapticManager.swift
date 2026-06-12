@@ -41,8 +41,8 @@ final class HapticManager {
         notification.prepare()
     }
 
-    /// WPM slider snapped to a new value
-    func wpmChanged() {
+    /// A discrete control (e.g. a stepped slider) snapped to a new value
+    func selectionTick() {
         selection.selectionChanged()
         selection.prepare()
     }
@@ -57,7 +57,7 @@ final class HapticManager {
     func playPause() {}
     func scrubTick() {}
     func scrubBoundary() {}
-    func wpmChanged() {}
+    func selectionTick() {}
     func completedReading() {}
     #endif
 }
