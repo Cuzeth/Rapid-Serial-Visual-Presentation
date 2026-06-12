@@ -425,16 +425,31 @@ struct StrobeTests {
         #expect(scores.isEmpty)
     }
 
+    /// Whether this environment's NLTagger has usable lexical-class models.
+    /// CI iOS simulators can lack the linguistic assets and tag every word
+    /// `.otherWord`, which makes exact-tag assertions meaningless there.
+    nonisolated static var lexicalTaggingAvailable: Bool {
+        WordComplexityAnalyzer.tagText(words: ["the"]).lexical.first == .determiner
+    }
+
+    /// Runs everywhere, even without linguistic assets: the tag tables must
+    /// always be parallel to the word array.
+    @Test func complexityTagTablesMatchWordCount() {
+        let words = ["He", "said", "stop—go", "now", "please", "tomorrow"]
+        let (lexical, entity) = WordComplexityAnalyzer.tagText(words: words)
+        #expect(lexical.count == words.count)
+        #expect(entity.count == words.count)
+    }
+
     /// NLTagger splits tokens the app tokenizer keeps whole (e.g. the em-dash
     /// compound "stop—go"). Tags must stay aligned to the word array by
     /// character offset, not by token count — a counting bug shifted every
     /// tag after the first split token.
-    @Test func complexityTagsStayAlignedAcrossTaggerSplitTokens() {
+    @Test(.enabled(if: StrobeTests.lexicalTaggingAvailable))
+    func complexityTagsStayAlignedAcrossTaggerSplitTokens() {
         let words = ["He", "said", "stop—go", "now", "please", "tomorrow"]
-        let (lexical, entity) = WordComplexityAnalyzer.tagText(words: words)
+        let (lexical, _) = WordComplexityAnalyzer.tagText(words: words)
 
-        #expect(lexical.count == words.count)
-        #expect(entity.count == words.count)
         // "said" and the words after the split compound keep their own tags.
         #expect(lexical[1] == .verb)
         #expect(lexical[3] == .adverb)
@@ -443,7 +458,8 @@ struct StrobeTests {
         #expect(lexical[5] != nil)
     }
 
-    @Test func complexityTagsAlignForPlainText() {
+    @Test(.enabled(if: StrobeTests.lexicalTaggingAvailable))
+    func complexityTagsAlignForPlainText() {
         let words = ["The", "quick", "brown", "fox", "jumps"]
         let (lexical, _) = WordComplexityAnalyzer.tagText(words: words)
         #expect(lexical[0] == .determiner)
