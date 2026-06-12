@@ -30,6 +30,12 @@ struct PassageView: View {
     /// Lazily-built lowercased copy of `words`, computed off-main on first
     /// search so each keystroke doesn't re-lowercase the whole document.
     @State private var lowercasedWords: [String]?
+    /// The in-flight lowercase pass, memoized so racing searches during the
+    /// initial build all await one pass instead of spawning duplicates.
+    @State private var lowercaseTask: Task<[String], Never>?
+    /// The query whose results `matchIndices` currently holds. Lets onSubmit
+    /// distinguish fresh matches from a stale set awaiting the debounce.
+    @State private var lastCompletedQuery: String?
     @State private var searchTask: Task<Void, Never>?
     @FocusState private var searchFocused: Bool
 
@@ -175,8 +181,13 @@ struct PassageView: View {
                 .submitLabel(.search)
                 #endif
                 .onSubmit {
-                    if !matchIndices.isEmpty {
+                    if searchQuery == lastCompletedQuery, !matchIndices.isEmpty {
                         stepMatch(by: 1)
+                    } else {
+                        // The debounced search hasn't landed for this query
+                        // yet — run it now rather than stepping through the
+                        // previous query's stale matches.
+                        runSearch(immediate: true)
                     }
                 }
                 .onChange(of: searchQuery) { _, _ in
@@ -190,6 +201,7 @@ struct PassageView: View {
                     matchIndices = []
                     matchSet = []
                     currentMatchPosition = 0
+                    lastCompletedQuery = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(StrobeTheme.textSecondary)
@@ -394,7 +406,7 @@ struct PassageView: View {
         HapticManager.shared.scrubTick()
     }
 
-    private func runSearch() {
+    private func runSearch(immediate: Bool = false) {
         searchTask?.cancel()
         let query = searchQuery
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -402,31 +414,30 @@ struct PassageView: View {
             matchIndices = []
             matchSet = []
             currentMatchPosition = 0
+            lastCompletedQuery = nil
             return
         }
 
-        // Debounced: scanning (and on first search, lowercasing) every word of
-        // a long document per keystroke would jank typing on the main thread.
+        // Debounced (unless submitted explicitly): scanning every word of a
+        // long document per keystroke would waste work mid-typing. Both the
+        // one-time lowercasing and the per-query scan run off the main thread.
         searchTask = Task {
-            try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled else { return }
-
-            let lowered: [String]
-            if let cached = lowercasedWords {
-                lowered = cached
-            } else {
-                let snapshot = words
-                lowered = await Task.detached(priority: .userInitiated) {
-                    snapshot.map { $0.lowercased() }
-                }.value
+            if !immediate {
+                try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
-                lowercasedWords = lowered
             }
 
-            let results = Self.findMatches(query: query, inLowercasedWords: lowered)
+            let lowered = await lowercasedWordsCache()
+            guard !Task.isCancelled else { return }
+
+            let (results, resultSet) = await Task.detached(priority: .userInitiated) {
+                let matches = Self.findMatches(query: query, inLowercasedWords: lowered)
+                return (matches, Set(matches))
+            }.value
             guard !Task.isCancelled, query == searchQuery else { return }
             matchIndices = results
-            matchSet = Set(results)
+            matchSet = resultSet
+            lastCompletedQuery = query
             if results.isEmpty {
                 currentMatchPosition = 0
                 return
@@ -436,6 +447,26 @@ struct PassageView: View {
             currentMatchPosition = Self.nearestMatchPosition(to: engine.currentIndex, in: results)
             scrollIntent = .matchPosition(currentMatchPosition)
         }
+    }
+
+    /// Returns the lowercased word list, building it off-main at most once.
+    /// The result is cached even when the awaiting search was cancelled —
+    /// the completed pass is valid for every future query.
+    private func lowercasedWordsCache() async -> [String] {
+        if let cached = lowercasedWords { return cached }
+        let task: Task<[String], Never>
+        if let existing = lowercaseTask {
+            task = existing
+        } else {
+            let snapshot = words
+            task = Task.detached(priority: .userInitiated) {
+                snapshot.map { $0.lowercased() }
+            }
+            lowercaseTask = task
+        }
+        let lowered = await task.value
+        lowercasedWords = lowered
+        return lowered
     }
 
     private func stepMatch(by delta: Int) {
@@ -476,14 +507,14 @@ struct PassageView: View {
     /// Case-insensitive substring search over `words`. Whitespace is trimmed
     /// from the query, and empty/whitespace-only queries yield no matches.
     /// Returned indices are sorted ascending by construction.
-    static func findMatches(query: String, in words: [String]) -> [Int] {
+    nonisolated static func findMatches(query: String, in words: [String]) -> [Int] {
         findMatches(query: query, inLowercasedWords: words.map { $0.lowercased() })
     }
 
     /// Variant of ``findMatches(query:in:)`` over pre-lowercased words, so the
     /// per-keystroke search path can reuse a cached lowercased copy instead of
     /// re-lowercasing the whole document each time.
-    static func findMatches(query: String, inLowercasedWords words: [String]) -> [Int] {
+    nonisolated static func findMatches(query: String, inLowercasedWords words: [String]) -> [Int] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let needle = trimmed.lowercased()
@@ -569,8 +600,11 @@ private struct WordToken: View {
                         .fill(backgroundColor)
                 )
                 // Expand the tap target beyond the visible token — word rows
-                // are otherwise well under the 44pt minimum touch size.
-                .contentShape(Rectangle().inset(by: -4))
+                // are otherwise well under the 44pt minimum touch size. Kept
+                // at 2pt per side so expanded shapes never overlap the 5pt
+                // word gap / 6pt line gap (overlap would route edge taps to
+                // the adjacent word).
+                .contentShape(Rectangle().inset(by: -2))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(text)

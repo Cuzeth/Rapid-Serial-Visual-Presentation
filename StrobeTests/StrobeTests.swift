@@ -467,6 +467,23 @@ struct StrobeTests {
         #expect(lexical[3] == .noun)
     }
 
+    /// A token starting with a combining mark (common in messy PDF
+    /// extractions) merges with the preceding joiner space into a single
+    /// grapheme cluster, so a Character-counted offset table desyncs from
+    /// the joined text — every word after the malformed token then receives
+    /// its neighbor's tag. Offsets must be scalar-based to stay exact.
+    @Test(.enabled(if: StrobeTests.lexicalTaggingAvailable))
+    func complexityTagsStayAlignedAfterLeadingCombiningMark() {
+        let words = ["He", "said", "\u{0301}stop", "the", "quick", "tomorrow"]
+        let (lexical, _) = WordComplexityAnalyzer.tagText(words: words)
+
+        // Words after the combining-mark token keep their own tags instead
+        // of shifting one index back.
+        #expect(lexical[3] == .determiner)
+        #expect(lexical[4] == .adjective)
+        #expect(lexical[5] != nil)
+    }
+
     // MARK: - ORP anchor position
 
     /// The Optimal Recognition Point sits left of center, around the 1/3 mark.
@@ -671,8 +688,10 @@ struct StrobeTests {
 
     /// The per-entry decompression cap doesn't stop an archive packed with
     /// many entries from exhausting temp storage; the cumulative budget must
-    /// abort the whole extraction.
-    @Test func zipExtractorAbortsWhenTotalExtractionBudgetExceeded() throws {
+    /// bound total bytes written. Entries over the remaining budget are
+    /// skipped rather than aborting the archive, so media-heavy but
+    /// legitimate EPUBs still import.
+    @Test func zipExtractorSkipsEntriesOverTotalExtractionBudget() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -686,11 +705,13 @@ struct StrobeTests {
         let zipURL = tempDir.appendingPathComponent("test.zip")
         try buildZIPWithCentralDirectory(entries: entries).write(to: zipURL)
 
-        // Budget covers only the first two entries — extraction must throw.
+        // Budget covers only the first two entries — the third is skipped,
+        // but extraction succeeds and earlier entries are intact.
         let cappedDir = tempDir.appendingPathComponent("capped")
-        #expect(throws: DocumentImportError.epubExtractionFailed) {
-            try ZIPExtractor.extract(zipAt: zipURL, to: cappedDir, maxTotalBytes: 25)
-        }
+        try ZIPExtractor.extract(zipAt: zipURL, to: cappedDir, maxTotalBytes: 25)
+        #expect(try Data(contentsOf: cappedDir.appendingPathComponent("a.txt")) == entries[0].content)
+        #expect(try Data(contentsOf: cappedDir.appendingPathComponent("b.txt")) == entries[1].content)
+        #expect(!FileManager.default.fileExists(atPath: cappedDir.appendingPathComponent("c.txt").path))
 
         // A sufficient budget extracts everything.
         let fullDir = tempDir.appendingPathComponent("full")

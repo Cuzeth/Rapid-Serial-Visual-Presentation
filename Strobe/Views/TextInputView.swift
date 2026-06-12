@@ -66,6 +66,7 @@ struct TextInputView: View {
                 VStack(spacing: 12) {
                     // Title field
                     TextField("Title (optional)", text: $title)
+                        .disabled(isSaving)
                         .font(StrobeTheme.bodyFont(size: 16))
                         .foregroundStyle(StrobeTheme.textPrimary)
                         .tint(StrobeTheme.accent)
@@ -90,6 +91,10 @@ struct TextInputView: View {
                         }
 
                         TextEditor(text: $inputText)
+                            // Locked during save: the save uses a snapshot of
+                            // the text, so edits made mid-save would be
+                            // silently lost when the sheet dismisses.
+                            .disabled(isSaving)
                             .scrollContentBackground(.hidden)
                             .font(StrobeTheme.bodyFont(size: 16))
                             .foregroundStyle(StrobeTheme.textPrimary)

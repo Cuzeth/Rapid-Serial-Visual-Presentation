@@ -34,9 +34,11 @@ struct StrobeApp: App {
 
         #if os(macOS)
         // Standard macOS Settings window, reachable via Cmd+, from anywhere.
+        // Min width must exceed the Replay Tutorial sheet's 600pt so the
+        // sheet never overhangs its parent window.
         Settings {
             SettingsView()
-                .frame(minWidth: 560, minHeight: 620)
+                .frame(minWidth: 640, minHeight: 620)
                 .preferredColorScheme(.dark)
         }
         #endif

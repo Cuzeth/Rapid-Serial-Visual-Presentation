@@ -33,30 +33,41 @@ jobs:
           def simctl(*args):
               return json.loads(subprocess.check_output(["xcrun", "simctl", "list", *args, "--json"]))
 
+          def ios_version(identifier):
+              # com.apple.CoreSimulator.SimRuntime.iOS-26-4 -> (26, 4)
+              suffix = identifier.rsplit(".iOS-", 1)[-1]
+              return tuple(int(part) for part in suffix.split("-") if part.isdigit())
+
+          # Prefer an iPhone on the NEWEST installed iOS runtime — the devices
+          # dict is keyed by runtime identifier with no ordering guarantee.
           devices = simctl("devices", "available")["devices"]
-          iphones = [
-              device
-              for runtime_devices in devices.values()
-              for device in runtime_devices
-              if device.get("isAvailable") and device["name"].startswith("iPhone")
-          ]
-          if iphones:
-              print(iphones[0]["udid"])
-          else:
+          udid = None
+          for key in sorted((k for k in devices if ".iOS-" in k), key=ios_version, reverse=True):
+              iphones = [
+                  d for d in devices[key]
+                  if d.get("isAvailable") and d["name"].startswith("iPhone")
+              ]
+              if iphones:
+                  udid = iphones[0]["udid"]
+                  break
+
+          if udid is None:
               device_types = [
                   t["identifier"]
                   for t in simctl("devicetypes")["devicetypes"]
                   if t["identifier"].rsplit(".", 1)[-1].startswith("iPhone")
               ]
-              runtimes = [
-                  r["identifier"]
-                  for r in simctl("runtimes")["runtimes"]
-                  if r.get("isAvailable") and ".iOS-" in r["identifier"]
-              ]
+              runtimes = sorted(
+                  (r["identifier"]
+                   for r in simctl("runtimes")["runtimes"]
+                   if r.get("isAvailable") and ".iOS-" in r["identifier"]),
+                  key=ios_version,
+              )
               udid = subprocess.check_output(
                   ["xcrun", "simctl", "create", "CI iPhone", device_types[-1], runtimes[-1]]
               ).decode().strip()
-              print(udid)
+
+          print(udid)
           EOF
           )
           echo "Selected simulator: $UDID"

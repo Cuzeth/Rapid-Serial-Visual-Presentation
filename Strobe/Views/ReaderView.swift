@@ -122,13 +122,12 @@ struct ReaderView: View {
             if engine.isAtEnd { showCompletion = true }
             readerFocused = true
         }
-        // Re-assert keyboard focus after the passage view or chapter picker
-        // closes, so Space/arrow shortcuts keep working on macOS.
-        .onChange(of: showPassage) { _, isShowing in
-            if !isShowing { readerFocused = true }
-        }
-        .onChange(of: showChapterPicker) { _, isShowing in
-            if !isShowing { readerFocused = true }
+        // Re-assert keyboard focus whenever any overlay (passage view, chapter
+        // picker, save-error alert) closes, so Space/arrow shortcuts keep
+        // working on macOS. One derived flag covers all presentations — adding
+        // a new one only requires extending `isPresentingOverlay`.
+        .onChange(of: isPresentingOverlay) { _, isPresenting in
+            if !isPresenting { readerFocused = true }
         }
         .onDisappear {
             persistState(pauseEngine: true, touchLastReadDate: true)
@@ -234,6 +233,12 @@ struct ReaderView: View {
         case undecided
         case reading
         case scrubbing
+    }
+
+    /// True while any focus-stealing presentation is up. Used to restore
+    /// keyboard focus when the last one closes.
+    private var isPresentingOverlay: Bool {
+        showPassage || showChapterPicker || persistenceError != nil
     }
 
     // MARK: - Unified gesture

@@ -504,7 +504,14 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
 
     nonisolated func parser(_ parser: XMLParser, foundCharacters string: String) {
         for index in openElementIndices {
-            elements[index].text = (elements[index].text ?? "") + string
+            // In-place append: `(text ?? "") + string` copies each long-lived
+            // ancestor's entire accumulated text on every callback, which is
+            // quadratic for large nav/TOC documents.
+            if elements[index].text == nil {
+                elements[index].text = string
+            } else {
+                elements[index].text?.append(string)
+            }
         }
     }
 

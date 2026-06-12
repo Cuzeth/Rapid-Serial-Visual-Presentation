@@ -386,25 +386,31 @@ struct ContentView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(displayedDocuments) { document in
-                    NavigationLink(destination: destination(for: document)) {
-                        DocumentCard(
-                            document: document,
-                            onRename: { beginRename(document) },
-                            onDelete: { documentPendingDeletion = document }
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button {
-                            beginRename(document)
-                        } label: {
-                            Label("Rename", systemImage: "pencil")
+                    ZStack(alignment: .topTrailing) {
+                        NavigationLink(destination: destination(for: document)) {
+                            DocumentCard(document: document)
                         }
-                        Button(role: .destructive) {
-                            documentPendingDeletion = document
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            documentMenuItems(for: document)
                         }
+
+                        // A sibling of the NavigationLink, not nested in its
+                        // label — interactive controls inside link labels are
+                        // unreliable outside Lists (the link's tap can win).
+                        Menu {
+                            documentMenuItems(for: document)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(StrobeTheme.textSecondary)
+                                .frame(width: 30, height: 30)
+                                .background(Color.white.opacity(0.05))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Document options")
+                        .padding(12)
                     }
                 }
             }
@@ -455,6 +461,22 @@ struct ContentView: View {
     private func beginRename(_ document: Document) {
         renameText = document.title
         documentPendingRename = document
+    }
+
+    /// Shared menu content for a document, used by both the card's visible
+    /// options menu and the long-press context menu so they can't diverge.
+    @ViewBuilder
+    private func documentMenuItems(for document: Document) -> some View {
+        Button {
+            beginRename(document)
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
+        Button(role: .destructive) {
+            documentPendingDeletion = document
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
 }
@@ -601,52 +623,25 @@ extension ContentView {
 
 // MARK: - Document Card Component
 
-/// A grid card displaying a document's title, progress percentage, and word count,
-/// with a visible options menu for rename/delete (the context menu still works too).
+/// A grid card displaying a document's title, progress percentage, and word
+/// count. The visible options menu is overlaid by the grid (outside the
+/// NavigationLink label); the card leaves its top-trailing corner clear for it.
 struct DocumentCard: View {
     let document: Document
-    var onRename: () -> Void = {}
-    var onDelete: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                // Icon / Cover placeholder
-                ZStack {
-                    Circle()
-                        .fill(StrobeTheme.accent.opacity(0.1))
-                        .frame(width: 48, height: 48)
+            // Icon / Cover placeholder
+            ZStack {
+                Circle()
+                    .fill(StrobeTheme.accent.opacity(0.1))
+                    .frame(width: 48, height: 48)
 
-                    Image(systemName: "text.book.closed.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(StrobeTheme.accent)
-                }
-                .accessibilityHidden(true)
-
-                Spacer()
-
-                Menu {
-                    Button {
-                        onRename()
-                    } label: {
-                        Label("Rename", systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        onDelete()
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Document options")
+                Image(systemName: "text.book.closed.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(StrobeTheme.accent)
             }
+            .accessibilityHidden(true)
 
             Spacer()
 

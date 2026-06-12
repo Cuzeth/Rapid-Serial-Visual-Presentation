@@ -51,6 +51,10 @@ struct SettingsView: View {
 
                     Spacer()
 
+                    // iOS only: on macOS this view lives in a Settings scene,
+                    // where dismiss() has no presentation to act on — the
+                    // window's own close control is the standard affordance.
+                    #if os(iOS)
                     Button {
                         dismiss()
                     } label: {
@@ -62,6 +66,8 @@ struct SettingsView: View {
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                    #endif
                 }
                 .frame(maxWidth: contentMaxWidth)
                 .frame(maxWidth: .infinity)

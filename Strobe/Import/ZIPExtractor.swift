@@ -48,9 +48,10 @@ enum ZIPExtractor {
     ///   - source: The file URL of the ZIP archive.
     ///   - destination: The directory to extract files into (created if needed).
     ///   - maxTotalBytes: Cumulative extraction budget across all entries.
+    ///     Entries that would exceed the remaining budget are skipped (not
+    ///     written), bounding disk usage without failing the whole archive.
     /// - Throws: File system errors if directories cannot be created or files
-    ///   written, or ``DocumentImportError/epubExtractionFailed`` when the
-    ///   archive expands past `maxTotalBytes`.
+    ///   written.
     nonisolated static func extract(
         zipAt source: URL,
         to destination: URL,
@@ -287,9 +288,13 @@ enum ZIPExtractor {
             return
         }
 
+        // Skip (rather than abort on) entries that exceed the remaining budget:
+        // the cap exists to bound disk usage, and legitimate media-heavy EPUBs
+        // can exceed it with images/audio the text pipeline never reads. Small
+        // text entries later in the archive still extract from what remains.
         guard budget.charge(fileData.count) else {
-            logger.warning("Archive exceeds total extraction budget at entry: \(name, privacy: .public) — possible ZIP bomb")
-            throw DocumentImportError.epubExtractionFailed
+            logger.warning("Skipping entry over total extraction budget: \(name, privacy: .public) — possible ZIP bomb or oversized media")
+            return
         }
 
         try fileData.write(to: fileURL)
