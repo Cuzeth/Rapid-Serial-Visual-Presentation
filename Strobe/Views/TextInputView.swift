@@ -138,10 +138,7 @@ struct TextInputView: View {
             Button("Discard", role: .destructive) { dismiss() }
             Button("Keep Editing", role: .cancel) {}
         }
-        .alert("Save Error", isPresented: .init(
-            get: { saveError != nil },
-            set: { if !$0 { saveError = nil } }
-        )) {
+        .alert("Save Error", isPresented: .init(isPresent: $saveError)) {
             Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")

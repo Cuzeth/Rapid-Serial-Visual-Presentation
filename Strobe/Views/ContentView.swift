@@ -156,20 +156,14 @@ struct ContentView: View {
                     importOverlay
                 }
             }
-            .alert("Couldn't Import File", isPresented: .init(
-                get: { importError != nil },
-                set: { if !$0 { importError = nil } }
-            )) {
+            .alert("Couldn't Import File", isPresented: .init(isPresent: $importError)) {
                 Button("OK") { importError = nil }
             } message: {
                 Text(importError ?? "")
             }
             .alert(
                 "Rename Document",
-                isPresented: .init(
-                    get: { documentPendingRename != nil },
-                    set: { if !$0 { documentPendingRename = nil } }
-                ),
+                isPresented: .init(isPresent: $documentPendingRename),
                 presenting: documentPendingRename
             ) { doc in
                 TextField("Title", text: $renameText)
@@ -187,10 +181,7 @@ struct ContentView: View {
             }
             .alert(
                 "Delete this document?",
-                isPresented: .init(
-                    get: { documentPendingDeletion != nil },
-                    set: { if !$0 { documentPendingDeletion = nil } }
-                ),
+                isPresented: .init(isPresent: $documentPendingDeletion),
                 presenting: documentPendingDeletion
             ) { doc in
                 Button("Delete", role: .destructive) {

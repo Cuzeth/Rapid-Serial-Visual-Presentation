@@ -172,10 +172,7 @@ struct ReaderView: View {
         .onChange(of: complexityIntensity) { _, newValue in
             engine.complexityIntensity = newValue
         }
-        .alert("Save Error", isPresented: .init(
-            get: { persistenceError != nil },
-            set: { if !$0 { persistenceError = nil } }
-        )) {
+        .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
             Button("OK") { persistenceError = nil }
         } message: {
             Text(persistenceError ?? "")
