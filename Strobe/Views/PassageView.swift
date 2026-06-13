@@ -21,8 +21,9 @@ struct PassageView: View {
 
     @State private var searchQuery: String = ""
     @State private var matchIndices: [Int] = []
-    /// Mirror of `matchIndices` for O(1) per-word lookups; kept in sync wherever
-    /// `matchIndices` is assigned so chunk renders don't rebuild a Set.
+    /// Mirror of `matchIndices` for O(1) per-word lookups so chunk renders
+    /// don't rebuild a Set. Only ever assigned through ``setMatches(_:precomputedSet:)``
+    /// so it can't drift from `matchIndices`.
     @State private var matchSet: Set<Int> = []
     @State private var currentMatchPosition: Int = 0
     @State private var renderedChunks: Set<Int> = []
@@ -165,15 +166,19 @@ struct PassageView: View {
     // MARK: - Search
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(StrobeTheme.textSecondary)
-                .font(.system(size: 14, weight: .semibold))
-
-            TextField("Search text", text: $searchQuery)
-                .font(readerFont.regularFont(size: 15))
-                .foregroundStyle(StrobeTheme.textPrimary)
-                .textFieldStyle(.plain)
+        StrobeSearchBar(
+            placeholder: "Search text",
+            text: $searchQuery,
+            font: readerFont.regularFont(size: 15),
+            onClear: {
+                searchTask?.cancel()
+                searchQuery = ""
+                setMatches([])
+                currentMatchPosition = 0
+                lastCompletedQuery = nil
+            }
+        ) { field in
+            field
                 .focused($searchFocused)
                 #if os(iOS)
                 .textInputAutocapitalization(.never)
@@ -193,28 +198,7 @@ struct PassageView: View {
                 .onChange(of: searchQuery) { _, _ in
                     runSearch()
                 }
-
-            if !searchQuery.isEmpty {
-                Button {
-                    searchTask?.cancel()
-                    searchQuery = ""
-                    matchIndices = []
-                    matchSet = []
-                    currentMatchPosition = 0
-                    lastCompletedQuery = nil
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(StrobeTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 16)
         .padding(.bottom, 6)
     }
@@ -406,13 +390,20 @@ struct PassageView: View {
         HapticManager.shared.scrubTick()
     }
 
+    /// Single funnel for updating the search results: assigns `matchIndices`
+    /// and its `matchSet` mirror together. `precomputedSet` lets the search
+    /// task reuse the Set it already built off the main thread.
+    private func setMatches(_ indices: [Int], precomputedSet: Set<Int>? = nil) {
+        matchIndices = indices
+        matchSet = precomputedSet ?? Set(indices)
+    }
+
     private func runSearch(immediate: Bool = false) {
         searchTask?.cancel()
         let query = searchQuery
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            matchIndices = []
-            matchSet = []
+            setMatches([])
             currentMatchPosition = 0
             lastCompletedQuery = nil
             return
@@ -435,8 +426,7 @@ struct PassageView: View {
                 return (matches, Set(matches))
             }.value
             guard !Task.isCancelled, query == searchQuery else { return }
-            matchIndices = results
-            matchSet = resultSet
+            setMatches(results, precomputedSet: resultSet)
             lastCompletedQuery = query
             if results.isEmpty {
                 currentMatchPosition = 0

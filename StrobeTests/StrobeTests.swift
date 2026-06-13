@@ -1287,4 +1287,82 @@ struct StrobeTests {
         let matches = [10, 30]
         #expect(PassageView.nearestMatchPosition(to: 20, in: matches) == 0)
     }
+
+    // MARK: - Document furthest-read progress
+
+    /// A standalone (not inserted into a container) document with `count` words.
+    private func makeDocument(wordCount count: Int) -> Document {
+        Document(
+            title: "Test",
+            fileName: "test",
+            bookmarkData: Data(),
+            words: Array(repeating: "word", count: count)
+        )
+    }
+
+    @Test func newDocumentStartsWithZeroProgress() {
+        let doc = makeDocument(wordCount: 11)
+        #expect(doc.furthestWordIndex == 0)
+        #expect(doc.progress == 0)
+        #expect(doc.progressPercentage == 0)
+    }
+
+    @Test func newDocumentSeedsFurthestFromStartingIndex() {
+        let doc = Document(
+            title: "Test",
+            fileName: "test",
+            bookmarkData: Data(),
+            words: Array(repeating: "word", count: 11),
+            currentWordIndex: 4
+        )
+        #expect(doc.furthestWordIndex == 4)
+    }
+
+    @Test func progressReflectsFurthestNotCurrentPosition() {
+        // Navigating backward (currentWordIndex behind the furthest marker)
+        // must not lower the displayed progress.
+        let doc = makeDocument(wordCount: 11)
+        doc.furthestWordIndex = 5
+        doc.currentWordIndex = 2
+        #expect(doc.displayedFurthestWordIndex == 5)
+        #expect(doc.progress == 0.5)
+        #expect(doc.progressPercentage == 50)
+    }
+
+    @Test func progressFallsBackToCurrentIndexForMigratedDocuments() {
+        // Documents saved before furthestWordIndex existed migrate with 0;
+        // display must not regress below the previously saved position.
+        let doc = makeDocument(wordCount: 11)
+        doc.currentWordIndex = 8
+        doc.furthestWordIndex = 0
+        #expect(doc.displayedFurthestWordIndex == 8)
+        #expect(doc.progress == 0.8)
+        #expect(doc.progressPercentage == 80)
+    }
+
+    @Test func progressIsCompleteAtLastWord() {
+        let doc = makeDocument(wordCount: 11)
+        doc.furthestWordIndex = 10
+        #expect(doc.progress == 1.0)
+        #expect(doc.progressPercentage == 100)
+    }
+
+    @Test func restartDoesNotResetProgress() {
+        // "Read Again" rewinds currentWordIndex to 0 while the furthest
+        // marker keeps the document showing as finished.
+        let doc = makeDocument(wordCount: 11)
+        doc.furthestWordIndex = 10
+        doc.currentWordIndex = 0
+        #expect(doc.progress == 1.0)
+    }
+
+    @Test func progressHandlesDegenerateWordCounts() {
+        let empty = makeDocument(wordCount: 0)
+        #expect(empty.progress == 0)
+
+        let single = makeDocument(wordCount: 1)
+        #expect(single.progress == 0)
+        single.furthestWordIndex = 1
+        #expect(single.progress == 1)
+    }
 }

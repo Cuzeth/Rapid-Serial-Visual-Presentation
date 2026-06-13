@@ -214,3 +214,20 @@ struct TutorialView: View {
         .padding(.horizontal, 24)
     }
 }
+
+extension View {
+    /// Presents the tutorial — full screen on iOS, a fixed-size sheet on
+    /// macOS (which has no full-screen covers).
+    func tutorialCover(isPresented: Binding<Bool>) -> some View {
+        #if os(iOS)
+        fullScreenCover(isPresented: isPresented) {
+            TutorialView()
+        }
+        #else
+        sheet(isPresented: isPresented) {
+            TutorialView()
+                .frame(minWidth: 600, minHeight: 500)
+        }
+        #endif
+    }
+}

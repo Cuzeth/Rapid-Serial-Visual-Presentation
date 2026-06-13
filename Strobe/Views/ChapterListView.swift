@@ -4,7 +4,8 @@ import SwiftData
 /// Displays the chapter list for a document with progress indicators.
 ///
 /// Shows a "Read Full Document" option and individual chapters with
-/// not-started / in-progress / completed status based on the current reading position.
+/// not-started / in-progress / completed status based on the furthest
+/// position the user has read to.
 struct ChapterListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -169,39 +170,47 @@ struct ChapterListView: View {
         case notStarted, inProgress, completed
     }
 
-    /// Where the reader should start when a chapter row is tapped.
-    ///
-    /// An in-progress chapter resumes at the user's current position instead of
-    /// restarting at the chapter's first word — otherwise tapping the chapter
-    /// you're partway through (and then leaving the reader) would overwrite
-    /// your saved position with the chapter start.
-    private func startingWordIndex(forChapterAt index: Int) -> Int {
-        if chapterStatus(at: index) == .inProgress {
-            return document.currentWordIndex
-        }
-        return document.chapters[index].wordIndex
-    }
-
-    private func chapterWordCount(at index: Int) -> Int {
+    /// Half-open word-index bounds of the chapter at `index`.
+    private func chapterBounds(at index: Int) -> (start: Int, end: Int) {
         let chapters = document.chapters
         let start = chapters[index].wordIndex
         let end = index + 1 < chapters.count
             ? chapters[index + 1].wordIndex
             : document.wordCount
+        return (start, end)
+    }
+
+    /// Where the reader should start when a chapter row is tapped.
+    ///
+    /// Resumes at the user's current position when it falls inside this
+    /// chapter — otherwise tapping the chapter you're partway through (and
+    /// then leaving the reader) would overwrite your saved position with the
+    /// chapter start. Judged on `currentWordIndex`, not the furthest-read
+    /// marker: status can say "in progress" for a chapter the user has read
+    /// into and then scrubbed back out of.
+    private func startingWordIndex(forChapterAt index: Int) -> Int {
+        let (start, end) = chapterBounds(at: index)
+        let current = document.currentWordIndex
+        if current > start && current < end - 1 {
+            return current
+        }
+        return start
+    }
+
+    private func chapterWordCount(at index: Int) -> Int {
+        let (start, end) = chapterBounds(at: index)
         return max(0, end - start)
     }
 
     private func chapterStatus(at index: Int) -> ChapterStatus {
-        let chapters = document.chapters
-        let start = chapters[index].wordIndex
-        let end = index + 1 < chapters.count
-            ? chapters[index + 1].wordIndex
-            : document.wordCount
-        let current = document.currentWordIndex
+        let (start, end) = chapterBounds(at: index)
+        // Judged against the furthest position ever reached, so navigating
+        // backward doesn't mark finished chapters un-finished.
+        let furthest = document.displayedFurthestWordIndex
 
-        if current >= end - 1 {
+        if furthest >= end - 1 {
             return .completed
-        } else if current > start {
+        } else if furthest > start {
             return .inProgress
         }
         return .notStarted

@@ -89,26 +89,16 @@ struct SettingsView: View {
                                     Spacer()
                                 }
 
-                                VStack(spacing: 4) {
-                                    // Haptic fires once on release rather than on
-                                    // every tick of the drag.
-                                    Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
-                                        if !editing {
-                                            HapticManager.shared.wpmChanged()
-                                        }
+                                snappingSlider(
+                                    value: $wpmSliderValue,
+                                    in: 100...1000,
+                                    step: 10,
+                                    accessibilityLabel: "Default words per minute",
+                                    accessibilityValue: "\(defaultWPM) words per minute"
+                                ) { snapped in
+                                    if snapped != defaultWPM {
+                                        defaultWPM = snapped
                                     }
-                                    .tint(StrobeTheme.accent)
-                                    .frame(minHeight: 44)
-                                    .accessibilityLabel("Default words per minute")
-                                    .accessibilityValue("\(defaultWPM) words per minute")
-                                    .onChange(of: wpmSliderValue) { _, newValue in
-                                        let snapped = Int(newValue)
-                                        if snapped != defaultWPM {
-                                            defaultWPM = snapped
-                                        }
-                                    }
-
-                                    sliderRangeLabels(min: "100", max: "1000")
                                 }
 
                                 Text("Applies to newly added documents — each document keeps its own speed afterward.")
@@ -132,24 +122,16 @@ struct SettingsView: View {
                                     Spacer()
                                 }
 
-                                VStack(spacing: 4) {
-                                    Slider(value: $fontSizeSliderValue, in: 24...72, step: 2) { editing in
-                                        if !editing {
-                                            HapticManager.shared.wpmChanged()
-                                        }
+                                snappingSlider(
+                                    value: $fontSizeSliderValue,
+                                    in: 24...72,
+                                    step: 2,
+                                    accessibilityLabel: "Reader text size",
+                                    accessibilityValue: "\(fontSize) points"
+                                ) { snapped in
+                                    if snapped != fontSize {
+                                        fontSize = snapped
                                     }
-                                    .tint(StrobeTheme.accent)
-                                    .frame(minHeight: 44)
-                                    .accessibilityLabel("Reader text size")
-                                    .accessibilityValue("\(fontSize) points")
-                                    .onChange(of: fontSizeSliderValue) { _, newValue in
-                                        let snapped = Int(newValue)
-                                        if snapped != fontSize {
-                                            fontSize = snapped
-                                        }
-                                    }
-
-                                    sliderRangeLabels(min: "24", max: "72")
                                 }
                             }
                         }
@@ -341,44 +323,20 @@ struct SettingsView: View {
                         Button {
                             showTutorial = true
                         } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 16))
-                                Text("Replay Tutorial")
-                                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundStyle(StrobeTheme.textPrimary)
-                            .padding(16)
-                            .background(StrobeTheme.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            navigationRowLabel(
+                                icon: "arrow.counterclockwise",
+                                title: "Replay Tutorial",
+                                trailingIcon: "chevron.right"
                             )
                         }
                         .buttonStyle(.plain)
 
                         // Source Code
                         Link(destination: URL(string: "https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation")!) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "chevron.left.forwardslash.chevron.right")
-                                    .font(.system(size: 16))
-                                Text("View Source Code")
-                                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundStyle(StrobeTheme.textPrimary)
-                            .padding(16)
-                            .background(StrobeTheme.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                            navigationRowLabel(
+                                icon: "chevron.left.forwardslash.chevron.right",
+                                title: "View Source Code",
+                                trailingIcon: "arrow.up.right"
                             )
                         }
 
@@ -399,19 +357,65 @@ struct SettingsView: View {
             wpmSliderValue = Double(defaultWPM)
             fontSizeSliderValue = Double(fontSize)
         }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showTutorial) {
-            TutorialView()
-        }
-        #else
-        .sheet(isPresented: $showTutorial) {
-            TutorialView()
-                .frame(minWidth: 600, minHeight: 500)
-        }
-        #endif
+        .tutorialCover(isPresented: $showTutorial)
     }
 
     // MARK: - Components
+
+    /// A stepped settings slider with haptic-on-release, integer snapping via
+    /// `onSnap`, and min/max range labels derived from `range`.
+    private func snappingSlider(
+        value: Binding<Double>,
+        in range: ClosedRange<Double>,
+        step: Double,
+        accessibilityLabel: String,
+        accessibilityValue: String,
+        onSnap: @escaping (Int) -> Void
+    ) -> some View {
+        VStack(spacing: 4) {
+            // Haptic fires once on release rather than on
+            // every tick of the drag.
+            Slider(value: value, in: range, step: step) { editing in
+                if !editing {
+                    HapticManager.shared.selectionTick()
+                }
+            }
+            .tint(StrobeTheme.accent)
+            .frame(minHeight: 44)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(accessibilityValue)
+            .onChange(of: value.wrappedValue) { _, newValue in
+                onSnap(Int(newValue))
+            }
+
+            sliderRangeLabels(
+                min: String(Int(range.lowerBound)),
+                max: String(Int(range.upperBound))
+            )
+        }
+    }
+
+    /// Row chrome shared by "Replay Tutorial" and "View Source Code": leading
+    /// icon, bold title, and a trailing affordance icon on a surface card.
+    private func navigationRowLabel(icon: String, title: String, trailingIcon: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+            Text(title)
+                .font(StrobeTheme.bodyFont(size: 16, bold: true))
+            Spacer()
+            Image(systemName: trailingIcon)
+                .font(.system(size: 13, weight: .semibold))
+        }
+        .foregroundStyle(StrobeTheme.textPrimary)
+        .padding(16)
+        .background(StrobeTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+        )
+    }
 
     private func sliderRangeLabels(min: String, max: String) -> some View {
         HStack {

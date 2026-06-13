@@ -172,10 +172,7 @@ struct ReaderView: View {
         .onChange(of: complexityIntensity) { _, newValue in
             engine.complexityIntensity = newValue
         }
-        .alert("Save Error", isPresented: .init(
-            get: { persistenceError != nil },
-            set: { if !$0 { persistenceError = nil } }
-        )) {
+        .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
             Button("OK") { persistenceError = nil }
         } message: {
             Text(persistenceError ?? "")
@@ -775,6 +772,16 @@ struct ReaderView: View {
             cancelPlayIntent()
             engine.pause()
         }
+        // The furthest-read marker only ever advances — leaving the reader
+        // after navigating backward (chapter peek, passage tap, scrubbing,
+        // "Read Again") must not erase display progress. The outgoing
+        // currentWordIndex is folded in so documents saved before the marker
+        // existed adopt their old position as the floor.
+        document.furthestWordIndex = max(
+            document.furthestWordIndex,
+            document.currentWordIndex,
+            engine.currentIndex
+        )
         document.currentWordIndex = engine.currentIndex
         document.wordsPerMinute = engine.wordsPerMinute
         if touchLastReadDate {
@@ -793,7 +800,7 @@ struct ReaderView: View {
         engine.wordsPerMinute = clamped
         document.wordsPerMinute = value
         if withHaptic {
-            HapticManager.shared.wpmChanged()
+            HapticManager.shared.selectionTick()
         }
     }
 }

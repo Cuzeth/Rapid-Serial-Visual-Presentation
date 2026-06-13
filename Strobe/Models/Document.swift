@@ -24,6 +24,11 @@ final class Document {
     @Attribute(.externalStorage) var complexityBlob: Data?
     var chapters: [Chapter]
     var currentWordIndex: Int
+    /// The furthest word index ever reached, used for progress display only —
+    /// resuming uses `currentWordIndex`. Never decreased by backward
+    /// navigation or "Read Again". The default lets stores created before
+    /// this property existed migrate lightweightly (no custom migration plan).
+    var furthestWordIndex: Int = 0
     var wordsPerMinute: Int
 
     /// Stored separately so the list view can display word count
@@ -81,10 +86,20 @@ final class Document {
         cachedWords = nil
     }
 
-    /// Reading progress as a value from 0.0 to 1.0.
+    /// The furthest-read index used for progress display. Floors at
+    /// `currentWordIndex` so documents saved before `furthestWordIndex`
+    /// existed (migrated with 0) still report the progress they had.
+    var displayedFurthestWordIndex: Int {
+        max(furthestWordIndex, currentWordIndex)
+    }
+
+    /// Reading progress as a value from 0.0 to 1.0, measured against the
+    /// furthest position ever reached — backing up to re-read doesn't
+    /// lower it.
     var progress: Double {
-        guard wordCount > 1 else { return currentWordIndex > 0 ? 1 : 0 }
-        return Double(currentWordIndex) / Double(wordCount - 1)
+        let furthest = displayedFurthestWordIndex
+        guard wordCount > 1 else { return furthest > 0 ? 1 : 0 }
+        return Double(furthest) / Double(wordCount - 1)
     }
 
     init(
@@ -107,6 +122,7 @@ final class Document {
         self.chapters = chapters
         self.wordCount = words.count
         self.currentWordIndex = currentWordIndex
+        self.furthestWordIndex = currentWordIndex
         self.wordsPerMinute = wordsPerMinute
         self.dateAdded = Date()
         self.cachedWords = words
