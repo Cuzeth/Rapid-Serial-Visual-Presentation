@@ -37,6 +37,10 @@ struct StrobeSearchBar<Field: View>: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(StrobeTheme.textSecondary)
                         .font(.system(size: 16))
+                        // The glyph alone is a ~16pt target; pad the hit area
+                        // toward the 44pt minimum without growing the bar.
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")

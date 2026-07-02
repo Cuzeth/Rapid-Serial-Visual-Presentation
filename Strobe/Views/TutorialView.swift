@@ -3,7 +3,7 @@ import SwiftUI
 /// Full-screen onboarding tutorial shown on first launch.
 /// A paged walkthrough introducing import, reading controls, chapters, and settings.
 struct TutorialView: View {
-    @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
+    @AppStorage(ReaderSettings.Keys.hasSeenTutorial) private var hasSeenTutorial = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var currentPage = 0

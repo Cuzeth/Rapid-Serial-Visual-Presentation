@@ -10,9 +10,20 @@ import SwiftData
 struct PassageView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Bindable var document: Document
+    let document: Document
     let engine: RSVPEngine
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+
+    /// Whether the passage content is dominantly right-to-left script.
+    /// Computed once at init — it drives the flow layout's direction, which
+    /// must not flip mid-session.
+    private let isRTLContent: Bool
+
+    init(document: Document, engine: RSVPEngine) {
+        self.document = document
+        self.engine = engine
+        self.isRTLContent = Self.isRTLDominant(engine.words)
+    }
 
     /// Number of words bundled into a single `WordChunkView`. Chunks live in a
     /// `LazyVStack` so very long documents only render visible regions.
@@ -39,6 +50,7 @@ struct PassageView: View {
     @State private var lastCompletedQuery: String?
     @State private var searchTask: Task<Void, Never>?
     @FocusState private var searchFocused: Bool
+    @FocusState private var passageFocused: Bool
 
     /// A word-center scroll that's waiting for its containing chunk to be
     /// realized. Consumed by the `renderedChunks` `onChange` handler in the
@@ -105,6 +117,13 @@ struct PassageView: View {
         #endif
         .focusable()
         .focusEffectDisabled()
+        .focused($passageFocused)
+        .onAppear {
+            // Take keyboard focus so Escape works immediately on macOS —
+            // without this the key press has no responder until the user
+            // clicks somewhere.
+            passageFocused = true
+        }
         .onKeyPress(.escape) {
             dismiss()
             return .handled
@@ -218,7 +237,7 @@ struct PassageView: View {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(matchIndices.isEmpty ? StrobeTheme.textSecondary.opacity(0.4) : StrobeTheme.textPrimary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
                     .background(StrobeTheme.surface)
                     .clipShape(Circle())
             }
@@ -232,7 +251,7 @@ struct PassageView: View {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(matchIndices.isEmpty ? StrobeTheme.textSecondary.opacity(0.4) : StrobeTheme.textPrimary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
                     .background(StrobeTheme.surface)
                     .clipShape(Circle())
             }
@@ -290,6 +309,10 @@ struct PassageView: View {
                     }
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Follow the *content's* script, not the UI locale — an
+                    // Arabic book read on an English device must still flow
+                    // right-to-left or every line renders in reversed order.
+                    .environment(\.layoutDirection, isRTLContent ? .rightToLeft : .leftToRight)
                 }
                 .mask(edgeFadeMask)
                 .onAppear {
@@ -516,6 +539,30 @@ struct PassageView: View {
         return results
     }
 
+    /// Whether the words are dominantly right-to-left script (Arabic or
+    /// Hebrew), sampled from the first `sampleLimit` words.
+    nonisolated static func isRTLDominant(_ words: [String], sampleLimit: Int = 200) -> Bool {
+        var rtlCount = 0
+        var totalCount = 0
+        for word in words.prefix(sampleLimit) {
+            for scalar in word.unicodeScalars where scalar.properties.isAlphabetic {
+                totalCount += 1
+                if isRTLScalar(scalar) { rtlCount += 1 }
+            }
+        }
+        return totalCount > 0 && rtlCount * 2 > totalCount
+    }
+
+    nonisolated private static func isRTLScalar(_ scalar: Unicode.Scalar) -> Bool {
+        let v = scalar.value
+        return (0x0590...0x05FF).contains(v)   // Hebrew
+            || (0x0600...0x06FF).contains(v)   // Arabic
+            || (0x0750...0x077F).contains(v)   // Arabic Supplement
+            || (0x08A0...0x08FF).contains(v)   // Arabic Extended-A
+            || (0xFB1D...0xFDFF).contains(v)   // Hebrew/Arabic presentation forms
+            || (0xFE70...0xFEFF).contains(v)   // Arabic presentation forms B
+    }
+
     /// Position into `matches` of the entry closest to `wordIndex`. Ties
     /// break toward the earlier (smaller-index) match. `matches` must be
     /// sorted ascending. Returns 0 for an empty array.
@@ -618,8 +665,9 @@ private struct WordToken: View {
 // MARK: - Flow layout
 
 /// Wraps a row of words across multiple lines, sized by each subview's
-/// intrinsic width. Designed for the passage view; not a general-purpose
-/// flow layout (e.g., it doesn't support RTL or vertical alignment options).
+/// intrinsic width. Follows the environment's layout direction: in
+/// right-to-left contexts (set from the *content's* script by PassageView)
+/// each line is mirrored so words flow right-to-left.
 private struct WordFlowLayout: Layout {
     var spacing: CGFloat = 5
     var lineSpacing: CGFloat = 6
@@ -632,9 +680,14 @@ private struct WordFlowLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let result = arrange(subviews: subviews, in: bounds.width)
+        // Custom layouts don't get automatic RTL mirroring — flip x manually.
+        let isRTL = subviews.layoutDirection == .rightToLeft
         for (i, frame) in result.frames.enumerated() {
+            let x = isRTL
+                ? bounds.maxX - frame.minX - frame.width
+                : bounds.minX + frame.minX
             subviews[i].place(
-                at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                at: CGPoint(x: x, y: bounds.minY + frame.minY),
                 anchor: .topLeading,
                 proposal: ProposedViewSize(width: frame.width, height: frame.height)
             )

@@ -12,13 +12,16 @@ struct ContentView: View {
 
     @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
-    @AppStorage("hasSeenTutorial") private var hasSeenTutorial = false
+    @AppStorage(ReaderSettings.Keys.hasSeenTutorial) private var hasSeenTutorial = false
+    @AppStorage(ReaderSettings.Keys.didCompactLegacyWordStorage) private var didCompactLegacyWordStorage = false
     @AppStorage(LibrarySortOrder.storageKey) private var librarySortOrderRaw = LibrarySortOrder.defaultValue.rawValue
 
     @State private var isImporting = false
     @State private var isProcessingImport = false
     @State private var importFileName = ""
+    @State private var importTask: Task<Void, Never>?
     @State private var importError: String?
+    @State private var persistenceError: String?
     @State private var showSettings = false
     @State private var showTutorial = false
     @State private var showTextInput = false
@@ -127,6 +130,11 @@ struct ContentView: View {
                     #if os(iOS)
                     .presentationDetents([.large])
                     .presentationCornerRadius(24)
+                    #elseif os(macOS)
+                    // Without a minimum frame the sheet sizes to the
+                    // TextEditor's tiny ideal size — every other macOS sheet
+                    // in the app sets one.
+                    .frame(minWidth: 600, minHeight: 500)
                     #endif
             }
             .onAppear {
@@ -152,6 +160,11 @@ struct ContentView: View {
             } message: {
                 Text(importError ?? "")
             }
+            .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
+                Button("OK") { persistenceError = nil }
+            } message: {
+                Text(persistenceError ?? "")
+            }
             .alert(
                 "Rename Document",
                 isPresented: .init(isPresent: $documentPendingRename),
@@ -162,7 +175,7 @@ struct ContentView: View {
                     let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty {
                         doc.title = trimmed
-                        try? modelContext.save()
+                        saveOrReport("Could not rename the document")
                     }
                     documentPendingRename = nil
                 }
@@ -177,7 +190,10 @@ struct ContentView: View {
             ) { doc in
                 Button("Delete", role: .destructive) {
                     modelContext.delete(doc)
-                    try? modelContext.save()
+                    // Surfaced because a silently failed save rolls the delete
+                    // back — the document would reappear on next launch with
+                    // no explanation.
+                    saveOrReport("Could not delete the document")
                     documentPendingDeletion = nil
                 }
                 Button("Cancel", role: .cancel) {
@@ -186,23 +202,19 @@ struct ContentView: View {
             } message: { doc in
                 Text("\"\(doc.title)\" will be permanently removed from your library.")
             }
+            .navigationDestination(for: Document.self) { document in
+                if document.chapters.isEmpty {
+                    ReaderView(document: document)
+                } else {
+                    ChapterListView(document: document)
+                }
+            }
+            .navigationDestination(for: ReaderRoute.self) { route in
+                ReaderView(document: route.document, startingWordIndex: route.startingWordIndex)
+            }
             .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
                 guard let provider = providers.first else { return false }
-                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
-                    guard let data = data as? Data,
-                          let path = String(data: data, encoding: .utf8),
-                          let url = URL(string: path) else { return }
-                    let ext = url.pathExtension.lowercased()
-                    guard ext == "pdf" || ext == "epub" else {
-                        Task { @MainActor in
-                            importError = "\"\(url.lastPathComponent)\" isn't a supported file type. Drop a PDF or EPUB."
-                        }
-                        return
-                    }
-                    Task { @MainActor in
-                        importDocument(from: url)
-                    }
-                }
+                handleDrop(provider)
                 return true
             }
         }
@@ -350,7 +362,11 @@ struct ContentView: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(displayedDocuments) { document in
                     ZStack(alignment: .topTrailing) {
-                        NavigationLink(destination: destination(for: document)) {
+                        // Value-based so the destination isn't built until the
+                        // user navigates — an eager `destination:` link would
+                        // construct a ReaderView (and decode word blobs) for
+                        // every visible card.
+                        NavigationLink(value: document) {
                             DocumentCard(document: document)
                         }
                         .buttonStyle(.plain)
@@ -370,6 +386,9 @@ struct ContentView: View {
                                 .frame(width: 30, height: 30)
                                 .background(Color.white.opacity(0.05))
                                 .clipShape(Circle())
+                                // Keep the visible circle small but give the
+                                // tap target the 44pt minimum.
+                                .contentShape(Rectangle().inset(by: -7))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Document options")
@@ -412,18 +431,20 @@ struct ContentView: View {
         .accessibilityHint("Import a PDF or EPUB, or enter text")
     }
 
-    @ViewBuilder
-    private func destination(for document: Document) -> some View {
-        if document.chapters.isEmpty {
-            ReaderView(document: document)
-        } else {
-            ChapterListView(document: document)
-        }
-    }
-
     private func beginRename(_ document: Document) {
         renameText = document.title
         documentPendingRename = document
+    }
+
+    /// Saves the model context, surfacing failures in the Save Error alert
+    /// (mirrors `ReaderView.persistState` — `try?` here silently rolled the
+    /// change back on next launch).
+    private func saveOrReport(_ what: String) {
+        do {
+            try modelContext.save()
+        } catch {
+            persistenceError = "\(what): \(error.localizedDescription)"
+        }
     }
 
     /// Shared menu content for a document, used by both the card's visible
@@ -479,8 +500,74 @@ extension ContentView {
         }
     }
 
-    private func importDocument(from url: URL) {
-        guard !isProcessingImport else { return }
+    /// Imports a dropped file via `loadInPlaceFileRepresentation`. The raw
+    /// `fileURL` item is unusable on iOS — it points into the source app's
+    /// sandbox with no security scope, so opening it fails with a misleading
+    /// "corrupted file" error. The in-place/copied representation is
+    /// readable; the system reclaims copies when the handler returns, so
+    /// they're cloned out first.
+    private func handleDrop(_ provider: NSItemProvider) {
+        let supported = DocumentImportPipeline.supportedContentTypes
+        let typeID = provider.registeredTypeIdentifiers.first { id in
+            guard let type = UTType(id) else { return false }
+            return supported.contains { type.conforms(to: $0) }
+        }
+
+        guard let typeID else {
+            // Load the URL just to name the file in the error message.
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
+                let name = (data as? Data)
+                    .flatMap { String(data: $0, encoding: .utf8) }
+                    .flatMap(URL.init(string:))?
+                    .lastPathComponent
+                Task { @MainActor in
+                    if let name {
+                        importError = "\"\(name)\" isn't a supported file type. Drop a PDF, EPUB, or text file."
+                    } else {
+                        importError = "That file isn't a supported type. Drop a PDF, EPUB, or text file."
+                    }
+                }
+            }
+            return
+        }
+
+        _ = provider.loadInPlaceFileRepresentation(forTypeIdentifier: typeID) { url, inPlace, _ in
+            guard let url else {
+                Task { @MainActor in
+                    importError = "Couldn't read the dropped file."
+                }
+                return
+            }
+            if inPlace {
+                Task { @MainActor in
+                    importDocument(from: url)
+                }
+            } else {
+                // The system deletes this copy when the handler returns —
+                // clone it to our own temp location first.
+                do {
+                    let dir = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("drop_\(UUID().uuidString)", isDirectory: true)
+                    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    let copy = dir.appendingPathComponent(url.lastPathComponent)
+                    try FileManager.default.copyItem(at: url, to: copy)
+                    Task { @MainActor in
+                        importDocument(from: copy, deleteAfterImport: true)
+                    }
+                } catch {
+                    Task { @MainActor in
+                        importError = "Couldn't read the dropped file."
+                    }
+                }
+            }
+        }
+    }
+
+    private func importDocument(from url: URL, deleteAfterImport: Bool = false) {
+        guard !isProcessingImport else {
+            importError = "Another import is still in progress. Wait for it to finish or cancel it first."
+            return
+        }
 
         let isSecurityScoped = url.startAccessingSecurityScopedResource()
 
@@ -504,23 +591,33 @@ extension ContentView {
         importFileName = url.lastPathComponent
         let fileName = url.lastPathComponent
 
-        Task(priority: .userInitiated) {
+        importTask = Task(priority: .userInitiated) {
             defer {
                 if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
+                if deleteAfterImport { try? FileManager.default.removeItem(at: url) }
                 isProcessingImport = false
                 importFileName = ""
+                importTask = nil
             }
 
             do {
                 let cleaningLevel = TextCleaningLevel.resolve(textCleaningLevel)
-                let importResult = try await Task.detached(priority: .userInitiated) {
+                let extraction = Task.detached(priority: .userInitiated) {
                     let detectedType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType
                     return try DocumentImportPipeline.extractWordsAndChapters(
                         from: url,
                         detectedContentType: detectedType,
                         cleaningLevel: cleaningLevel
                     )
-                }.value
+                }
+                // Detached tasks don't inherit cancellation — forward the
+                // overlay's Cancel to the extraction work explicitly.
+                let importResult = try await withTaskCancellationHandler {
+                    try await extraction.value
+                } onCancel: {
+                    extraction.cancel()
+                }
+                try Task.checkCancellation()
 
                 guard !importResult.words.isEmpty else {
                     throw DocumentImportError.noReadableText
@@ -542,6 +639,8 @@ extension ContentView {
                 )
                 modelContext.insert(document)
                 try modelContext.save()
+            } catch is CancellationError {
+                // User cancelled — no alert.
             } catch {
                 if let localizedError = error as? LocalizedError,
                    let message = localizedError.errorDescription {
@@ -554,13 +653,25 @@ extension ContentView {
     }
 
     private func compactLegacyWordStorageIfNeeded() {
+        // One-time pass. Touching `wordsBlob`/`words` on every document
+        // faults every row (and can pull external blobs) on the main thread —
+        // without this flag, every launch paid that for an empty check.
+        guard !didCompactLegacyWordStorage else { return }
         var didCompact = false
         for document in documents where document.wordsBlob == nil && !document.words.isEmpty {
             document.compactWordStorageIfNeeded()
             didCompact = true
         }
-        guard didCompact else { return }
-        try? modelContext.save()
+        if didCompact {
+            do {
+                try modelContext.save()
+            } catch {
+                // Leave the flag unset so the next launch retries.
+                importError = "Could not migrate document storage: \(error.localizedDescription)"
+                return
+            }
+        }
+        didCompactLegacyWordStorage = true
     }
 
     private var importOverlay: some View {
@@ -576,6 +687,20 @@ extension ContentView {
                 Text("Importing \(importFileName)...")
                     .font(StrobeTheme.bodyFont(size: 16))
                     .foregroundStyle(.white)
+
+                Button {
+                    importTask?.cancel()
+                } label: {
+                    Text("Cancel")
+                        .font(StrobeTheme.bodyFont(size: 15, bold: true))
+                        .foregroundStyle(StrobeTheme.textSecondary)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Stops the import")
             }
             .padding(32)
             .background(StrobeTheme.surface)
@@ -630,7 +755,9 @@ struct DocumentCard: View {
             .accessibilityElement(children: .combine)
         }
         .padding(16)
-        .frame(height: 180)
+        // Minimum (not fixed) height: the card's fonts scale with Dynamic
+        // Type, and a fixed 180pt truncated titles at accessibility sizes.
+        .frame(minHeight: 180)
         .background(StrobeTheme.Gradients.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(

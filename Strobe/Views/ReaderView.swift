@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if os(macOS)
+import AppKit
+#endif
 
 /// The RSVP reading interface — displays words one at a time.
 ///
@@ -37,6 +40,8 @@ struct ReaderView: View {
     @State private var showChapterPicker = false
     @State private var showPassage = false
     @State private var persistenceError: String?
+    @State private var isLoaded = false
+    @State private var isBackfillingComplexity = false
     @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
@@ -50,25 +55,63 @@ struct ReaderView: View {
     init(document: Document, startingWordIndex: Int? = nil) {
         self.document = document
         self.startingWordIndex = startingWordIndex
-        let effectiveIndex = startingWordIndex ?? document.currentWordIndex
-        let words = document.readingWords
         // Read settings via the shared snapshot because @AppStorage properties
         // aren't accessible before `self` is fully initialized. ReaderSettings
         // owns the keys and defaults the @AppStorage declarations above use.
         let timing = ReaderSettings.timingSnapshot()
+        // The engine starts empty; words are decoded off the main actor in
+        // `.task` so opening a large document doesn't hitch navigation.
         self._engine = State(initialValue: RSVPEngine(
-            words: words,
-            currentIndex: effectiveIndex,
+            words: [],
             wordsPerMinute: document.wordsPerMinute,
             smartTimingEnabled: timing.smartTimingEnabled,
             sentencePauseEnabled: timing.sentencePauseEnabled,
             smartTimingPercentPerLetter: timing.smartTimingPercentPerLetter,
             sentencePauseMultiplier: timing.sentencePauseMultiplier,
             complexityTimingEnabled: timing.complexityTimingEnabled,
-            complexityIntensity: timing.complexityIntensity,
-            complexityScores: document.complexityScores
+            complexityIntensity: timing.complexityIntensity
         ))
         self._wpmSliderValue = State(initialValue: Double(document.wordsPerMinute))
+    }
+
+    /// Decodes the word and complexity blobs (off-main) and hands them to the
+    /// engine. Runs once; `isLoaded` gates persistence so a reader closed
+    /// mid-load can't overwrite the saved position with the empty state.
+    private func loadDocumentIfNeeded() async {
+        guard !isLoaded else { return }
+        let words = await document.loadReadingWordsAsync()
+        let scores = await document.loadComplexityScoresAsync()
+        let effectiveIndex = startingWordIndex ?? document.currentWordIndex
+        engine.load(words: words, currentIndex: effectiveIndex, complexityScores: scores)
+        isLoaded = true
+        // A document resumed at its last word (with more than one word) opens
+        // onto the completion card; single-word documents show their word.
+        if engine.isAtEnd && engine.words.count > 1 {
+            showCompletion = true
+        }
+        if scores == nil && complexityTimingEnabled {
+            backfillComplexityScores()
+        }
+    }
+
+    /// Computes and stores complexity scores for documents imported before
+    /// complexity timing existed — without this, the setting is a silent
+    /// no-op for them. Runs off-main; playback works normally meanwhile.
+    private func backfillComplexityScores() {
+        guard !isBackfillingComplexity else { return }
+        let words = engine.words
+        guard !words.isEmpty else { return }
+        isBackfillingComplexity = true
+        Task {
+            defer { isBackfillingComplexity = false }
+            let scores = await Task.detached(priority: .utility) {
+                WordComplexityAnalyzer.analyzeComplexity(words)
+            }.value
+            document.storeComplexityScores(scores)
+            engine.updateComplexityScores(scores)
+            // Benign if this fails — the scores are recomputed next open.
+            try? modelContext.save()
+        }
     }
 
     var body: some View {
@@ -90,11 +133,7 @@ struct ReaderView: View {
                     completionView
                         .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
                 } else {
-                    WordView(
-                        word: engine.currentWord,
-                        fontSize: CGFloat(fontSize)
-                    )
-                    .equatable()
+                    CurrentWordView(engine: engine, fontSize: CGFloat(fontSize))
                     .id("wordview") // stabilize identity
                     .transition(.opacity)
                     // The word display sits above the gesture layer; without
@@ -118,8 +157,10 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden(true)
         #endif
+        .task {
+            await loadDocumentIfNeeded()
+        }
         .onAppear {
-            if engine.isAtEnd { showCompletion = true }
             readerFocused = true
         }
         // Re-assert keyboard focus whenever any overlay (passage view, chapter
@@ -134,7 +175,20 @@ struct ReaderView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .inactive || newPhase == .background {
-                persistState(pauseEngine: false, touchLastReadDate: false)
+                // Pause as well as persist — words advancing while the app is
+                // covered (Notification Center, app switcher, a call) are
+                // words the user never saw.
+                persistState(pauseEngine: true, touchLastReadDate: false)
+            }
+        }
+        .onChange(of: showPassage) { _, isShowing in
+            // Tapping a word in the passage view seeks the engine — if the
+            // completion overlay was up, it's stale once the position left
+            // the end. (Deliberately keyed on the sheet, not on
+            // `engine.currentIndex`: reading the index here would subscribe
+            // the whole reader body to every word tick.)
+            if !isShowing && showCompletion && !engine.isAtEnd {
+                withAnimation { showCompletion = false }
             }
         }
         .onChange(of: engine.isPlaying) { wasPlaying, isNowPlaying in
@@ -144,13 +198,7 @@ struct ReaderView: View {
                     // The user may have scrubbed away or resumed during the
                     // delay — re-check before showing the overlay.
                     guard engine.isAtEnd, !engine.isPlaying else { return }
-                    if reduceMotion {
-                        showCompletion = true
-                    } else {
-                        withAnimation(.spring(duration: 0.6)) {
-                            showCompletion = true
-                        }
-                    }
+                    showCompletionOverlay()
                 }
             }
         }
@@ -168,6 +216,11 @@ struct ReaderView: View {
         }
         .onChange(of: complexityTimingEnabled) { _, newValue in
             engine.complexityTimingEnabled = newValue
+            // The setting can be flipped on mid-session (macOS Settings
+            // window) for a legacy document with no stored scores.
+            if newValue && isLoaded && engine.complexityScores == nil {
+                backfillComplexityScores()
+            }
         }
         .onChange(of: complexityIntensity) { _, newValue in
             engine.complexityIntensity = newValue
@@ -197,32 +250,36 @@ struct ReaderView: View {
             return .handled
         }
         .onKeyPress(.leftArrow) {
-            if engine.isPlaying { engine.pause() }
-            if showCompletion {
-                withAnimation { showCompletion = false }
-            }
-            if engine.scrub(by: -1) {
-                HapticManager.shared.scrubBoundary()
-            } else {
-                HapticManager.shared.scrubTick()
-            }
+            scrubWithFeedback(by: -1)
             return .handled
         }
         .onKeyPress(.rightArrow) {
-            if engine.isPlaying { engine.pause() }
-            if showCompletion {
-                withAnimation { showCompletion = false }
-            }
-            if engine.scrub(by: 1) {
-                HapticManager.shared.scrubBoundary()
-            } else {
-                HapticManager.shared.scrubTick()
-            }
+            scrubWithFeedback(by: 1)
             return .handled
         }
         .onKeyPress(.escape) {
             dismiss()
             return .handled
+        }
+        #if os(macOS)
+        // Cmd+Q doesn't reliably trigger onDisappear/scenePhase on macOS —
+        // without this hook, quitting mid-read loses the session's position.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            persistState(pauseEngine: true, touchLastReadDate: true)
+        }
+        #endif
+    }
+
+    /// Shared pause + scrub + haptic used by both arrow keys.
+    private func scrubWithFeedback(by delta: Int) {
+        if engine.isPlaying { engine.pause() }
+        if showCompletion {
+            withAnimation { showCompletion = false }
+        }
+        if engine.scrub(by: delta) {
+            HapticManager.shared.scrubBoundary()
+        } else {
+            HapticManager.shared.scrubTick()
         }
     }
 
@@ -297,10 +354,16 @@ struct ReaderView: View {
                     // counts as a tap. Toggle playback.
                     if engine.isPlaying {
                         engine.pause()
-                    } else if !engine.isAtEnd {
+                        HapticManager.shared.playPause()
+                    } else if engine.isAtEnd {
+                        // A tap at the last word can't start playback — show
+                        // the completion card rather than a false "playing"
+                        // haptic with no visible change.
+                        showCompletionOverlay()
+                    } else {
                         engine.play()
+                        HapticManager.shared.playPause()
                     }
-                    HapticManager.shared.playPause()
                 }
                 scrubAccumulator = 0
                 touchMode = .undecided
@@ -314,8 +377,12 @@ struct ReaderView: View {
             guard isTouching, touchMode == .undecided, !showCompletion else { return }
             touchMode = .reading
             if !engine.isPlaying {
-                engine.play()
-                HapticManager.shared.playPause()
+                if engine.isAtEnd {
+                    showCompletionOverlay()
+                } else {
+                    engine.play()
+                    HapticManager.shared.playPause()
+                }
             }
         }
         pendingPlayWorkItem = workItem
@@ -332,11 +399,27 @@ struct ReaderView: View {
     private func togglePlayback() {
         if engine.isPlaying {
             engine.pause()
+        } else if engine.isAtEnd {
+            // Playing at the end is impossible — surface the completion card
+            // instead of doing nothing (or worse, a false "playing" haptic).
+            showCompletionOverlay()
+            return
         } else {
-            guard !engine.isAtEnd else { return }
             engine.play()
         }
         HapticManager.shared.playPause()
+    }
+
+    /// Presents the completion overlay, respecting Reduce Motion.
+    private func showCompletionOverlay() {
+        guard !showCompletion else { return }
+        if reduceMotion {
+            showCompletion = true
+        } else {
+            withAnimation(.spring(duration: 0.6)) {
+                showCompletion = true
+            }
+        }
     }
 
     // MARK: - Top bar
@@ -351,18 +434,9 @@ struct ReaderView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Button {
+                CircleIconButton(systemImage: "chevron.left", accessibilityLabel: "Back") {
                     dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .padding(12)
-                        .background(StrobeTheme.surface)
-                        .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back")
 
                 Spacer()
 
@@ -373,25 +447,14 @@ struct ReaderView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
 
-                    Text("\(engine.currentIndex + 1) / \(engine.words.count)")
-                        .font(StrobeTheme.bodyFont(size: 12))
-                        .foregroundStyle(StrobeTheme.textSecondary)
+                    WordCounterView(engine: engine)
                 }
 
                 Spacer()
 
-                Button {
+                CircleIconButton(systemImage: "text.alignleft", accessibilityLabel: "View text") {
                     showPassage = true
-                } label: {
-                    Image(systemName: "text.alignleft")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .padding(12)
-                        .background(StrobeTheme.surface)
-                        .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("View text")
                 .accessibilityHint("Shows the full passage with your current word highlighted")
             }
             .padding(.horizontal)
@@ -430,6 +493,10 @@ struct ReaderView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .padding(.horizontal)
             .opacity(engine.isPlaying ? 0.0 : 1.0)
+            // Zero opacity does not disable hit testing — without this, taps
+            // during playback land on the invisible slider instead of the
+            // gesture layer (and can silently change the reading speed).
+            .allowsHitTesting(!engine.isPlaying)
         }
         .animation(.easeInOut(duration: navFadeDuration), value: engine.isPlaying)
     }
@@ -439,60 +506,22 @@ struct ReaderView: View {
     private var bottomBar: some View {
         VStack(spacing: 16) {
             if !document.chapters.isEmpty {
-                chapterNavigation
-            }
-
-            // Progress Scrubber
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(StrobeTheme.surface)
-                        .frame(height: 6)
-
-                    Capsule()
-                        .fill(StrobeTheme.accent)
-                        .frame(width: geo.size.width * engine.progress, height: 6)
-
-                    // Thumb
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 16, height: 16)
-                        .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
-                        .offset(x: (geo.size.width * engine.progress) - 8)
-                }
-                .frame(maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            if engine.isPlaying { engine.pause() }
-                            isBarScrubbing = true
-                            if showCompletion {
-                                withAnimation { showCompletion = false }
-                            }
-                            let pct = max(0, min(value.location.x / geo.size.width, 1))
-                            let target = Int(pct * Double(engine.words.count - 1))
-                            engine.seek(to: target)
-                        }
-                        .onEnded { _ in
-                            isBarScrubbing = false
-                        }
-                )
-            }
-            .frame(height: 44)
-            .accessibilityElement()
-            .accessibilityLabel("Reading progress")
-            .accessibilityValue("\(Int(engine.progress * 100)) percent, word \(engine.currentIndex + 1) of \(engine.words.count)")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment:
-                    _ = engine.scrub(by: 1)
-                case .decrement:
-                    _ = engine.scrub(by: -1)
-                @unknown default:
-                    break
+                ChapterNavigationView(
+                    chapters: document.chapters,
+                    engine: engine,
+                    showChapterPicker: $showChapterPicker
+                ) {
+                    if showCompletion {
+                        withAnimation { showCompletion = false }
+                    }
                 }
             }
+
+            ProgressScrubberView(
+                engine: engine,
+                isBarScrubbing: $isBarScrubbing,
+                showCompletion: $showCompletion
+            )
 
             Text(hintText)
                 .font(StrobeTheme.bodyFont(size: 14))
@@ -502,180 +531,6 @@ struct ReaderView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 20)
         .constrainedAndCentered(maxWidth: controlsMaxWidth)
-    }
-
-    // MARK: - Chapter navigation
-
-    /// Index of the chapter containing the current word (largest chapter whose
-    /// `wordIndex` is at or before `engine.currentIndex`). Nil if no chapters.
-    private var currentChapterIndex: Int? {
-        let chapters = document.chapters
-        guard !chapters.isEmpty else { return nil }
-        var result = 0
-        for (i, chapter) in chapters.enumerated() {
-            if chapter.wordIndex <= engine.currentIndex {
-                result = i
-            } else {
-                break
-            }
-        }
-        return result
-    }
-
-    private var canGoPreviousChapter: Bool {
-        let chapters = document.chapters
-        guard let idx = currentChapterIndex else { return false }
-        return engine.currentIndex > chapters[idx].wordIndex + 2 || idx > 0
-    }
-
-    private var canGoNextChapter: Bool {
-        guard let idx = currentChapterIndex else { return false }
-        return idx + 1 < document.chapters.count
-    }
-
-    private var chapterNavigation: some View {
-        let chapters = document.chapters
-        let idx = currentChapterIndex ?? 0
-        let title = chapters.indices.contains(idx) ? chapters[idx].title : ""
-
-        return HStack(spacing: 10) {
-            Button {
-                jumpToPreviousChapter()
-            } label: {
-                Image(systemName: "backward.end.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(canGoPreviousChapter ? StrobeTheme.textSecondary : StrobeTheme.textSecondary.opacity(0.35))
-                    .frame(width: 36, height: 36)
-                    .background(StrobeTheme.surface)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canGoPreviousChapter)
-            .accessibilityLabel("Previous chapter")
-
-            Button {
-                showChapterPicker = true
-            } label: {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(StrobeTheme.bodyFont(size: 13, bold: true))
-                        .foregroundStyle(StrobeTheme.textPrimary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                }
-                .padding(.horizontal, 14)
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .background(StrobeTheme.surface)
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showChapterPicker, arrowEdge: .bottom) {
-                chapterPickerContent
-            }
-            .accessibilityLabel("Chapter")
-            .accessibilityValue(title)
-            .accessibilityHint("Pick a chapter to jump to")
-
-            Button {
-                jumpToNextChapter()
-            } label: {
-                Image(systemName: "forward.end.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(canGoNextChapter ? StrobeTheme.textSecondary : StrobeTheme.textSecondary.opacity(0.35))
-                    .frame(width: 36, height: 36)
-                    .background(StrobeTheme.surface)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!canGoNextChapter)
-            .accessibilityLabel("Next chapter")
-        }
-    }
-
-    @ViewBuilder
-    private var chapterPickerContent: some View {
-        let chapters = document.chapters
-        let activeIndex = currentChapterIndex
-
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(chapters.enumerated()), id: \.element.id) { i, chapter in
-                        Button {
-                            showChapterPicker = false
-                            jumpToChapter(i)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Text(chapter.title)
-                                    .font(StrobeTheme.bodyFont(size: 15, bold: i == activeIndex))
-                                    .foregroundStyle(i == activeIndex ? StrobeTheme.accent : StrobeTheme.textPrimary)
-                                    .lineLimit(2)
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 8)
-                                if i == activeIndex {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(StrobeTheme.accent)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .id(chapter.id)
-
-                        if i < chapters.count - 1 {
-                            Divider()
-                                .background(StrobeTheme.surface)
-                                .padding(.leading, 16)
-                        }
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-            .background(StrobeTheme.background)
-            .onAppear {
-                guard let idx = activeIndex, chapters.indices.contains(idx) else { return }
-                // Defer one runloop so LazyVStack rows are registered before we scroll.
-                DispatchQueue.main.async {
-                    proxy.scrollTo(chapters[idx].id, anchor: .center)
-                }
-            }
-        }
-        .frame(idealWidth: 360, idealHeight: 480)
-        .presentationDetents([.medium, .large])
-    }
-
-    private func jumpToChapter(_ index: Int) {
-        let chapters = document.chapters
-        guard chapters.indices.contains(index) else { return }
-        if engine.isPlaying { engine.pause() }
-        if showCompletion {
-            withAnimation { showCompletion = false }
-        }
-        engine.seek(to: chapters[index].wordIndex)
-        HapticManager.shared.scrubBoundary()
-    }
-
-    private func jumpToPreviousChapter() {
-        let chapters = document.chapters
-        guard let idx = currentChapterIndex else { return }
-        let chapterStart = chapters[idx].wordIndex
-        if engine.currentIndex > chapterStart + 2 {
-            jumpToChapter(idx)
-        } else if idx > 0 {
-            jumpToChapter(idx - 1)
-        }
-    }
-
-    private func jumpToNextChapter() {
-        guard let idx = currentChapterIndex, idx + 1 < document.chapters.count else { return }
-        jumpToChapter(idx + 1)
     }
 
     // MARK: - Completion view
@@ -699,7 +554,7 @@ struct ReaderView: View {
                     .font(StrobeTheme.titleFont(size: 32))
                     .foregroundStyle(StrobeTheme.textPrimary)
 
-                Text("\(engine.words.count) words read")
+                Text(engine.words.count == 1 ? "1 word read" : "\(engine.words.count) words read")
                     .font(StrobeTheme.bodyFont(size: 18))
                     .foregroundStyle(StrobeTheme.textSecondary)
             }
@@ -764,6 +619,9 @@ struct ReaderView: View {
     // MARK: - Persistence
 
     private func persistState(pauseEngine: Bool, touchLastReadDate: Bool) {
+        // Before the async load completes the engine holds no words and index
+        // 0 — persisting that would erase the real saved position.
+        guard isLoaded else { return }
         if isAdjustingWPM {
             isAdjustingWPM = false
             applyWPM(Int(wpmSliderValue), withHaptic: false)
@@ -772,21 +630,11 @@ struct ReaderView: View {
             cancelPlayIntent()
             engine.pause()
         }
-        // The furthest-read marker only ever advances — leaving the reader
-        // after navigating backward (chapter peek, passage tap, scrubbing,
-        // "Read Again") must not erase display progress. The outgoing
-        // currentWordIndex is folded in so documents saved before the marker
-        // existed adopt their old position as the floor.
-        document.furthestWordIndex = max(
-            document.furthestWordIndex,
-            document.currentWordIndex,
-            engine.currentIndex
+        document.recordPosition(
+            currentIndex: engine.currentIndex,
+            wordsPerMinute: engine.wordsPerMinute,
+            touchLastReadDate: touchLastReadDate
         )
-        document.currentWordIndex = engine.currentIndex
-        document.wordsPerMinute = engine.wordsPerMinute
-        if touchLastReadDate {
-            document.lastReadDate = Date()
-        }
         do {
             try modelContext.save()
         } catch {
@@ -801,6 +649,100 @@ struct ReaderView: View {
         document.wordsPerMinute = value
         if withHaptic {
             HapticManager.shared.selectionTick()
+        }
+    }
+}
+
+// MARK: - Per-tick child views
+//
+// These read `engine.currentIndex`/`currentWord`/`progress` in their own
+// bodies so @Observable tracking invalidates only these small subtrees on
+// every word tick (16×/sec at 1000 WPM) — not the entire reader.
+
+/// The word display. Isolates the per-tick `currentWord` read.
+private struct CurrentWordView: View {
+    let engine: RSVPEngine
+    let fontSize: CGFloat
+
+    var body: some View {
+        WordView(word: engine.currentWord, fontSize: fontSize)
+            .equatable()
+    }
+}
+
+/// The "n / total" counter in the top bar.
+private struct WordCounterView: View {
+    let engine: RSVPEngine
+
+    var body: some View {
+        Text("\(engine.currentIndex + 1) / \(engine.words.count)")
+            .font(StrobeTheme.bodyFont(size: 12))
+            .foregroundStyle(StrobeTheme.textSecondary)
+    }
+}
+
+/// The progress bar with drag-to-seek and VoiceOver adjustment.
+private struct ProgressScrubberView: View {
+    let engine: RSVPEngine
+    @Binding var isBarScrubbing: Bool
+    @Binding var showCompletion: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(StrobeTheme.surface)
+                    .frame(height: 6)
+
+                Capsule()
+                    .fill(StrobeTheme.accent)
+                    .frame(width: geo.size.width * engine.progress, height: 6)
+
+                // Thumb
+                Circle()
+                    .fill(.white)
+                    .frame(width: 16, height: 16)
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
+                    .offset(x: (geo.size.width * engine.progress) - 8)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if engine.isPlaying { engine.pause() }
+                        isBarScrubbing = true
+                        if showCompletion {
+                            withAnimation { showCompletion = false }
+                        }
+                        let pct = max(0, min(value.location.x / geo.size.width, 1))
+                        let target = Int(pct * Double(engine.words.count - 1))
+                        engine.seek(to: target)
+                    }
+                    .onEnded { _ in
+                        isBarScrubbing = false
+                    }
+            )
+        }
+        .frame(height: 44)
+        .accessibilityElement()
+        .accessibilityLabel("Reading progress")
+        .accessibilityValue("\(Int(engine.progress * 100)) percent, word \(engine.currentIndex + 1) of \(engine.words.count)")
+        .accessibilityAdjustableAction { direction in
+            // Step ~1% per adjustment — single-word steps made the scrubber
+            // unusable with VoiceOver on book-length documents.
+            let step = max(1, engine.words.count / 100)
+            switch direction {
+            case .increment:
+                _ = engine.scrub(by: step)
+            case .decrement:
+                _ = engine.scrub(by: -step)
+            @unknown default:
+                break
+            }
+            if showCompletion && !engine.isAtEnd {
+                showCompletion = false
+            }
         }
     }
 }

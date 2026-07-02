@@ -12,6 +12,8 @@ struct TextInputView: View {
     @State private var saveError: String?
     @State private var isSaving = false
     @State private var showDiscardConfirmation = false
+    @State private var approximateWordCount = 0
+    @State private var wordCountTask: Task<Void, Never>?
     @FocusState private var editorFocused: Bool
 
     /// Whether the user has typed anything worth protecting from accidental dismissal.
@@ -20,14 +22,31 @@ struct TextInputView: View {
             || !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Recomputes the displayed word count, debounced and off the main actor.
+    /// As a computed property this ran on every body evaluation — after
+    /// pasting a book-length text, each keystroke in the *title* field
+    /// re-scanned the whole text on the main thread.
+    private func scheduleWordCount(for text: String) {
+        wordCountTask?.cancel()
+        wordCountTask = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            let count = await Task.detached(priority: .utility) {
+                Self.approximateWordCount(of: text)
+            }.value
+            guard !Task.isCancelled else { return }
+            approximateWordCount = count
+        }
+    }
+
     /// Approximate word count for display.
     /// Counts CJK ideographs individually and whitespace-splits Latin text.
-    private var approximateWordCount: Int {
+    nonisolated private static func approximateWordCount(of text: String) -> Int {
         var cjkCount = 0
         var latinBuffer = ""
         var latinWords = 0
 
-        for scalar in inputText.unicodeScalars {
+        for scalar in text.unicodeScalars {
             let isCJK = CJKUtilities.isHanIdeograph(scalar)
 
             if isCJK {
@@ -129,6 +148,9 @@ struct TextInputView: View {
         .onAppear {
             editorFocused = true
         }
+        .onChange(of: inputText) { _, newText in
+            scheduleWordCount(for: newText)
+        }
         .interactiveDismissDisabled(hasUnsavedInput || isSaving)
         .confirmationDialog(
             "Discard this text?",
@@ -149,23 +171,14 @@ struct TextInputView: View {
 
     private var header: some View {
         HStack {
-            Button {
+            CircleIconButton(systemImage: "xmark", iconSize: 16, padding: 10, accessibilityLabel: "Close") {
                 if hasUnsavedInput {
                     showDiscardConfirmation = true
                 } else {
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(StrobeTheme.textSecondary)
-                    .padding(10)
-                    .background(StrobeTheme.surface)
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
             .disabled(isSaving)
-            .accessibilityLabel("Close")
 
             Spacer()
 

@@ -19,6 +19,11 @@ enum ReaderSettings {
         nonisolated static let complexityTimingEnabled = "complexityTimingEnabled"
         nonisolated static let complexityIntensity = "complexityIntensity"
         nonisolated static let holdToReadEnabled = "holdToReadEnabled"
+
+        // App-level flags (not reader settings, but registered here so key
+        // strings never drift between files).
+        nonisolated static let hasSeenTutorial = "hasSeenTutorial"
+        nonisolated static let didCompactLegacyWordStorage = "didCompactLegacyWordStorage"
     }
 
     enum Defaults {

@@ -9,7 +9,9 @@ import SwiftData
 struct ChapterListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Bindable var document: Document
+    let document: Document
+
+    @FocusState private var listFocused: Bool
 
     private var contentMaxWidth: CGFloat {
         horizontalSizeClass == .regular ? 720 : .infinity
@@ -27,7 +29,7 @@ struct ChapterListView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         // Full Document Option
-                        NavigationLink(destination: ReaderView(document: document)) {
+                        NavigationLink(value: ReaderRoute(document: document)) {
                             fullDocumentRow
                         }
                         .buttonStyle(StrobeCardButtonStyle())
@@ -41,7 +43,10 @@ struct ChapterListView: View {
                         // Chapters
                         LazyVStack(spacing: 12) {
                             ForEach(Array(document.chapters.enumerated()), id: \.element.id) { index, chapter in
-                                NavigationLink(destination: ReaderView(document: document, startingWordIndex: startingWordIndex(forChapterAt: index))) {
+                                NavigationLink(value: ReaderRoute(
+                                    document: document,
+                                    startingWordIndex: startingWordIndex(forChapterAt: index)
+                                )) {
                                     chapterRow(chapter: chapter, index: index)
                                 }
                                 .buttonStyle(StrobeCardButtonStyle())
@@ -57,24 +62,25 @@ struct ChapterListView: View {
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
+        // Escape pops this list on macOS, matching the reader and passage
+        // view. Focus is taken on appear so the key has a responder.
+        .focusable()
+        .focusEffectDisabled()
+        .focused($listFocused)
+        .onAppear { listFocused = true }
+        .onKeyPress(.escape) {
+            dismiss()
+            return .handled
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 16) {
-            Button {
+            CircleIconButton(systemImage: "chevron.left", accessibilityLabel: "Back") {
                 dismiss()
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(StrobeTheme.textSecondary)
-                    .padding(12)
-                    .background(StrobeTheme.surface)
-                    .clipShape(Circle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(document.title)
@@ -166,17 +172,47 @@ struct ChapterListView: View {
 
     // MARK: - Helpers
 
-    private enum ChapterStatus {
+    // nonisolated so the synthesized Equatable can be used off the main
+    // actor (tests compare statuses inside nonisolated #expect closures).
+    nonisolated enum ChapterStatus {
         case notStarted, inProgress, completed
     }
 
-    /// Half-open word-index bounds of the chapter at `index`.
     private func chapterBounds(at index: Int) -> (start: Int, end: Int) {
-        let chapters = document.chapters
+        Self.chapterBounds(at: index, chapters: document.chapters, totalWordCount: document.wordCount)
+    }
+
+    private func startingWordIndex(forChapterAt index: Int) -> Int {
+        Self.startingWordIndex(
+            forChapterAt: index,
+            chapters: document.chapters,
+            totalWordCount: document.wordCount,
+            currentWordIndex: document.currentWordIndex
+        )
+    }
+
+    private func chapterWordCount(at index: Int) -> Int {
+        let (start, end) = chapterBounds(at: index)
+        return max(0, end - start)
+    }
+
+    private func chapterStatus(at index: Int) -> ChapterStatus {
+        Self.chapterStatus(
+            at: index,
+            chapters: document.chapters,
+            totalWordCount: document.wordCount,
+            furthestWordIndex: document.displayedFurthestWordIndex
+        )
+    }
+
+    // MARK: - Pure helpers (testable)
+
+    /// Half-open word-index bounds of the chapter at `index`.
+    nonisolated static func chapterBounds(at index: Int, chapters: [Chapter], totalWordCount: Int) -> (start: Int, end: Int) {
         let start = chapters[index].wordIndex
         let end = index + 1 < chapters.count
             ? chapters[index + 1].wordIndex
-            : document.wordCount
+            : totalWordCount
         return (start, end)
     }
 
@@ -188,29 +224,32 @@ struct ChapterListView: View {
     /// chapter start. Judged on `currentWordIndex`, not the furthest-read
     /// marker: status can say "in progress" for a chapter the user has read
     /// into and then scrubbed back out of.
-    private func startingWordIndex(forChapterAt index: Int) -> Int {
-        let (start, end) = chapterBounds(at: index)
-        let current = document.currentWordIndex
-        if current > start && current < end - 1 {
-            return current
+    nonisolated static func startingWordIndex(
+        forChapterAt index: Int,
+        chapters: [Chapter],
+        totalWordCount: Int,
+        currentWordIndex: Int
+    ) -> Int {
+        let (start, end) = chapterBounds(at: index, chapters: chapters, totalWordCount: totalWordCount)
+        if currentWordIndex > start && currentWordIndex < end - 1 {
+            return currentWordIndex
         }
         return start
     }
 
-    private func chapterWordCount(at index: Int) -> Int {
-        let (start, end) = chapterBounds(at: index)
-        return max(0, end - start)
-    }
-
-    private func chapterStatus(at index: Int) -> ChapterStatus {
-        let (start, end) = chapterBounds(at: index)
-        // Judged against the furthest position ever reached, so navigating
-        // backward doesn't mark finished chapters un-finished.
-        let furthest = document.displayedFurthestWordIndex
-
-        if furthest >= end - 1 {
+    /// Chapter completion state, judged against the furthest position ever
+    /// reached so navigating backward doesn't mark finished chapters
+    /// un-finished.
+    nonisolated static func chapterStatus(
+        at index: Int,
+        chapters: [Chapter],
+        totalWordCount: Int,
+        furthestWordIndex: Int
+    ) -> ChapterStatus {
+        let (start, end) = chapterBounds(at: index, chapters: chapters, totalWordCount: totalWordCount)
+        if furthestWordIndex >= end - 1 {
             return .completed
-        } else if furthest > start {
+        } else if furthestWordIndex > start {
             return .inProgress
         }
         return .notStarted

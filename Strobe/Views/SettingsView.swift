@@ -55,18 +55,9 @@ struct SettingsView: View {
                     // where dismiss() has no presentation to act on — the
                     // window's own close control is the standard affordance.
                     #if os(iOS)
-                    Button {
+                    CircleIconButton(systemImage: "xmark", iconSize: 16, padding: 10, accessibilityLabel: "Close") {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(StrobeTheme.textSecondary)
-                            .padding(10)
-                            .background(StrobeTheme.surface)
-                            .clipShape(Circle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                     #endif
                 }
                 .frame(maxWidth: contentMaxWidth)
@@ -79,9 +70,11 @@ struct SettingsView: View {
                         settingCard(title: "Default Speed") {
                             VStack(spacing: 16) {
                                 HStack {
+                                    // Matches the Text Size card's numeral:
+                                    // serif display face in primary white.
                                     Text("\(defaultWPM)")
-                                        .font(StrobeTheme.bodyFont(size: 32, bold: true))
-                                        .foregroundStyle(StrobeTheme.accent)
+                                        .font(StrobeTheme.titleFont(size: 32))
+                                        .foregroundStyle(StrobeTheme.textPrimary)
                                     Text("WPM")
                                         .font(StrobeTheme.bodyFont(size: 16))
                                         .foregroundStyle(StrobeTheme.textSecondary)
@@ -465,6 +458,8 @@ struct SettingsView: View {
                 )
         }
         .buttonStyle(.plain)
+        // Selection is otherwise color-only — invisible to VoiceOver.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private var appVersionLabel: String {
