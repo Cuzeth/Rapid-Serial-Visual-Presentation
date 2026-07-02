@@ -225,16 +225,22 @@ struct TextInputView: View {
         Task {
             defer { isSaving = false }
 
-            // Tokenizing and complexity analysis (NLTagger) are expensive on
-            // long pasted texts — run them off the main thread so the sheet
-            // stays responsive.
-            let (words, complexityScores) = await Task.detached(priority: .userInitiated) {
+            // Tokenizing, complexity analysis (NLTagger), and storage-blob
+            // encoding are expensive on long pasted texts — run them off the
+            // main thread so the sheet stays responsive.
+            let (wordCount, wordsBlob, complexityBlob) = await Task.detached(priority: .userInitiated) {
+                () -> (Int, Data, Data?) in
                 let words = Tokenizer.tokenize(trimmedText)
-                let scores = words.isEmpty ? [] : WordComplexityAnalyzer.analyzeComplexity(words)
-                return (words, scores)
+                guard !words.isEmpty else { return (0, Data(), nil) }
+                let scores = WordComplexityAnalyzer.analyzeComplexity(words)
+                return (
+                    words.count,
+                    WordStorage.encode(words),
+                    scores.isEmpty ? nil : ComplexityStorage.encode(scores)
+                )
             }.value
 
-            guard !words.isEmpty else {
+            guard wordCount > 0 else {
                 saveError = "No readable text found."
                 return
             }
@@ -253,8 +259,9 @@ struct TextInputView: View {
                 title: resolvedTitle,
                 fileName: resolvedTitle,
                 bookmarkData: Data(),
-                words: words,
-                complexityScores: complexityScores,
+                wordsBlob: wordsBlob,
+                wordCount: wordCount,
+                complexityBlob: complexityBlob,
                 wordsPerMinute: defaultWPM
             )
             modelContext.insert(document)

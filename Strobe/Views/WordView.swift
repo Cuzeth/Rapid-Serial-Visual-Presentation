@@ -30,10 +30,45 @@ struct WordView: View, Equatable {
         ReaderFont.resolve(readerFontSelection)
     }
 
+    /// Everything derived from `word` that the body needs, computed once per
+    /// evaluation — as separate computed properties, `redIndex` alone was
+    /// recomputed four times per word tick (by `before`/`after`/`anchor`/
+    /// `attributedWord`) on the playback hot path.
+    private struct WordParts {
+        let redIndex: Int
+        let isArabic: Bool
+        let before: String
+        let anchor: String
+        let after: String
+    }
+
+    private func makeParts() -> WordParts {
+        let redIndex = Self.redIndex(of: word)
+        let before = String(word.prefix(redIndex))
+        let anchor: String
+        let after: String
+        if redIndex < word.count {
+            anchor = String(word[word.index(word.startIndex, offsetBy: redIndex)])
+            after = redIndex + 1 < word.count
+                ? String(word.suffix(word.count - redIndex - 1))
+                : ""
+        } else {
+            anchor = ""
+            after = ""
+        }
+        return WordParts(
+            redIndex: redIndex,
+            isArabic: Self.isArabic(word),
+            before: before,
+            anchor: anchor,
+            after: after
+        )
+    }
+
     /// The character index of the ORP anchor letter (the red letter).
     /// Calculated from letter-only positions, skipping punctuation.
     /// For short CJK words (≤3 characters), centers the anchor instead.
-    private var redIndex: Int {
+    nonisolated private static func redIndex(of word: String) -> Int {
         // Collect indices of letter characters only (skip punctuation like apostrophes)
         let letterIndices = word.enumerated().compactMap { offset, char in
             char.isLetter ? offset : nil
@@ -74,7 +109,7 @@ struct WordView: View, Equatable {
     /// Whether the word contains Arabic script. Arabic is cursive — changing
     /// the font weight on individual characters breaks glyph connections,
     /// so only color is changed for the anchor letter.
-    private var isArabic: Bool {
+    nonisolated private static func isArabic(_ word: String) -> Bool {
         word.unicodeScalars.contains { scalar in
             let v = scalar.value
             return (v >= 0x0600 && v <= 0x06FF)
@@ -88,7 +123,7 @@ struct WordView: View, Equatable {
     /// Builds an `AttributedString` with the anchor letter colored red.
     /// For non-Arabic scripts the anchor is also bolded. For Arabic, only
     /// color is changed to avoid breaking cursive glyph connections.
-    private func attributedWord(fontSize: CGFloat) -> AttributedString {
+    private func attributedWord(fontSize: CGFloat, parts: WordParts) -> AttributedString {
         var attributed = AttributedString(word)
         // The reader's font size is user-controlled via a slider, so we opt out
         // of Dynamic Type scaling here — otherwise accessibility sizes would
@@ -96,35 +131,20 @@ struct WordView: View, Equatable {
         attributed.font = readerFont.regularFont(size: fontSize, relativeTo: nil)
         attributed.foregroundColor = .primary
 
-        guard redIndex < word.count else { return attributed }
+        guard parts.redIndex < word.count else { return attributed }
 
-        let start = word.index(word.startIndex, offsetBy: redIndex)
+        let start = word.index(word.startIndex, offsetBy: parts.redIndex)
         let end = word.index(after: start)
         if let attrStart = AttributedString.Index(start, within: attributed),
            let attrEnd = AttributedString.Index(end, within: attributed) {
             attributed[attrStart..<attrEnd].foregroundColor = .red
             // Bold breaks Arabic cursive shaping — only apply for non-Arabic.
-            if !isArabic {
+            if !parts.isArabic {
                 attributed[attrStart..<attrEnd].font = readerFont.boldFont(size: fontSize, relativeTo: nil)
             }
         }
 
         return attributed
-    }
-
-    private var before: String {
-        guard !word.isEmpty else { return "" }
-        return String(word.prefix(redIndex))
-    }
-
-    private var after: String {
-        guard redIndex + 1 < word.count else { return "" }
-        return String(word.suffix(word.count - redIndex - 1))
-    }
-
-    private var anchor: String {
-        guard redIndex < word.count else { return "" }
-        return String(word[word.index(word.startIndex, offsetBy: redIndex)])
     }
 
     /// Horizontal breathing room kept between the word and the view edges.
@@ -136,8 +156,9 @@ struct WordView: View, Equatable {
     private static let minimumDisplayFontSize: CGFloat = 12
 
     var body: some View {
+        let parts = makeParts()
         GeometryReader { geo in
-            let metrics = layoutMetrics(for: geo.size.width)
+            let metrics = layoutMetrics(for: geo.size.width, parts: parts)
 
             ZStack {
                 ZStack {
@@ -146,7 +167,7 @@ struct WordView: View, Equatable {
                         .fill(Color.red.opacity(0.12))
                         .frame(width: 1.5, height: metrics.fontSize * 1.6)
 
-                    Text(attributedWord(fontSize: metrics.fontSize))
+                    Text(attributedWord(fontSize: metrics.fontSize, parts: parts))
                         .offset(x: metrics.anchorOffset)
                         .lineLimit(1)
                         .minimumScaleFactor(0.58)
@@ -172,7 +193,7 @@ struct WordView: View, Equatable {
     /// enough, because the centering offset shifts the wider (usually
     /// trailing) half toward the edge. The offset is then clamped so the
     /// shifted word can never extend past the view bounds.
-    private func layoutMetrics(for availableWidth: CGFloat) -> LayoutMetrics {
+    private func layoutMetrics(for availableWidth: CGFloat, parts: WordParts) -> LayoutMetrics {
         let textAreaWidth = availableWidth - 2 * Self.horizontalTextMargin
         guard textAreaWidth > 0, !word.isEmpty else {
             return LayoutMetrics(fontSize: fontSize, anchorOffset: 0)
@@ -180,9 +201,9 @@ struct WordView: View, Equatable {
 
         // Measure once at the base size; glyph widths scale linearly with
         // font size. The anchor is measured bold to match its rendering.
-        let beforeWidth = textWidth(before, fontSize: fontSize)
-        let afterWidth = textWidth(after, fontSize: fontSize)
-        let anchorWidth = textWidth(anchor, fontSize: fontSize, bold: !isArabic)
+        let beforeWidth = textWidth(parts.before, fontSize: fontSize)
+        let afterWidth = textWidth(parts.after, fontSize: fontSize)
+        let anchorWidth = textWidth(parts.anchor, fontSize: fontSize, bold: !parts.isArabic)
 
         let neededHalfWidth = max(beforeWidth, afterWidth) + anchorWidth / 2
         let availableHalfWidth = textAreaWidth / 2
@@ -197,7 +218,7 @@ struct WordView: View, Equatable {
         let idealOffset = (afterWidth - beforeWidth) / 2 * appliedScale
         let wordWidth = (beforeWidth + anchorWidth + afterWidth) * appliedScale
         let anchorOffset = Self.clampedAnchorOffset(
-            idealOffset: isArabic ? -idealOffset : idealOffset,
+            idealOffset: parts.isArabic ? -idealOffset : idealOffset,
             wordWidth: wordWidth,
             availableWidth: textAreaWidth
         )

@@ -602,29 +602,39 @@ extension ContentView {
 
             do {
                 let cleaningLevel = TextCleaningLevel.resolve(textCleaningLevel)
+                // The storage blobs are encoded on the background task too —
+                // encoding a book-length word array is ~2 MB of work that
+                // would otherwise hitch the main thread at import completion.
                 let extraction = Task.detached(priority: .userInitiated) {
+                    () -> (result: ImportResult, wordsBlob: Data, complexityBlob: Data?) in
                     let detectedType = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType
-                    return try DocumentImportPipeline.extractWordsAndChapters(
+                    let result = try DocumentImportPipeline.extractWordsAndChapters(
                         from: url,
                         detectedContentType: detectedType,
                         cleaningLevel: cleaningLevel
                     )
+                    try Task.checkCancellation()
+                    let wordsBlob = WordStorage.encode(result.words)
+                    let complexityBlob = result.complexityScores.isEmpty
+                        ? nil
+                        : ComplexityStorage.encode(result.complexityScores)
+                    return (result, wordsBlob, complexityBlob)
                 }
                 // Detached tasks don't inherit cancellation — forward the
                 // overlay's Cancel to the extraction work explicitly.
-                let importResult = try await withTaskCancellationHandler {
+                let extracted = try await withTaskCancellationHandler {
                     try await extraction.value
                 } onCancel: {
                     extraction.cancel()
                 }
                 try Task.checkCancellation()
 
-                guard !importResult.words.isEmpty else {
+                guard !extracted.result.words.isEmpty else {
                     throw DocumentImportError.noReadableText
                 }
 
                 let title = DocumentImportPipeline.resolveTitle(
-                    metadataTitle: importResult.title,
+                    metadataTitle: extracted.result.title,
                     fileName: fileName
                 )
 
@@ -632,9 +642,10 @@ extension ContentView {
                     title: title,
                     fileName: fileName,
                     bookmarkData: bookmarkData,
-                    words: importResult.words,
-                    complexityScores: importResult.complexityScores,
-                    chapters: importResult.chapters,
+                    wordsBlob: extracted.wordsBlob,
+                    wordCount: extracted.result.words.count,
+                    complexityBlob: extracted.complexityBlob,
+                    chapters: extracted.result.chapters,
                     wordsPerMinute: defaultWPM
                 )
                 modelContext.insert(document)

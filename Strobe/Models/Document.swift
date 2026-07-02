@@ -191,4 +191,32 @@ final class Document {
         self.cachedWords = words
         self.cachedComplexity = complexityScores.isEmpty ? nil : complexityScores
     }
+
+    /// Creates a document from pre-encoded storage blobs. Import flows encode
+    /// on their background task and use this so inserting a book-length
+    /// document doesn't pay ~2 MB of blob encoding on the main thread.
+    init(
+        title: String,
+        fileName: String,
+        bookmarkData: Data,
+        wordsBlob: Data,
+        wordCount: Int,
+        complexityBlob: Data?,
+        chapters: [Chapter] = [],
+        wordsPerMinute: Int = 300
+    ) {
+        self.id = UUID()
+        self.title = title
+        self.fileName = fileName
+        self.bookmarkData = bookmarkData
+        self.wordsBlob = wordsBlob
+        self.complexityBlob = complexityBlob
+        self.words = []
+        self.chapters = chapters
+        self.wordCount = wordCount
+        self.currentWordIndex = 0
+        self.furthestWordIndex = 0
+        self.wordsPerMinute = wordsPerMinute
+        self.dateAdded = Date()
+    }
 }
