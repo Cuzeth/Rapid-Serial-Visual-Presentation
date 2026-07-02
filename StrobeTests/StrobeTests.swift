@@ -7,6 +7,8 @@
 
 import Testing
 import NaturalLanguage
+import CoreGraphics
+import CoreText
 @testable import Strobe
 internal import UniformTypeIdentifiers
 
@@ -35,7 +37,9 @@ struct StrobeTests {
     @Test func resolvesSourceTypeFromExtension() {
         #expect(DocumentImportPipeline.resolveSourceType(for: URL(fileURLWithPath: "/tmp/book.pdf")) == .pdf)
         #expect(DocumentImportPipeline.resolveSourceType(for: URL(fileURLWithPath: "/tmp/book.epub")) == .epub)
-        #expect(DocumentImportPipeline.resolveSourceType(for: URL(fileURLWithPath: "/tmp/book.txt")) == .unknown)
+        #expect(DocumentImportPipeline.resolveSourceType(for: URL(fileURLWithPath: "/tmp/book.txt")) == .plainText)
+        #expect(DocumentImportPipeline.resolveSourceType(for: URL(fileURLWithPath: "/tmp/notes.md")) == .plainText)
+        #expect(DocumentImportPipeline.resolveSourceType(for: URL(fileURLWithPath: "/tmp/book.bin")) == .unknown)
     }
 
     @Test func resolvesSourceTypeFromDetectedContentType() {
@@ -59,9 +63,11 @@ struct StrobeTests {
     }
 
     @Test func unknownExtractionTypeThrowsUnsupportedTypeError() {
+        // .txt is now a supported plain-text import — use a genuinely
+        // unsupported extension.
         do {
             _ = try DocumentImportPipeline.extractWordsAndChapters(
-                from: URL(fileURLWithPath: "/tmp/book.txt")
+                from: URL(fileURLWithPath: "/tmp/book.jpg")
             )
             Issue.record("Expected unknown type to throw unsupported-file-type error.")
         } catch let error as DocumentImportError {
@@ -1364,5 +1370,415 @@ struct StrobeTests {
         #expect(single.progress == 0)
         single.furthestWordIndex = 1
         #expect(single.progress == 1)
+    }
+
+    @Test func singleWordDocumentCompletesOnceRead() {
+        // A single-word document can never advance its indices past 0 —
+        // having been read (lastReadDate set) is the completion signal.
+        let single = makeDocument(wordCount: 1)
+        #expect(single.progress == 0)
+        single.recordPosition(currentIndex: 0, wordsPerMinute: 300, touchLastReadDate: true)
+        #expect(single.progress == 1)
+    }
+
+    // MARK: - Document.recordPosition
+
+    @Test func recordPositionAdvancesCurrentAndFurthest() {
+        let doc = makeDocument(wordCount: 11)
+        doc.recordPosition(currentIndex: 6, wordsPerMinute: 420, touchLastReadDate: false)
+        #expect(doc.currentWordIndex == 6)
+        #expect(doc.furthestWordIndex == 6)
+        #expect(doc.wordsPerMinute == 420)
+        #expect(doc.lastReadDate == nil)
+    }
+
+    @Test func recordPositionNeverLowersFurthestMarker() {
+        let doc = makeDocument(wordCount: 11)
+        doc.recordPosition(currentIndex: 8, wordsPerMinute: 300, touchLastReadDate: false)
+        doc.recordPosition(currentIndex: 2, wordsPerMinute: 300, touchLastReadDate: false)
+        #expect(doc.currentWordIndex == 2)
+        #expect(doc.furthestWordIndex == 8)
+    }
+
+    @Test func recordPositionFoldsLegacySavedPositionIntoFurthest() {
+        // Documents saved before the marker existed: currentWordIndex holds
+        // the old position and furthest migrated as 0. Recording a smaller
+        // outgoing index must adopt the old position as the floor.
+        let doc = makeDocument(wordCount: 11)
+        doc.currentWordIndex = 7
+        doc.furthestWordIndex = 0
+        doc.recordPosition(currentIndex: 3, wordsPerMinute: 300, touchLastReadDate: false)
+        #expect(doc.furthestWordIndex == 7)
+        #expect(doc.currentWordIndex == 3)
+    }
+
+    @Test func recordPositionTouchesLastReadDateOnlyWhenAsked() {
+        let doc = makeDocument(wordCount: 11)
+        doc.recordPosition(currentIndex: 1, wordsPerMinute: 300, touchLastReadDate: false)
+        #expect(doc.lastReadDate == nil)
+        doc.recordPosition(currentIndex: 1, wordsPerMinute: 300, touchLastReadDate: true)
+        #expect(doc.lastReadDate != nil)
+    }
+
+    // MARK: - Legacy word-storage migration
+
+    @Test func compactLegacyWordStorageMigratesWordsToBlob() {
+        let doc = makeDocument(wordCount: 0)
+        // Simulate a pre-blob document: words in the legacy array, no blob.
+        doc.wordsBlob = nil
+        doc.words = ["alpha", "beta", "gamma"]
+        doc.compactWordStorageIfNeeded()
+        #expect(doc.wordsBlob != nil)
+        #expect(doc.words.isEmpty)
+        #expect(doc.wordCount == 3)
+        #expect(doc.readingWords == ["alpha", "beta", "gamma"])
+    }
+
+    @Test func compactLegacyWordStorageIsNoOpWhenBlobExists() {
+        let doc = makeDocument(wordCount: 2)
+        let blobBefore = doc.wordsBlob
+        let countBefore = doc.wordCount
+        doc.compactWordStorageIfNeeded()
+        #expect(doc.wordsBlob == blobBefore)
+        #expect(doc.wordCount == countBefore)
+    }
+
+    // MARK: - Engine loading & clamping
+
+    @Test func emptyEngineIsNotAtEndAndDoesNotPlay() {
+        let engine = RSVPEngine(words: [])
+        #expect(!engine.isAtEnd)
+        #expect(engine.progress == 0)
+        engine.play()
+        #expect(!engine.isPlaying)
+    }
+
+    @Test func engineInitClampsOutOfBoundsIndex() {
+        let past = RSVPEngine(words: ["a", "b"], currentIndex: 10)
+        #expect(past.currentIndex == 1)
+        let negative = RSVPEngine(words: ["a", "b"], currentIndex: -5)
+        #expect(negative.currentIndex == 0)
+    }
+
+    @Test func engineLoadReplacesWordsAndClampsIndex() {
+        let engine = RSVPEngine(words: [])
+        engine.load(words: ["a", "b", "c"], currentIndex: 99, complexityScores: [0.1, 0.2, 0.3])
+        #expect(engine.currentIndex == 2)
+        #expect(engine.currentWord == "c")
+        #expect(engine.complexityScores == [0.1, 0.2, 0.3])
+    }
+
+    // MARK: - Engine live playback
+
+    // MainActor for two reasons: the engine (and its main-queue timer) is
+    // main-actor-isolated, and staying on the actor between play() and the
+    // first assertion means the timer can't fire in that window — the
+    // "isPlaying right after play()" check would otherwise race the ~30 ms
+    // playback under parallel test load.
+    @MainActor
+    @Test func enginePlaybackAdvancesAndAutoPausesAtEnd() async throws {
+        // 6000 WPM → 10 ms per word; three words should finish in ~30 ms.
+        let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 6000)
+        engine.play()
+        #expect(engine.isPlaying)
+
+        for _ in 0..<400 where engine.isPlaying {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(engine.currentIndex == 2)
+        #expect(engine.isAtEnd)
+        #expect(!engine.isPlaying) // auto-paused at the last word
+    }
+
+    // MARK: - Chapter math
+
+    private func makeChapters(_ starts: [Int]) -> [Chapter] {
+        starts.enumerated().map { Chapter(title: "Ch \($0.offset + 1)", wordIndex: $0.element) }
+    }
+
+    @Test func chapterBoundsUseNextChapterStartOrTotalCount() {
+        let chapters = makeChapters([0, 100, 250])
+        let first = ChapterListView.chapterBounds(at: 0, chapters: chapters, totalWordCount: 400)
+        #expect(first.start == 0 && first.end == 100)
+        let last = ChapterListView.chapterBounds(at: 2, chapters: chapters, totalWordCount: 400)
+        #expect(last.start == 250 && last.end == 400)
+    }
+
+    @Test func chapterRowResumesInsideChapterOtherwiseStartsAtChapter() {
+        let chapters = makeChapters([0, 100, 250])
+        // Current position inside chapter 1 → resume there.
+        #expect(ChapterListView.startingWordIndex(forChapterAt: 1, chapters: chapters, totalWordCount: 400, currentWordIndex: 150) == 150)
+        // Current position outside chapter 1 → start at the chapter.
+        #expect(ChapterListView.startingWordIndex(forChapterAt: 1, chapters: chapters, totalWordCount: 400, currentWordIndex: 50) == 100)
+        // Sitting exactly on the chapter start → chapter start.
+        #expect(ChapterListView.startingWordIndex(forChapterAt: 1, chapters: chapters, totalWordCount: 400, currentWordIndex: 100) == 100)
+        // Sitting on the chapter's last word restarts it (the `end - 1` rule).
+        #expect(ChapterListView.startingWordIndex(forChapterAt: 1, chapters: chapters, totalWordCount: 400, currentWordIndex: 249) == 100)
+    }
+
+    @Test func chapterStatusReflectsFurthestPosition() {
+        let chapters = makeChapters([0, 100, 250])
+        #expect(ChapterListView.chapterStatus(at: 1, chapters: chapters, totalWordCount: 400, furthestWordIndex: 0) == .notStarted)
+        #expect(ChapterListView.chapterStatus(at: 1, chapters: chapters, totalWordCount: 400, furthestWordIndex: 150) == .inProgress)
+        #expect(ChapterListView.chapterStatus(at: 1, chapters: chapters, totalWordCount: 400, furthestWordIndex: 249) == .completed)
+        // Final chapter completes at the document's last word.
+        #expect(ChapterListView.chapterStatus(at: 2, chapters: chapters, totalWordCount: 400, furthestWordIndex: 399) == .completed)
+    }
+
+    // MARK: - Tokenizer carry ordering
+
+    @Test func carryFlushesBeforeCJKText() {
+        // A trailing hyphenated fragment must be emitted before following CJK
+        // words, not appended after them. (How NLTokenizer segments 你好 —
+        // one word or two — is not what's under test here.)
+        let words = Tokenizer.tokenize("informa- 你好")
+        #expect(words.first == "informa-")
+        #expect(words.dropFirst().joined() == "你好")
+    }
+
+    @Test func punctuationTokenAttachesToPendingCarry() {
+        var output: [String] = []
+        var carry: String? = "infor-"
+        Tokenizer.appendTokenizedText("— word", into: &output, carry: &carry)
+        if let carry, !carry.isEmpty {
+            output.append(carry)
+        }
+        // The em dash can't continue the hyphenation — the fragment is
+        // flushed with the dash attached instead of the dash being dropped.
+        #expect(output == ["infor-—", "word"])
+    }
+
+    // MARK: - Entity double-encoding
+
+    @Test func doubleEncodedEntitiesDecodeExactlyOnce() {
+        // Single-pass resolution: the output of one entity is never rescanned.
+        #expect(EPUBTextExtractor.resolveHTMLEntities("&amp;lt;") == "&lt;")
+        #expect(EPUBTextExtractor.resolveHTMLEntities("&amp;#65;") == "&#65;")
+        #expect(EPUBTextExtractor.resolveHTMLEntities("&amp;amp;") == "&amp;")
+    }
+
+    // MARK: - Plain text import
+
+    @Test func plainTextImportTokenizesFile() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("strobe_test_\(UUID().uuidString).txt")
+        try "hello plain world".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try DocumentImportPipeline.extractWordsAndChapters(from: url)
+        #expect(result.words == ["hello", "plain", "world"])
+        #expect(result.complexityScores.count == 3)
+        #expect(result.sourceType == .plainText)
+        #expect(result.chapters.isEmpty)
+    }
+
+    // MARK: - EPUB DRM detection
+
+    @Test func drmProtectedEPUBIsRejected() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let containerXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0">
+          <rootfiles>
+            <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+          </rootfiles>
+        </container>
+        """
+
+        let opf = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <package version="3.0">
+          <manifest>
+            <item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+          </manifest>
+          <spine>
+            <itemref idref="c1"/>
+          </spine>
+        </package>
+        """
+
+        // A spine content document is listed as encrypted → DRM.
+        let encryptionXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"
+                    xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+          <enc:EncryptedData>
+            <enc:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+            <enc:CipherData>
+              <enc:CipherReference URI="OEBPS/chapter1.xhtml"/>
+            </enc:CipherData>
+          </enc:EncryptedData>
+        </encryption>
+        """
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            ("META-INF/container.xml", Data(containerXML.utf8), false),
+            ("META-INF/encryption.xml", Data(encryptionXML.utf8), false),
+            ("OEBPS/content.opf", Data(opf.utf8), false),
+            ("OEBPS/chapter1.xhtml", Data([0x00, 0x01, 0x02, 0x03]), false),
+        ]
+
+        let epubURL = tempDir.appendingPathComponent("drm.epub")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: epubURL)
+
+        do {
+            _ = try EPUBTextExtractor.extractWordsAndChapters(from: epubURL)
+            Issue.record("Expected DRM-protected EPUB to be rejected.")
+        } catch let error as DocumentImportError {
+            #expect(error == .epubDRMProtected)
+        }
+    }
+
+    @Test func fontObfuscationOnlyEncryptionIsAllowed() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let containerXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0">
+          <rootfiles>
+            <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+          </rootfiles>
+        </container>
+        """
+
+        let opf = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <package version="3.0">
+          <manifest>
+            <item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+          </manifest>
+          <spine>
+            <itemref idref="c1"/>
+          </spine>
+        </package>
+        """
+
+        // Only a font is encrypted (the common benign use) — must import.
+        let encryptionXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <encryption xmlns="urn:oasis:names:tc:opendocument:xmlns:container"
+                    xmlns:enc="http://www.w3.org/2001/04/xmlenc#">
+          <enc:EncryptedData>
+            <enc:EncryptionMethod Algorithm="http://www.idpf.org/2008/embedding"/>
+            <enc:CipherData>
+              <enc:CipherReference URI="OEBPS/fonts/body.otf"/>
+            </enc:CipherData>
+          </enc:EncryptedData>
+        </encryption>
+        """
+
+        let chapter = "<html><body><p>Readable words here.</p></body></html>"
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            ("META-INF/container.xml", Data(containerXML.utf8), false),
+            ("META-INF/encryption.xml", Data(encryptionXML.utf8), false),
+            ("OEBPS/content.opf", Data(opf.utf8), false),
+            ("OEBPS/chapter1.xhtml", Data(chapter.utf8), false),
+        ]
+
+        let epubURL = tempDir.appendingPathComponent("font-obfuscated.epub")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: epubURL)
+
+        let result = try EPUBTextExtractor.extractWordsAndChapters(from: epubURL)
+        #expect(result.words.contains("Readable"))
+    }
+
+    // MARK: - ZIP robustness (mutation sweep)
+
+    /// The ZIP parser's safety rests on manual bounds checks — this sweep
+    /// defends that invariant. Truncating a valid archive at every length and
+    /// flipping bytes at deterministic positions must never crash the
+    /// extractor; throwing or extracting garbage are both acceptable.
+    @Test func zipExtractorSurvivesTruncationAndByteFlips() throws {
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("META-INF/container.xml", Data("<container/>".utf8), false),
+            ("OEBPS/content.opf", Data(String(repeating: "<x/>", count: 50).utf8), true),
+        ]
+        let valid = buildZIPWithCentralDirectory(entries: entries)
+
+        func attemptExtraction(_ data: Data) {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("zipfuzz_\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let zipURL = dir.appendingPathComponent("t.zip")
+            do {
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                try data.write(to: zipURL)
+                try ZIPExtractor.extract(zipAt: zipURL, to: dir.appendingPathComponent("out"))
+            } catch {
+                // Throwing on malformed input is correct behavior.
+            }
+        }
+
+        // Every truncation length (stride keeps the sweep fast).
+        var length = 0
+        while length < valid.count {
+            attemptExtraction(valid.prefix(length))
+            length += 7
+        }
+
+        // Deterministic byte flips across the archive.
+        var offset = 0
+        while offset < valid.count {
+            var mutated = valid
+            mutated[offset] ^= 0xFF
+            attemptExtraction(mutated)
+            offset += 11
+        }
+    }
+
+    // MARK: - PDF happy path
+
+    /// Draws each page's text into a real PDF via CoreText so PDFKit's text
+    /// extraction has something to find.
+    private func makeTextPDF(pages: [String]) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("strobe_test_\(UUID().uuidString).pdf")
+        var mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let context = CGContext(url as CFURL, mediaBox: &mediaBox, nil) else {
+            throw DocumentImportError.pdfLoadFailed
+        }
+        let font = CTFontCreateWithName("Helvetica" as CFString, 24, nil)
+        for text in pages {
+            context.beginPDFPage(nil)
+            let attributed = NSAttributedString(
+                string: text,
+                attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]
+            )
+            let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+            let path = CGPath(rect: mediaBox.insetBy(dx: 50, dy: 50), transform: nil)
+            let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+            CTFrameDraw(frame, context)
+            context.endPDFPage()
+        }
+        context.closePDF()
+        return url
+    }
+
+    @Test func pdfExtractionReadsTextFromPages() throws {
+        let url = try makeTextPDF(pages: ["alpha beta gamma", "delta epsilon"])
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try PDFTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: .none)
+        #expect(result.words.contains("alpha"))
+        #expect(result.words.contains("gamma"))
+        #expect(result.words.contains("epsilon"))
+        // Page 1's words precede page 2's.
+        if let alphaIndex = result.words.firstIndex(of: "alpha"),
+           let deltaIndex = result.words.firstIndex(of: "delta") {
+            #expect(alphaIndex < deltaIndex)
+        } else {
+            Issue.record("Expected words from both pages to be extracted.")
+        }
     }
 }

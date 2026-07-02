@@ -15,7 +15,7 @@ Tests use the **Swift Testing** framework (not XCTest):
 
 ## Architecture
 
-Strobe is an RSVP (Rapid Serial Visual Presentation) speed reader for iOS and macOS. Users import PDFs/EPUBs or paste text, then read word-by-word with configurable timing.
+Strobe is an RSVP (Rapid Serial Visual Presentation) speed reader for iOS and macOS. Users import PDFs/EPUBs/plain-text files or paste text, then read word-by-word with configurable timing.
 
 ### Data Flow
 ```
@@ -28,7 +28,7 @@ PDF/EPUB/Text → DocumentImportPipeline → Extractor → TextCleaner → Token
 
 ### Key Layers
 
-**Import Pipeline** (`Import/`): `DocumentImportPipeline` detects file type via UTType, routes to `EPUBTextExtractor` or `PDFTextExtractor`, then cleans and tokenizes. EPUB extraction uses `ZIPExtractor` → OPF parsing → HTML stripping. Returns `ImportResult` with words, chapters, source type, and title.
+**Import Pipeline** (`Import/`): `DocumentImportPipeline` detects file type via UTType, routes to `EPUBTextExtractor`, `PDFTextExtractor`, or a plain-text reader, then cleans and tokenizes. EPUB extraction uses `ZIPExtractor` → OPF parsing → DRM check (`META-INF/encryption.xml` vs. spine) → HTML stripping. Long phases check `Task.checkCancellation()` so the import overlay's Cancel works. Returns `ImportResult` with words, chapters, source type, and title.
 
 **Tokenizer** (`Engine/Tokenizer.swift`): Whitespace-based splitting with special handling for:
 - Soft hyphen removal, non-breaking hyphen normalization
@@ -66,8 +66,10 @@ Strobe/
 - **Concurrency**: `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, `SWIFT_APPROACHABLE_CONCURRENCY = YES`
 - **Logging**: `os.Logger` with subsystem/category
 - **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
-- **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `noReadableText`)
-- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `readerFontSelection`, `textCleaningLevel`
+- **Typography**: Fraunces (`titleFont`) for headings and for large display numerals in Settings cards (WPM, text size — `titleFont(size: 32)` in `textPrimary`); body text and captions use `bodyFont`. Keep sibling numerals styled identically.
+- **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `epubDRMProtected`, `pdfLoadFailed`, `pdfPasswordProtected`, `noReadableText`)
+- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `readerFontSelection`, `textCleaningLevel` — all registered in `ReaderSettings.Keys` (plus app flags `hasSeenTutorial`, `didCompactLegacyWordStorage`); never use raw key strings
+- **Navigation**: value-based (`NavigationLink(value:)` + `navigationDestination` in `ContentView`, `ReaderRoute` for chapter entries) — eager `destination:` links would decode word blobs for every visible row. `ReaderView` loads word blobs asynchronously in `.task`, never in `init`.
 - **Platform conditionals**: `#if os(iOS)` / `#if os(macOS)` for UIKit/AppKit imports, haptics, presentation modifiers, and hint text. Engine, import pipeline, and models are fully cross-platform.
 - **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader) — via `.onKeyPress`, also works on iPad with hardware keyboard
 - **macOS haptics**: `HapticManager` is no-op on macOS (all methods are empty stubs)
