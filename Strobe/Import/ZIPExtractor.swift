@@ -256,10 +256,11 @@ enum ZIPExtractor {
     ) throws {
         let fileURL = destination.appendingPathComponent(name)
 
-        // Prevent Zip Slip path traversal
+        // Prevent Zip Slip path traversal. Entry names come from the (possibly
+        // malicious) archive, so they're logged with default privacy.
         guard fileURL.standardizedFileURL.path
             .hasPrefix(destination.standardizedFileURL.path + "/") else {
-            logger.warning("Skipping ZIP entry with path traversal: \(name, privacy: .public)")
+            logger.warning("Skipping ZIP entry with path traversal: \(name, privacy: .private)")
             return
         }
 
@@ -279,12 +280,12 @@ enum ZIPExtractor {
         } else if compressionMethod == 8 {
             let compressed = Data(bytes: bytes + dataStart, count: compressedSize)
             guard let decompressed = inflate(compressed, expectedSize: uncompressedSize) else {
-                logger.warning("Deflate decompression failed for entry: \(name, privacy: .public)")
+                logger.warning("Deflate decompression failed for entry: \(name, privacy: .private)")
                 return
             }
             fileData = decompressed
         } else {
-            logger.warning("Unsupported compression method \(compressionMethod) for entry: \(name, privacy: .public)")
+            logger.warning("Unsupported compression method \(compressionMethod) for entry: \(name, privacy: .private)")
             return
         }
 
@@ -293,7 +294,7 @@ enum ZIPExtractor {
         // can exceed it with images/audio the text pipeline never reads. Small
         // text entries later in the archive still extract from what remains.
         guard budget.charge(fileData.count) else {
-            logger.warning("Skipping entry over total extraction budget: \(name, privacy: .public) — possible ZIP bomb or oversized media")
+            logger.warning("Skipping entry over total extraction budget: \(name, privacy: .private) — possible ZIP bomb or oversized media")
             return
         }
 
@@ -337,6 +338,14 @@ enum ZIPExtractor {
                 COMPRESSION_ZLIB
             )
             guard decodedSize > 0 else { return nil }
+            // A nonzero declared size that doesn't match the actual output
+            // means a corrupt or lying header — reject rather than silently
+            // writing a truncated entry. (Zero means the size lives in a
+            // trailing data descriptor, so there's nothing to verify against.)
+            if expectedSize > 0 && decodedSize != expectedSize {
+                logger.warning("Decompressed size \(decodedSize) != declared \(expectedSize) — rejecting entry")
+                return nil
+            }
             return Data(bytes: destinationBuffer, count: decodedSize)
         }
 

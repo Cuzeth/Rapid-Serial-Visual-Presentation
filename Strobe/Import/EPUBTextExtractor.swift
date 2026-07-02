@@ -36,11 +36,19 @@ enum EPUBTextExtractor {
 
         let opf = try parseOPF(at: opfURL)
 
+        try ensureSpineNotEncrypted(
+            epubRoot: tempDir,
+            opfRelativePath: opfRelativePath,
+            opf: opf
+        )
+
         // Phase 1: Collect raw text from spine-ordered XHTML files
         var sectionTexts: [(href: String, text: String)] = []
         sectionTexts.reserveCapacity(opf.spineItems.count)
 
-        for itemID in opf.spineItems {
+        for (i, itemID) in opf.spineItems.enumerated() {
+            // Keep a cancelled import (user tapped Cancel) responsive.
+            if i % 16 == 0 { try Task.checkCancellation() }
             guard let href = opf.manifest[itemID] else { continue }
             let fileURL = opfDir.appendingPathComponent(href)
 
@@ -84,6 +92,63 @@ enum EPUBTextExtractor {
         return EPUBExtractionResult(words: words, chapters: chapters, title: opf.title)
     }
 
+    // MARK: - DRM detection
+
+    /// Throws ``DocumentImportError/epubDRMProtected`` if any spine content
+    /// document is listed in `META-INF/encryption.xml`.
+    ///
+    /// `encryption.xml` alone doesn't imply DRM — its common benign use is
+    /// font obfuscation, which leaves content documents unencrypted. Only
+    /// encrypted *spine* entries make the book unreadable; without this check
+    /// they would decode as binary garbage and import as mojibake "words".
+    nonisolated private static func ensureSpineNotEncrypted(
+        epubRoot: URL,
+        opfRelativePath: String,
+        opf: OPFResult
+    ) throws {
+        let encryptionURL = epubRoot
+            .appendingPathComponent("META-INF", isDirectory: true)
+            .appendingPathComponent("encryption.xml")
+        guard let data = try? Data(contentsOf: encryptionURL) else { return }
+
+        let parser = SimpleXMLParser()
+        parser.parse(data: data)
+
+        // <enc:CipherReference URI="..."/> paths are relative to the archive root.
+        var encryptedPaths = Set<String>()
+        for element in parser.elements where element.name == "CipherReference" {
+            if let uri = element.attributes["URI"] {
+                let decoded = uri.removingPercentEncoding ?? uri
+                encryptedPaths.insert(normalizedArchivePath(decoded))
+            }
+        }
+        guard !encryptedPaths.isEmpty else { return }
+
+        // Spine hrefs are relative to the OPF's directory — translate to
+        // archive-root-relative paths before comparing.
+        let opfDirPrefix: String
+        if let lastSlash = opfRelativePath.lastIndex(of: "/") {
+            opfDirPrefix = String(opfRelativePath[...lastSlash])
+        } else {
+            opfDirPrefix = ""
+        }
+
+        for itemID in opf.spineItems {
+            guard let href = opf.manifest[itemID] else { continue }
+            let rootRelative = normalizedArchivePath(opfDirPrefix + href)
+            if encryptedPaths.contains(rootRelative) {
+                throw DocumentImportError.epubDRMProtected
+            }
+        }
+    }
+
+    /// Resolves `.` / `..` segments and leading slashes so paths from
+    /// encryption.xml and the OPF manifest compare consistently.
+    nonisolated private static func normalizedArchivePath(_ path: String) -> String {
+        let standardized = URL(fileURLWithPath: "/" + path).standardized.path
+        return String(standardized.dropFirst())
+    }
+
     // MARK: - container.xml → OPF path
 
     /// Reads `META-INF/container.xml` to find the path to the OPF package file.
@@ -91,7 +156,11 @@ enum EPUBTextExtractor {
         let containerURL = epubDir
             .appendingPathComponent("META-INF", isDirectory: true)
             .appendingPathComponent("container.xml")
-        let data = try Data(contentsOf: containerURL)
+        // A missing container.xml is a malformed EPUB — map to the import
+        // error instead of surfacing a raw CocoaError with a temp-dir path.
+        guard let data = try? Data(contentsOf: containerURL) else {
+            throw DocumentImportError.epubExtractionFailed
+        }
         let parser = SimpleXMLParser()
         parser.parse(data: data)
 
@@ -117,7 +186,9 @@ enum EPUBTextExtractor {
 
     /// Parses the OPF package file to extract manifest items, reading order, and metadata.
     nonisolated private static func parseOPF(at url: URL) throws -> OPFResult {
-        let data = try Data(contentsOf: url)
+        guard let data = try? Data(contentsOf: url) else {
+            throw DocumentImportError.epubExtractionFailed
+        }
         let parser = SimpleXMLParser()
         parser.parse(data: data)
 
@@ -305,6 +376,15 @@ enum EPUBTextExtractor {
 
     // MARK: - HTML stripping
 
+    /// Block-level elements whose boundaries get a space to prevent word joining.
+    nonisolated private static let blockTags: Set<String> = [
+        "p", "/p", "div", "/div", "br", "br/",
+        "h1", "/h1", "h2", "/h2", "h3", "/h3",
+        "h4", "/h4", "h5", "/h5", "h6", "/h6",
+        "li", "/li", "blockquote", "/blockquote",
+        "section", "/section", "article", "/article"
+    ]
+
     /// Strips HTML tags from raw XHTML data, producing plain text.
     ///
     /// Skips `<script>`, `<style>`, and `<table>` content entirely.
@@ -347,14 +427,7 @@ enum EPUBTextExtractor {
                     else if tagName == "/table" { tableDepth = max(0, tableDepth - 1) }
 
                     // Block-level elements get a space to prevent word joining
-                    let blockTags: Set<String> = [
-                        "p", "/p", "div", "/div", "br", "br/",
-                        "h1", "/h1", "h2", "/h2", "h3", "/h3",
-                        "h4", "/h4", "h5", "/h5", "h6", "/h6",
-                        "li", "/li", "blockquote", "/blockquote",
-                        "section", "/section", "article", "/article"
-                    ]
-                    if blockTags.contains(tagName) {
+                    if Self.blockTags.contains(tagName) {
                         output.append(" ")
                     }
 
@@ -375,87 +448,99 @@ enum EPUBTextExtractor {
 
     // MARK: - HTML entity resolution
 
+    /// Named entity bodies (the text between `&` and `;`) and their replacements.
     nonisolated private static let htmlEntityMap: [String: String] = [
-        "&nbsp;": " ",
-        "&amp;": "&",
-        "&lt;": "<",
-        "&gt;": ">",
-        "&quot;": "\"",
-        "&apos;": "'",
-        "&mdash;": "\u{2014}",
-        "&ndash;": "\u{2013}",
-        "&hellip;": "\u{2026}",
-        "&lsquo;": "\u{2018}",
-        "&rsquo;": "\u{2019}",
-        "&ldquo;": "\u{201C}",
-        "&rdquo;": "\u{201D}",
-        "&trade;": "\u{2122}",
-        "&reg;": "\u{00AE}",
-        "&copy;": "\u{00A9}",
-        "&bull;": "\u{2022}",
-        "&deg;": "\u{00B0}",
-        "&times;": "\u{00D7}",
-        "&divide;": "\u{00F7}",
-        "&laquo;": "\u{00AB}",
-        "&raquo;": "\u{00BB}",
-        "&frac12;": "\u{00BD}",
-        "&frac14;": "\u{00BC}",
-        "&frac34;": "\u{00BE}",
+        "nbsp": " ",
+        "amp": "&",
+        "lt": "<",
+        "gt": ">",
+        "quot": "\"",
+        "apos": "'",
+        "mdash": "\u{2014}",
+        "ndash": "\u{2013}",
+        "hellip": "\u{2026}",
+        "lsquo": "\u{2018}",
+        "rsquo": "\u{2019}",
+        "ldquo": "\u{201C}",
+        "rdquo": "\u{201D}",
+        "trade": "\u{2122}",
+        "reg": "\u{00AE}",
+        "copy": "\u{00A9}",
+        "bull": "\u{2022}",
+        "deg": "\u{00B0}",
+        "times": "\u{00D7}",
+        "divide": "\u{00F7}",
+        "laquo": "\u{00AB}",
+        "raquo": "\u{00BB}",
+        "frac12": "\u{00BD}",
+        "frac14": "\u{00BC}",
+        "frac34": "\u{00BE}",
     ]
 
-    /// Resolves named and numeric HTML entities in the given string.
+    /// Longest entity body worth scanning for: `&#x10FFFF;` (8) with slack.
+    nonisolated private static let maxEntityBodyLength = 16
+
+    /// Resolves named and numeric (`&#NNN;` / `&#xHHH;`) HTML entities in a
+    /// single left-to-right pass.
+    ///
+    /// A single pass makes double-encoded input decode correctly and
+    /// deterministically: each resolved entity is emitted as plain text and
+    /// never rescanned, so `&amp;lt;` → `&lt;` and `&amp;#65;` → `&#65;`
+    /// (the multi-pass predecessor decoded those a second time, and its
+    /// dictionary-ordered named pass made the result order-dependent).
     nonisolated static func resolveHTMLEntities(_ text: String) -> String {
-        var result = text
-
-        // Named entities
-        for (entity, replacement) in htmlEntityMap {
-            result = result.replacingOccurrences(of: entity, with: replacement)
-        }
-
-        // Numeric decimal entities: &#123;
-        result = resolveNumericEntities(in: result, hex: false)
-        // Numeric hex entities: &#x1F4A9;
-        result = resolveNumericEntities(in: result, hex: true)
-
-        return result
-    }
-
-    /// Replaces `&#NNN;` (decimal) or `&#xHHH;` (hex) numeric character references.
-    nonisolated private static func resolveNumericEntities(in text: String, hex: Bool) -> String {
-        let prefix = hex ? "&#x" : "&#"
-        guard text.contains(prefix) else { return text }
+        guard text.contains("&") else { return text }
 
         var result = ""
         result.reserveCapacity(text.count)
         var i = text.startIndex
 
         while i < text.endIndex {
-            if text[i...].hasPrefix(prefix) {
-                let entityStart = i
-                let digitsStart = text.index(i, offsetBy: prefix.count)
-                var j = digitsStart
-                while j < text.endIndex && text[j] != ";" {
-                    j = text.index(after: j)
-                }
-                if j < text.endIndex && j > digitsStart {
-                    let digits = String(text[digitsStart..<j])
-                    let codePoint = hex ? UInt32(digits, radix: 16) : UInt32(digits)
-                    if let cp = codePoint, let scalar = Unicode.Scalar(cp) {
-                        result.append(Character(scalar))
-                        i = text.index(after: j) // skip past ';'
-                        continue
-                    }
-                }
-                // Not a valid entity — emit the '&' and continue
-                result.append(text[entityStart])
-                i = text.index(after: entityStart)
+            let char = text[i]
+            guard char == "&" else {
+                result.append(char)
+                i = text.index(after: i)
+                continue
+            }
+
+            // Find the terminating ';' within a bounded window.
+            var j = text.index(after: i)
+            var semicolon: String.Index?
+            var steps = 0
+            while j < text.endIndex, steps < maxEntityBodyLength {
+                if text[j] == ";" { semicolon = j; break }
+                if text[j] == "&" { break } // a new '&' can't be inside an entity
+                j = text.index(after: j)
+                steps += 1
+            }
+
+            if let semicolon,
+               let replacement = entityReplacement(String(text[text.index(after: i)..<semicolon])) {
+                result.append(replacement)
+                i = text.index(after: semicolon)
             } else {
-                result.append(text[i])
+                // Not a valid entity — emit the '&' literally and continue.
+                result.append(char)
                 i = text.index(after: i)
             }
         }
 
         return result
+    }
+
+    /// Replacement for an entity body (`amp`, `#65`, `#x41`, …), or nil if invalid.
+    nonisolated private static func entityReplacement(_ body: String) -> String? {
+        if body.hasPrefix("#x") || body.hasPrefix("#X") {
+            guard let codePoint = UInt32(body.dropFirst(2), radix: 16),
+                  let scalar = Unicode.Scalar(codePoint) else { return nil }
+            return String(Character(scalar))
+        }
+        if body.hasPrefix("#") {
+            guard let codePoint = UInt32(body.dropFirst(1)),
+                  let scalar = Unicode.Scalar(codePoint) else { return nil }
+            return String(Character(scalar))
+        }
+        return htmlEntityMap[body]
     }
 }
 
@@ -478,8 +563,20 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
         var text: String?
     }
 
+    /// Text is attributed to at most this many enclosing ancestors. Real
+    /// package/nav documents nest titles a handful of levels deep; without a
+    /// cap, a crafted document with thousands of open elements makes every
+    /// character-data callback O(depth) and stores O(depth × text) copies —
+    /// a memory-amplification DoS on import.
+    nonisolated private static let maxAttributedAncestors = 32
+    /// Cumulative cap on attributed text across the whole document. The
+    /// documents this parser reads (container.xml, OPF, nav) are metadata —
+    /// a few hundred KB of titles is far beyond any legitimate book.
+    nonisolated private static let maxTotalAttributedBytes = 8 << 20
+
     nonisolated(unsafe) private(set) var elements: [Element] = []
     nonisolated(unsafe) private var openElementIndices: [Int] = []
+    nonisolated(unsafe) private var totalAttributedBytes = 0
 
     nonisolated override init() { super.init() }
 
@@ -503,7 +600,10 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
     }
 
     nonisolated func parser(_ parser: XMLParser, foundCharacters string: String) {
-        for index in openElementIndices {
+        guard totalAttributedBytes < Self.maxTotalAttributedBytes else { return }
+        let ancestors = openElementIndices.suffix(Self.maxAttributedAncestors)
+        totalAttributedBytes += string.utf8.count * ancestors.count
+        for index in ancestors {
             // In-place append: `(text ?? "") + string` copies each long-lived
             // ancestor's entire accumulated text on every callback, which is
             // quadratic for large nav/TOC documents.
@@ -539,7 +639,6 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     struct NavPoint {
         var title: String?
         var src: String?
-        let depth: Int
     }
 
     nonisolated(unsafe) private(set) var navPoints: [NavPoint] = []
@@ -625,14 +724,10 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     }
 
     nonisolated private func finishCurrentNavPoint() {
-        guard let depth = activeNavPointDepth else { return }
+        guard activeNavPointDepth != nil else { return }
         let trimmedTitle = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTitle != nil || currentSrc != nil {
-            navPoints.append(NavPoint(
-                title: trimmedTitle,
-                src: currentSrc,
-                depth: depth
-            ))
+            navPoints.append(NavPoint(title: trimmedTitle, src: currentSrc))
         }
         activeNavPointDepth = nil
         currentTitle = nil

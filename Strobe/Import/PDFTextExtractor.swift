@@ -1,4 +1,5 @@
 import PDFKit
+import os
 
 /// The result of extracting text from a PDF file.
 struct PDFExtractionResult {
@@ -14,6 +15,16 @@ struct PDFExtractionResult {
 /// from the PDF outline.
 enum PDFTextExtractor {
 
+    nonisolated private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.abdeen.strobe",
+        category: "PDFTextExtractor"
+    )
+
+    /// Upper bound on pages processed per import. Far beyond any real book —
+    /// this exists so a crafted PDF declaring an enormous page count can't
+    /// pin the import task's CPU and memory indefinitely.
+    nonisolated static let maxProcessedPages = 20_000
+
     /// Extracts words and chapters from a PDF file.
     /// - Parameters:
     ///   - url: The file URL of the PDF document.
@@ -28,14 +39,28 @@ enum PDFTextExtractor {
             throw DocumentImportError.pdfLoadFailed
         }
 
+        // A locked document opens fine but yields no page text — without this
+        // check it would fall through to the misleading "image-only" error.
+        guard !document.isLocked else {
+            throw DocumentImportError.pdfPasswordProtected
+        }
+
         let title = (document.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String)
             .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
 
+        let pageCount = min(document.pageCount, maxProcessedPages)
+        if document.pageCount > maxProcessedPages {
+            logger.warning("PDF declares \(document.pageCount) pages; processing the first \(maxProcessedPages).")
+        }
+
         // Phase 1: Collect raw text from each page
         var pageTexts: [String] = []
-        pageTexts.reserveCapacity(document.pageCount)
+        pageTexts.reserveCapacity(pageCount)
 
-        for i in 0..<document.pageCount {
+        for i in 0..<pageCount {
+            // Keep a cancelled import (user tapped Cancel) from grinding
+            // through the rest of a large document.
+            if i % 64 == 0 { try Task.checkCancellation() }
             autoreleasepool {
                 if let page = document.page(at: i), let text = page.string {
                     pageTexts.append(text)
@@ -50,10 +75,10 @@ enum PDFTextExtractor {
 
         // Phase 3: Tokenize cleaned pages
         var result: [String] = []
-        result.reserveCapacity(document.pageCount * 250)
+        result.reserveCapacity(pageCount * 250)
 
         var pageWordOffsets: [Int] = []
-        pageWordOffsets.reserveCapacity(document.pageCount)
+        pageWordOffsets.reserveCapacity(pageCount)
 
         var carry: String?
         for text in cleanedPages {

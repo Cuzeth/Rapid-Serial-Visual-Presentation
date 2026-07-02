@@ -5,6 +5,7 @@ internal import UniformTypeIdentifiers
 enum DocumentSourceType: String, Equatable {
     case pdf
     case epub
+    case plainText
     case unknown
 }
 
@@ -24,7 +25,11 @@ struct ImportResult {
 /// the display title from metadata or the filename.
 enum DocumentImportPipeline {
     /// The content types the app can import via the file picker.
-    nonisolated static let supportedContentTypes: [UTType] = [.pdf, .epub]
+    nonisolated static let supportedContentTypes: [UTType] = [.pdf, .epub, .plainText]
+
+    /// Upper bound on plain-text file size — beyond any real book; bounds
+    /// memory against a pathological multi-gigabyte file.
+    nonisolated static let maxPlainTextBytes = 64 << 20
 
     /// Determines the document format from the system-detected content type
     /// or, as a fallback, from the file extension.
@@ -32,6 +37,7 @@ enum DocumentImportPipeline {
         if let detectedContentType {
             if detectedContentType.conforms(to: .pdf) { return .pdf }
             if detectedContentType.conforms(to: .epub) { return .epub }
+            if detectedContentType.conforms(to: .plainText) { return .plainText }
         }
 
         let ext = url.pathExtension.lowercased()
@@ -40,6 +46,8 @@ enum DocumentImportPipeline {
             return .pdf
         case "epub":
             return .epub
+        case "txt", "text", "md", "markdown":
+            return .plainText
         default:
             return .unknown
         }
@@ -60,7 +68,7 @@ enum DocumentImportPipeline {
         var name = fileName
         if let dotRange = name.range(of: ".", options: .backwards) {
             let ext = String(name[dotRange.upperBound...]).lowercased()
-            if ["pdf", "epub"].contains(ext) {
+            if ["pdf", "epub", "txt", "text", "md", "markdown"].contains(ext) {
                 name = String(name[..<dotRange.lowerBound])
             }
         }
@@ -102,14 +110,39 @@ enum DocumentImportPipeline {
         switch type {
         case .pdf:
             let result = try PDFTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
+            try Task.checkCancellation()
             let complexity = WordComplexityAnalyzer.analyzeComplexity(result.words)
+            try Task.checkCancellation()
             return ImportResult(words: result.words, complexityScores: complexity, chapters: result.chapters, sourceType: .pdf, title: result.title)
         case .epub:
             let result = try EPUBTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaningLevel)
+            try Task.checkCancellation()
             let complexity = WordComplexityAnalyzer.analyzeComplexity(result.words)
+            try Task.checkCancellation()
             return ImportResult(words: result.words, complexityScores: complexity, chapters: result.chapters, sourceType: .epub, title: result.title)
+        case .plainText:
+            let text = try readPlainText(from: url)
+            let cleaned = TextCleaner.cleanText(text, level: cleaningLevel)
+            try Task.checkCancellation()
+            let words = Tokenizer.tokenize(cleaned)
+            try Task.checkCancellation()
+            let complexity = WordComplexityAnalyzer.analyzeComplexity(words)
+            try Task.checkCancellation()
+            return ImportResult(words: words, complexityScores: complexity, chapters: [], sourceType: .plainText, title: nil)
         case .unknown:
             throw DocumentImportError.unsupportedFileType
         }
+    }
+
+    /// Reads a plain-text file as UTF-8 (lossy for other encodings' invalid
+    /// sequences), bounded by ``maxPlainTextBytes``.
+    nonisolated private static func readPlainText(from url: URL) throws -> String {
+        guard let data = try? Data(contentsOf: url) else {
+            throw DocumentImportError.noReadableText
+        }
+        guard data.count <= maxPlainTextBytes else {
+            throw DocumentImportError.noReadableText
+        }
+        return String(decoding: data, as: UTF8.self)
     }
 }

@@ -144,6 +144,12 @@ enum TextCleaner {
             // Preserve blank lines (paragraph breaks)
             guard !trimmed.isEmpty else { return line }
 
+            // Boilerplate (page numbers, TOC leaders, ISBNs, notices) is
+            // short. A line this long is prose — keep it without pattern
+            // checks. This also bounds the regex engine's quadratic worst
+            // case on a crafted multi-megabyte single line.
+            guard trimmed.count <= maxPatternCheckLength else { return line }
+
             func remove(_ reason: RemovalReason) -> String? {
                 removedCount += 1
                 if let pageIndex {
@@ -192,6 +198,9 @@ enum TextCleaner {
 
     // MARK: - Cached regex patterns
 
+    /// Longest line the pattern matchers will inspect; longer lines are prose.
+    nonisolated private static let maxPatternCheckLength = 2048
+
     nonisolated private static let pageOfRegexes: [NSRegularExpression] = [
         #"^[Pp]age\s+\d+(\s+(of|/)\s+\d+)?$"#,
         #"^[Pp]\.\s*\d+$"#,
@@ -202,8 +211,11 @@ enum TextCleaner {
     nonisolated private static let tocLeaderRegex =
         try! NSRegularExpression(pattern: #"\.{3,}\s*\d+\s*$"#)
 
+    // The bounded prefix and mandatory digit break the class overlap the old
+    // `[\s:\-]*[\d\-]{10,}` had (both classes matched '-'), whose ambiguity
+    // made the engine backtrack quadratically on long hyphen runs.
     nonisolated private static let isbnRegex =
-        try! NSRegularExpression(pattern: #"ISBN[\s:\-]*[\d\-]{10,}"#, options: .caseInsensitive)
+        try! NSRegularExpression(pattern: #"ISBN[\s:-]{0,5}\d[\d-]{9,}"#, options: .caseInsensitive)
 
     nonisolated private static let firstEditionRegex =
         try! NSRegularExpression(pattern: #"^first\s+(edition|printing)"#, options: .caseInsensitive)
