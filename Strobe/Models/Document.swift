@@ -13,7 +13,10 @@ final class Document {
     var fileName: String
     var dateAdded: Date
     var lastReadDate: Date?
-    /// Security-scoped bookmark for re-accessing the original file.
+    /// Security-scoped bookmark captured at import. Not currently consumed
+    /// anywhere — retained (and still captured for new imports) so a future
+    /// re-import/refresh feature can re-access the original file without
+    /// re-prompting. Empty for documents created from typed/pasted text.
     var bookmarkData: Data
     /// Legacy word storage — empty for new documents. Retained for SwiftData
     /// schema compatibility with pre-blob versions. See ``compactWordStorageIfNeeded()``.
@@ -71,9 +74,46 @@ final class Document {
         return decoded
     }
 
-    /// Whether this document was created from typed/pasted text rather than a file.
-    /// Always `false` for file-backed documents (which have non-empty bookmark data).
-    var isTextDocument: Bool { bookmarkData.isEmpty }
+    /// Asynchronously resolves ``readingWords``, decoding the blob off the
+    /// main actor so opening a large document doesn't hitch the UI.
+    func loadReadingWordsAsync() async -> [String] {
+        if let cachedWords {
+            return cachedWords
+        }
+        let resolvedWords: [String]
+        if let wordsBlob, !wordsBlob.isEmpty {
+            let blob = wordsBlob
+            resolvedWords = await Task.detached(priority: .userInitiated) {
+                WordStorage.decode(blob)
+            }.value
+        } else {
+            resolvedWords = words
+        }
+        cachedWords = resolvedWords
+        return resolvedWords
+    }
+
+    /// Asynchronously resolves ``complexityScores``, decoding the blob off
+    /// the main actor.
+    func loadComplexityScoresAsync() async -> [Float]? {
+        if let cachedComplexity {
+            return cachedComplexity
+        }
+        guard let complexityBlob, !complexityBlob.isEmpty else { return nil }
+        let blob = complexityBlob
+        let decoded = await Task.detached(priority: .userInitiated) {
+            ComplexityStorage.decode(blob)
+        }.value
+        cachedComplexity = decoded
+        return decoded
+    }
+
+    /// Stores freshly computed complexity scores (a backfill for documents
+    /// imported before complexity timing existed) and refreshes the cache.
+    func storeComplexityScores(_ scores: [Float]) {
+        complexityBlob = scores.isEmpty ? nil : ComplexityStorage.encode(scores)
+        cachedComplexity = scores.isEmpty ? nil : scores
+    }
 
     /// Migrates words from the legacy `words` array to the `wordsBlob` external storage format.
     /// No-op if `wordsBlob` already exists or the legacy array is empty.
@@ -98,8 +138,31 @@ final class Document {
     /// lower it.
     var progress: Double {
         let furthest = displayedFurthestWordIndex
-        guard wordCount > 1 else { return furthest > 0 ? 1 : 0 }
+        guard wordCount > 1 else {
+            // A single-word document can never advance its indices past 0,
+            // so "has it been read" is the completion signal instead.
+            if wordCount == 1 {
+                return (lastReadDate != nil || furthest > 0) ? 1 : 0
+            }
+            return 0
+        }
         return Double(furthest) / Double(wordCount - 1)
+    }
+
+    /// Folds the reader's outgoing position into the persisted state.
+    ///
+    /// The furthest-read marker only ever advances — leaving the reader
+    /// after navigating backward (chapter peek, passage tap, scrubbing,
+    /// "Read Again") must not erase display progress. The outgoing
+    /// `currentWordIndex` is folded in so documents saved before the marker
+    /// existed adopt their old position as the floor.
+    func recordPosition(currentIndex: Int, wordsPerMinute: Int, touchLastReadDate: Bool) {
+        furthestWordIndex = max(furthestWordIndex, currentWordIndex, currentIndex)
+        currentWordIndex = currentIndex
+        self.wordsPerMinute = wordsPerMinute
+        if touchLastReadDate {
+            lastReadDate = Date()
+        }
     }
 
     init(

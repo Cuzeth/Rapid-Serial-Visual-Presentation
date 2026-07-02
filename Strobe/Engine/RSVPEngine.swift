@@ -63,8 +63,13 @@ final class RSVPEngine {
         return words[currentIndex]
     }
 
-    /// Whether the playback position is at the last word.
-    var isAtEnd: Bool { currentIndex >= words.count - 1 }
+    /// Whether the playback position is at the last word. `false` when the
+    /// word array is empty (e.g. still loading) so an unloaded engine never
+    /// reports a finished document.
+    var isAtEnd: Bool {
+        guard !words.isEmpty else { return false }
+        return currentIndex >= words.count - 1
+    }
 
     /// Playback progress as a value from 0.0 to 1.0.
     var progress: Double {
@@ -73,6 +78,10 @@ final class RSVPEngine {
     }
 
     private var timerSource: DispatchSourceTimer?
+    /// The deadline the timer is currently scheduled for. Advancing anchors
+    /// the next tick to this value (not `.now()`) so per-tick handler latency
+    /// doesn't accumulate into drift at high WPM.
+    private var scheduledDeadline: DispatchTime?
 
     private var baseInterval: TimeInterval {
         60.0 / Double(max(1, wordsPerMinute))
@@ -91,7 +100,7 @@ final class RSVPEngine {
         complexityScores: [Float]? = nil
     ) {
         self.words = words
-        self.currentIndex = currentIndex
+        self.currentIndex = words.isEmpty ? 0 : max(0, min(currentIndex, words.count - 1))
         self.wordsPerMinute = wordsPerMinute
         self.smartTimingEnabled = smartTimingEnabled
         self.sentencePauseEnabled = sentencePauseEnabled
@@ -102,9 +111,25 @@ final class RSVPEngine {
         self.complexityScores = complexityScores
     }
 
-    /// Starts playback from the current position. No-op if already playing or at end.
+    /// Replaces the word array, position, and complexity scores after
+    /// asynchronous loading. The position is clamped to the new bounds.
+    /// Intended to be called once, while paused, on an engine created empty.
+    func load(words: [String], currentIndex: Int, complexityScores: [Float]?) {
+        self.words = words
+        self.complexityScores = complexityScores
+        self.currentIndex = words.isEmpty ? 0 : max(0, min(currentIndex, words.count - 1))
+    }
+
+    /// Replaces the complexity scores (e.g. after a background backfill for a
+    /// legacy document) without touching playback state.
+    func updateComplexityScores(_ scores: [Float]?) {
+        complexityScores = scores
+    }
+
+    /// Starts playback from the current position. No-op if already playing,
+    /// at the end, or if no words are loaded.
     func play() {
-        guard !isPlaying, !isAtEnd else { return }
+        guard !isPlaying, !words.isEmpty, !isAtEnd else { return }
         isPlaying = true
         scheduleNextWord()
     }
@@ -135,11 +160,26 @@ final class RSVPEngine {
 
     private func onPlaybackSettingChanged() {
         guard isPlaying else { return }
-        scheduleNextWord()
+        guard let source = timerSource, let scheduled = scheduledDeadline else {
+            scheduleNextWord()
+            return
+        }
+        // Only ever pull the current word's deadline earlier. Pushing it out
+        // would let a continuously dragged settings slider (each didSet lands
+        // here) stall playback on one word indefinitely.
+        let candidate = DispatchTime.now() + nextInterval()
+        if candidate < scheduled {
+            scheduledDeadline = candidate
+            source.schedule(deadline: candidate)
+        }
     }
 
-    /// Schedules (or reschedules) the single reusable timer for the next word advance.
-    private func scheduleNextWord() {
+    /// Schedules (or reschedules) the single reusable timer for the next word
+    /// advance. When `anchor` is set (the previous tick's deadline), the next
+    /// deadline is measured from it so scheduling latency doesn't compound —
+    /// clamped to now so a long stall (app suspension) can't cause a burst of
+    /// catch-up ticks.
+    private func scheduleNextWord(anchor: DispatchTime? = nil) {
         guard isPlaying else { return }
         if timerSource == nil {
             let source = DispatchSource.makeTimerSource(queue: .main)
@@ -149,7 +189,10 @@ final class RSVPEngine {
             source.resume()
             timerSource = source
         }
-        timerSource?.schedule(deadline: .now() + nextInterval())
+        let now = DispatchTime.now()
+        let deadline = max((anchor ?? now) + nextInterval(), now)
+        scheduledDeadline = deadline
+        timerSource?.schedule(deadline: deadline)
     }
 
     private func stopTimer() {
@@ -157,13 +200,15 @@ final class RSVPEngine {
         source.setEventHandler {}
         source.cancel()
         timerSource = nil
+        scheduledDeadline = nil
     }
 
     private func advance() {
         guard isPlaying else { return }
         if currentIndex < words.count - 1 {
+            let previousDeadline = scheduledDeadline
             currentIndex += 1
-            scheduleNextWord()
+            scheduleNextWord(anchor: previousDeadline)
         } else {
             pause()
         }

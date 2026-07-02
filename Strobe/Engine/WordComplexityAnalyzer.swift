@@ -21,6 +21,9 @@ enum WordComplexityAnalyzer {
         var scores = [Float](repeating: 0.5, count: words.count)
 
         for i in 0..<words.count {
+            // A cancelled import stops scoring; the partial result is
+            // discarded by the pipeline's cancellation check right after.
+            if i % 8192 == 0 && Task.isCancelled { break }
             let word = words[i]
             let stripped = word.trimmingCharacters(in: .punctuationCharacters)
 
@@ -102,27 +105,35 @@ enum WordComplexityAnalyzer {
 
         // Tokens arrive in document order, so a forward cursor over both the
         // string indices and the word-start table keeps the mapping O(n).
-        var wordIndex = 0
-        var cursorOffset = 0
-        var cursorIndex = text.startIndex
+        // Each scheme is one batched enumeration — the previous version made
+        // a per-word `tagger.tag(at:)` point query for the name type, which
+        // re-resolves the token at each position (~200k queries on a novel).
+        func mapTags(scheme: NLTagScheme, into tags: inout [NLTag?]) {
+            var wordIndex = 0
+            var cursorOffset = 0
+            var cursorIndex = text.startIndex
 
-        tagger.enumerateTags(
-            in: text.startIndex..<text.endIndex,
-            unit: .word,
-            scheme: .lexicalClass,
-            options: [.omitWhitespace, .omitPunctuation]
-        ) { tag, range in
-            cursorOffset += text.unicodeScalars.distance(from: cursorIndex, to: range.lowerBound)
-            cursorIndex = range.lowerBound
-            while wordIndex + 1 < words.count && cursorOffset >= wordStarts[wordIndex + 1] {
-                wordIndex += 1
+            tagger.enumerateTags(
+                in: text.startIndex..<text.endIndex,
+                unit: .word,
+                scheme: scheme,
+                options: [.omitWhitespace, .omitPunctuation]
+            ) { tag, range in
+                guard !Task.isCancelled else { return false }
+                cursorOffset += text.unicodeScalars.distance(from: cursorIndex, to: range.lowerBound)
+                cursorIndex = range.lowerBound
+                while wordIndex + 1 < words.count && cursorOffset >= wordStarts[wordIndex + 1] {
+                    wordIndex += 1
+                }
+                if tags[wordIndex] == nil {
+                    tags[wordIndex] = tag
+                }
+                return true
             }
-            if lexicalTags[wordIndex] == nil {
-                lexicalTags[wordIndex] = tag
-                entityTags[wordIndex] = tagger.tag(at: range.lowerBound, unit: .word, scheme: .nameType).0
-            }
-            return true
         }
+
+        mapTags(scheme: .lexicalClass, into: &lexicalTags)
+        mapTags(scheme: .nameType, into: &entityTags)
 
         return (lexicalTags, entityTags)
     }

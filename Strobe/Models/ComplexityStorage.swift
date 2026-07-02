@@ -8,7 +8,7 @@ import Foundation
 enum ComplexityStorage {
 
     /// Encodes a complexity score array into raw binary data.
-    static func encode(_ scores: [Float]) -> Data {
+    nonisolated static func encode(_ scores: [Float]) -> Data {
         scores.withUnsafeBytes { Data($0) }
     }
 
@@ -16,7 +16,7 @@ enum ComplexityStorage {
     ///
     /// `Data` from SwiftData's external blob store isn't guaranteed to be
     /// 4-byte aligned, so `loadUnaligned` is required — `load` would trap.
-    static func decode(_ data: Data) -> [Float] {
+    nonisolated static func decode(_ data: Data) -> [Float] {
         guard !data.isEmpty else { return [] }
         let count = data.count / MemoryLayout<Float>.size
         return data.withUnsafeBytes { buffer in

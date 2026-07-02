@@ -56,6 +56,13 @@ enum Tokenizer {
                     appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
                     tokenBuffer.removeAll(keepingCapacity: true)
                 }
+                // A hyphenated Latin fragment can't merge with CJK — emit it
+                // now, or it would be appended *after* the CJK words that
+                // follow it, reordering the text.
+                if let pending = carry {
+                    output.append(pending)
+                    carry = nil
+                }
                 cjkBuffer.unicodeScalars.append(scalar)
                 continue
             }
@@ -119,7 +126,13 @@ enum Tokenizer {
         // Punctuation-only tokens (e.g. a stray period or apostrophe)
         // get glued onto the previous word rather than becoming their own word.
         if !isReadableWord(token) {
-            if !output.isEmpty {
+            if let pending = carry {
+                // Punctuation can't continue a hyphenated fragment — flush
+                // the fragment with the punctuation attached instead of
+                // silently dropping the token when output is empty.
+                output.append(pending + token)
+                carry = nil
+            } else if !output.isEmpty {
                 output[output.count - 1].append(token)
             }
             return
