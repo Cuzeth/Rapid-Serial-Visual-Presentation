@@ -23,6 +23,18 @@ final class RSVPEngine {
         didSet { onPlaybackSettingChanged() }
     }
 
+    /// Temporary speed while the hold-to-read finger drags vertically.
+    /// Cleared on `pause()` so every hold starts at `wordsPerMinute`.
+    var wpmOverride: Int? {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// The speed playback actually runs at: the hold override if one is
+    /// active, otherwise the configured speed.
+    var effectiveWordsPerMinute: Int {
+        wpmOverride ?? wordsPerMinute
+    }
+
     /// When enabled, longer words are displayed for proportionally more time.
     var smartTimingEnabled: Bool {
         didSet { onPlaybackSettingChanged() }
@@ -84,7 +96,7 @@ final class RSVPEngine {
     private var scheduledDeadline: DispatchTime?
 
     private var baseInterval: TimeInterval {
-        60.0 / Double(max(1, wordsPerMinute))
+        60.0 / Double(max(1, effectiveWordsPerMinute))
     }
 
     init(
@@ -134,10 +146,12 @@ final class RSVPEngine {
         scheduleNextWord()
     }
 
-    /// Stops playback and invalidates the timer.
+    /// Stops playback, invalidates the timer, and discards any hold-to-read
+    /// speed override so the next play resumes at the configured speed.
     func pause() {
         isPlaying = false
         stopTimer()
+        wpmOverride = nil
     }
 
     /// Jumps to a specific word index, clamped to valid bounds.
@@ -259,6 +273,20 @@ final class RSVPEngine {
         }
 
         return multiplier
+    }
+
+    /// Maps a hold-to-read vertical drag to a temporary WPM. Movement within
+    /// ±15pt of the touch-down point changes nothing; beyond that dead zone,
+    /// each point is worth 2.5 WPM (up = faster), measured from the dead-zone
+    /// edge, snapped to 10-WPM steps and clamped to the 100–1000 slider range.
+    nonisolated static func holdSpeedWPM(baseWPM: Int, verticalTranslation: Double) -> Int {
+        let deadZone = 15.0
+        let wpmPerPoint = 2.5
+        let magnitude = abs(verticalTranslation)
+        guard magnitude > deadZone else { return baseWPM }
+        let delta = (magnitude - deadZone) * wpmPerPoint * (verticalTranslation < 0 ? 1 : -1)
+        let snapped = ((Double(baseWPM) + delta) / 10).rounded() * 10
+        return Int(min(1000, max(100, snapped)))
     }
 
     nonisolated private static func hasTrailingPunctuation(_ word: String) -> Bool {

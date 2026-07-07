@@ -212,6 +212,61 @@ struct StrobeTests {
         #expect(engine.isAtEnd)
     }
 
+    // MARK: - Hold-to-read speed control
+
+    @Test func holdSpeedWPMReturnsBaseInsideDeadZone() {
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: 0) == 300)
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: -15) == 300)
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: 15) == 300)
+    }
+
+    @Test func holdSpeedWPMIncreasesWhenMovingUp() {
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: -215) == 800)
+    }
+
+    @Test func holdSpeedWPMDecreasesWhenMovingDown() {
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: 55) == 200)
+    }
+
+    @Test func holdSpeedWPMSnapsToTenWPMSteps() {
+        let adjusted = RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: -21)
+        #expect(adjusted == 320)
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: -19) == 310)
+    }
+
+    @Test func holdSpeedWPMClampsToSliderRange() {
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: -2000) == 1000)
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: 2000) == 100)
+    }
+
+    @Test func engineEffectiveWPMFollowsOverrideWithoutTouchingBase() {
+        let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 300)
+        #expect(engine.effectiveWordsPerMinute == 300)
+        engine.wpmOverride = 500
+        #expect(engine.effectiveWordsPerMinute == 500)
+        #expect(engine.wordsPerMinute == 300)
+    }
+
+    @Test func enginePauseClearsWPMOverride() {
+        let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 300)
+        engine.play()
+        engine.wpmOverride = 700
+        engine.pause()
+        #expect(engine.wpmOverride == nil)
+        #expect(engine.effectiveWordsPerMinute == 300)
+    }
+
+    @Test func engineResumesAtBaseSpeedAfterPause() {
+        let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 300)
+        engine.play()
+        engine.wpmOverride = 900
+        engine.pause()
+        engine.play()
+        #expect(engine.isPlaying)
+        #expect(engine.effectiveWordsPerMinute == 300)
+        engine.pause()
+    }
+
     // MARK: - WordStorage round-trip
 
     @Test func wordStorageEncodeDecodeRoundTrip() {
