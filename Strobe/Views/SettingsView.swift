@@ -11,6 +11,7 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
+    @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
@@ -84,8 +85,8 @@ struct SettingsView: View {
 
                                 snappingSlider(
                                     value: $wpmSliderValue,
-                                    in: 100...1000,
-                                    step: 10,
+                                    in: ReaderSettings.wpmRange,
+                                    step: ReaderSettings.wpmStep,
                                     accessibilityLabel: "Default words per minute",
                                     accessibilityValue: "\(defaultWPM) words per minute"
                                 ) { snapped in
@@ -281,12 +282,46 @@ struct SettingsView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .tint(StrobeTheme.accent)
+
+                                if holdToReadEnabled {
+                                    Toggle(isOn: $holdSpeedAdjustEnabled) {
+                                        VStack(alignment: .leading) {
+                                            Text("Drag to Adjust Speed")
+                                                .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                                .foregroundStyle(StrobeTheme.textPrimary)
+                                            Text("While holding to read, drag up or down to change speed")
+                                                .font(StrobeTheme.bodyFont(size: 12))
+                                                .foregroundStyle(StrobeTheme.textSecondary)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .tint(StrobeTheme.accent)
+                                    .padding(.leading, 4)
+                                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                                }
+                                #endif
+                                #if os(macOS)
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $holdSpeedAdjustEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Drag to Adjust Speed")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("While reading, click-drag up or down to change speed")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
                                 #endif
                             }
                             .toggleStyle(.switch)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: smartTimingEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sentencePauseEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: complexityTimingEnabled)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: holdToReadEnabled)
                         }
 
                         // Text Cleaning

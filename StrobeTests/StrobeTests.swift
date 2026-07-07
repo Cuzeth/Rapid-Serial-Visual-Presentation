@@ -239,6 +239,24 @@ struct StrobeTests {
         #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: 2000) == 100)
     }
 
+    @Test func holdSpeedWPMRoundsToNearestStep() {
+        // 312.5 → 310 (ordinary round-down; complements the -21 tie case).
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 300, verticalTranslation: -20) == 310)
+    }
+
+    @Test func holdSpeedWPMClampsFromBoundaryBases() {
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 1000, verticalTranslation: -50) == 1000)
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 100, verticalTranslation: 50) == 100)
+    }
+
+    @Test func holdSpeedWPMNormalizesOffGridBaseInDeadZone() {
+        // Batch A makes the dead-zone path snap+clamp too, so an off-grid or
+        // out-of-range base normalizes even with no drag.
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 305, verticalTranslation: 0) == 310)
+        #expect(RSVPEngine.holdSpeedWPM(baseWPM: 50, verticalTranslation: 0) == 100)
+    }
+
+    @MainActor
     @Test func engineEffectiveWPMFollowsOverrideWithoutTouchingBase() {
         let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 300)
         #expect(engine.effectiveWordsPerMinute == 300)
@@ -247,6 +265,7 @@ struct StrobeTests {
         #expect(engine.wordsPerMinute == 300)
     }
 
+    @MainActor
     @Test func enginePauseClearsWPMOverride() {
         let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 300)
         engine.play()
@@ -256,6 +275,7 @@ struct StrobeTests {
         #expect(engine.effectiveWordsPerMinute == 300)
     }
 
+    @MainActor
     @Test func engineResumesAtBaseSpeedAfterPause() {
         let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 300)
         engine.play()
@@ -264,6 +284,22 @@ struct StrobeTests {
         engine.play()
         #expect(engine.isPlaying)
         #expect(engine.effectiveWordsPerMinute == 300)
+        engine.pause()
+    }
+
+    // Base 60 WPM = 1 s/word (three words ≈ 3 s to finish). Raising the override
+    // to 6000 WPM = 10 ms/word must let playback finish well under the ~800 ms
+    // budget — impossible unless baseInterval derives from the override.
+    @MainActor
+    @Test func enginePlaybackTimerHonorsWPMOverride() async throws {
+        let engine = RSVPEngine(words: ["a", "b", "c"], wordsPerMinute: 60)
+        engine.play()
+        engine.wpmOverride = 6000
+        for _ in 0..<80 where engine.isPlaying {   // ~800 ms budget
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(engine.isAtEnd)
+        #expect(!engine.isPlaying)
         engine.pause()
     }
 

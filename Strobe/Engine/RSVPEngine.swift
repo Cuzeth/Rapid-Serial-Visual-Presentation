@@ -278,15 +278,19 @@ final class RSVPEngine {
     /// Maps a hold-to-read vertical drag to a temporary WPM. Movement within
     /// ±15pt of the touch-down point changes nothing; beyond that dead zone,
     /// each point is worth 2.5 WPM (up = faster), measured from the dead-zone
-    /// edge, snapped to 10-WPM steps and clamped to the 100–1000 slider range.
+    /// edge. The result is always snapped to `ReaderSettings.wpmStep` and
+    /// clamped to `ReaderSettings.wpmRange`.
     nonisolated static func holdSpeedWPM(baseWPM: Int, verticalTranslation: Double) -> Int {
         let deadZone = 15.0
         let wpmPerPoint = 2.5
         let magnitude = abs(verticalTranslation)
-        guard magnitude > deadZone else { return baseWPM }
-        let delta = (magnitude - deadZone) * wpmPerPoint * (verticalTranslation < 0 ? 1 : -1)
-        let snapped = ((Double(baseWPM) + delta) / 10).rounded() * 10
-        return Int(min(1000, max(100, snapped)))
+        let delta = magnitude > deadZone
+            ? (magnitude - deadZone) * wpmPerPoint * (verticalTranslation < 0 ? 1 : -1)
+            : 0
+        let step = ReaderSettings.wpmStep
+        let snapped = ((Double(baseWPM) + delta) / step).rounded() * step
+        return Int(min(ReaderSettings.wpmRange.upperBound,
+                       max(ReaderSettings.wpmRange.lowerBound, snapped)))
     }
 
     nonisolated private static func hasTrailingPunctuation(_ word: String) -> Bool {

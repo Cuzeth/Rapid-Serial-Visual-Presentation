@@ -19,6 +19,7 @@ enum ReaderSettings {
         nonisolated static let complexityTimingEnabled = "complexityTimingEnabled"
         nonisolated static let complexityIntensity = "complexityIntensity"
         nonisolated static let holdToReadEnabled = "holdToReadEnabled"
+        nonisolated static let holdSpeedAdjustEnabled = "holdSpeedAdjustEnabled"
 
         // App-level flags (not reader settings, but registered here so key
         // strings never drift between files).
@@ -36,7 +37,14 @@ enum ReaderSettings {
         nonisolated static let complexityTimingEnabled = false
         nonisolated static let complexityIntensity = 0.5
         nonisolated static let holdToReadEnabled = true
+        nonisolated static let holdSpeedAdjustEnabled = true
     }
+
+    /// Shared words-per-minute domain: the reader slider, the settings slider,
+    /// and the hold-to-read speed mapping all read these so the range and step
+    /// can never drift between call sites.
+    nonisolated static let wpmRange: ClosedRange<Double> = 100...1000
+    nonisolated static let wpmStep: Double = 10
 
     /// The engine-relevant timing settings, read directly from UserDefaults.
     struct TimingSnapshot {
