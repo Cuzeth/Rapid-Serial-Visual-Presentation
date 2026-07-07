@@ -27,6 +27,7 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
+    @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -136,12 +137,25 @@ struct ReaderView: View {
                     CurrentWordView(engine: engine, fontSize: CGFloat(fontSize))
                     .id("wordview") // stabilize identity
                     .transition(.opacity)
+                    // Overlay (not a sibling) so the word never shifts when
+                    // the readout appears.
+                    .overlay {
+                        HoldSpeedReadoutView(engine: engine)
+                            .offset(y: CGFloat(fontSize) * 1.4)
+                            .accessibilityHidden(true)
+                    }
                     // The word display sits above the gesture layer; without
                     // this, holding directly on the word would swallow the
                     // hold-to-read gesture.
                     .allowsHitTesting(false)
                     .accessibilityAction(named: engine.isPlaying ? "Pause" : "Play") {
                         togglePlayback()
+                    }
+                    .accessibilityAction(named: "Increase speed") {
+                        nudgeSpeed(by: Int(ReaderSettings.wpmStep))
+                    }
+                    .accessibilityAction(named: "Decrease speed") {
+                        nudgeSpeed(by: -Int(ReaderSettings.wpmStep))
                     }
                 }
 
@@ -323,6 +337,29 @@ struct ReaderView: View {
                     }
                 }
 
+                if touchMode == .reading, holdSpeedAdjustEnabled {
+                    // Vertical drag while holding adjusts speed live. The
+                    // override is nil inside the dead zone so the readout
+                    // only appears once the finger commits to adjusting.
+                    guard engine.isPlaying else { return }
+                    let base = engine.wordsPerMinute
+                    let mapped = RSVPEngine.holdSpeedWPM(
+                        baseWPM: base,
+                        verticalTranslation: value.translation.height
+                    )
+                    if mapped != engine.effectiveWordsPerMinute {
+                        engine.wpmOverride = mapped == base ? nil : mapped
+                        // A distinct cue at the 100/1000 rail; otherwise the
+                        // per-step selection tick the WPM slider uses.
+                        if mapped == Int(ReaderSettings.wpmRange.lowerBound)
+                            || mapped == Int(ReaderSettings.wpmRange.upperBound) {
+                            HapticManager.shared.scrubBoundary()
+                        } else {
+                            HapticManager.shared.selectionTick()
+                        }
+                    }
+                }
+
                 if touchMode == .scrubbing {
                     // Scrubbing is a paused-only interaction.
                     guard !engine.isPlaying else { return }
@@ -344,6 +381,9 @@ struct ReaderView: View {
                 let wasScrubbing = touchMode == .scrubbing
                 isTouching = false
                 cancelPlayIntent()
+                // pause() clears the override; this covers the not-playing
+                // edge case (e.g. the document ended mid-hold).
+                engine.wpmOverride = nil
                 if holdToReadEnabled {
                     if engine.isPlaying {
                         engine.pause()
@@ -476,7 +516,7 @@ struct ReaderView: View {
                     .foregroundStyle(StrobeTheme.textSecondary)
                     .padding(.bottom, 4)
                 
-                Slider(value: $wpmSliderValue, in: 100...1000, step: 10) { editing in
+                Slider(value: $wpmSliderValue, in: ReaderSettings.wpmRange, step: ReaderSettings.wpmStep) { editing in
                     isAdjustingWPM = editing
                     if !editing {
                         applyWPM(Int(wpmSliderValue), withHaptic: true)
@@ -606,9 +646,12 @@ struct ReaderView: View {
         if showCompletion { return "Completed" }
         if isBarScrubbing { return "Seeking..." }
         #if os(macOS)
-        return "Press Space to read, arrows to scrub"
+        return holdSpeedAdjustEnabled
+            ? "Press Space to read, arrows to scrub · click-drag up/down for speed"
+            : "Press Space to read, arrows to scrub"
         #else
-        return holdToReadEnabled ? "Hold to read" : "Tap to read"
+        guard holdToReadEnabled else { return "Tap to read" }
+        return holdSpeedAdjustEnabled ? "Hold to read · drag up/down for speed" : "Hold to read"
         #endif
     }
 
@@ -651,6 +694,17 @@ struct ReaderView: View {
             HapticManager.shared.selectionTick()
         }
     }
+
+    /// Steps the configured speed by ±`wpmStep`, clamped to `wpmRange`. The
+    /// accessible, touch-mode-independent equivalent of the hold-to-read speed
+    /// drag — the WPM slider is hidden during playback, so VoiceOver / Switch
+    /// Control users and tap-to-read users otherwise have no in-playback path.
+    private func nudgeSpeed(by delta: Int) {
+        let lower = Int(ReaderSettings.wpmRange.lowerBound)
+        let upper = Int(ReaderSettings.wpmRange.upperBound)
+        let target = min(upper, max(lower, engine.wordsPerMinute + delta))
+        applyWPM(target, withHaptic: true)
+    }
 }
 
 // MARK: - Per-tick child views
@@ -667,6 +721,38 @@ private struct CurrentWordView: View {
     var body: some View {
         WordView(word: engine.currentWord, fontSize: fontSize)
             .equatable()
+    }
+}
+
+/// The transient speed readout shown while a hold-to-read vertical drag
+/// has an active WPM override. Isolates the per-change speed read.
+/// Every speed step restarts a 2s idle window; once idle, the readout
+/// fades out over 1s. Release (nil override) fades it quickly.
+private struct HoldSpeedReadoutView: View {
+    let engine: RSVPEngine
+    @State private var isVisible = false
+    // Latched so the fade-out keeps showing the last held value instead of
+    // flicking to the base WPM when the override clears.
+    @State private var shownWPM = 0
+
+    var body: some View {
+        Text("\(shownWPM) wpm")
+            .font(StrobeTheme.bodyFont(size: 14))
+            .monospacedDigit()
+            .foregroundStyle(StrobeTheme.textSecondary)
+            .opacity(isVisible ? 1 : 0)
+            .task(id: engine.wpmOverride) {
+                guard let override = engine.wpmOverride else {
+                    // Release: fade out quickly, keep the last shown number.
+                    withAnimation(.easeInOut(duration: 0.2)) { isVisible = false }
+                    return
+                }
+                shownWPM = override
+                withAnimation(.easeInOut(duration: 0.2)) { isVisible = true }
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 1)) { isVisible = false }
+            }
     }
 }
 

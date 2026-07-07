@@ -91,9 +91,9 @@ struct TutorialView: View {
 
     private var controlsDescription: String {
         #if os(macOS)
-        "Press Space to read, Space to pause. Use arrow keys or trackpad to scrub through text."
+        "Press Space to read, Space to pause. Use arrow keys or trackpad to scrub. While reading, drag up or down to adjust speed."
         #else
-        "Hold to read, release to pause. Swipe left or right to scrub. Prefer hands-free? Switch to tap-to-read in Settings."
+        "Hold to read, release to pause. Swipe left or right to scrub, or drag up and down to adjust speed. Prefer hands-free? Switch to tap-to-read in Settings."
         #endif
     }
 
