@@ -698,16 +698,28 @@ private struct CurrentWordView: View {
 
 /// The transient speed readout shown while a hold-to-read vertical drag
 /// has an active WPM override. Isolates the per-change speed read.
+/// Every speed step restarts a 2s idle window; once idle, the readout
+/// fades out over 1s. Release (nil override) fades it quickly.
 private struct HoldSpeedReadoutView: View {
     let engine: RSVPEngine
+    @State private var isVisible = false
 
     var body: some View {
         Text("\(engine.effectiveWordsPerMinute) WPM")
             .font(StrobeTheme.bodyFont(size: 14))
             .monospacedDigit()
             .foregroundStyle(StrobeTheme.textSecondary)
-            .opacity(engine.wpmOverride != nil ? 1 : 0)
-            .animation(.easeInOut(duration: 0.2), value: engine.wpmOverride != nil)
+            .opacity(isVisible ? 1 : 0)
+            .task(id: engine.wpmOverride) {
+                guard engine.wpmOverride != nil else {
+                    withAnimation(.easeInOut(duration: 0.2)) { isVisible = false }
+                    return
+                }
+                withAnimation(.easeInOut(duration: 0.2)) { isVisible = true }
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 1)) { isVisible = false }
+            }
     }
 }
 
