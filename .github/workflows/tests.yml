@@ -14,6 +14,7 @@ jobs:
   test-ios:
     name: iOS Tests
     runs-on: macos-26
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v5
@@ -72,6 +73,12 @@ jobs:
           )
           echo "Selected simulator: $UDID"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          # Start booting now so the slow simulator boot overlaps the build
+          # phase instead of serializing after it — `simctl boot` returns as
+          # soon as the boot is underway, and xcodebuild attaches to a
+          # booting/booted device without restarting it. This was the silent
+          # multi-minute gap after the build finished.
+          xcrun simctl boot "$UDID" || true
 
       - name: Run tests
         run: |
@@ -82,8 +89,7 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -resultBundlePath TestResults.xcresult \
             -skipPackagePluginValidation \
-            -skip-testing:StrobeUITests \
-            CODE_SIGNING_ALLOWED=NO | xcpretty --color
+            CODE_SIGNING_ALLOWED=NO | xcbeautify --renderer github-actions
 
       - name: Upload test results
         if: failure()
@@ -95,6 +101,7 @@ jobs:
   test-macos:
     name: macOS Tests
     runs-on: macos-26
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v5
@@ -108,7 +115,7 @@ jobs:
             -destination 'platform=macOS' \
             -resultBundlePath TestResults-macOS.xcresult \
             -skipPackagePluginValidation \
-            CODE_SIGNING_ALLOWED=NO | xcpretty --color
+            CODE_SIGNING_ALLOWED=NO | xcbeautify --renderer github-actions
 
       - name: Upload test results
         if: failure()
