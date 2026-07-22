@@ -36,7 +36,7 @@ PDF/EPUB/Text → DocumentImportPipeline → Extractor → TextCleaner → Token
 - CJK text: detected by Unicode range, segmented via `NLTokenizer`, punctuation attached to preceding word
 - Mixed-script text: character-by-character buffering switches between Latin and CJK
 
-**RSVPEngine** (`Engine/RSVPEngine.swift`): `@Observable` class driving timer-based word advancement. Supports smart timing (duration scales with word length), sentence pauses (multiplier at sentence-ending punctuation across Latin, CJK, and Arabic scripts), and complexity timing (per-word duration modulation based on cognitive complexity scores).
+**RSVPEngine** (`Engine/RSVPEngine.swift`): `@Observable` class driving timer-based word advancement. Supports smart timing (duration scales with word length; a configurable minimum word length keeps shorter words at the base rate), sentence pauses (multiplier at sentence-ending punctuation across Latin, CJK, and Arabic scripts), and complexity timing (per-word duration modulation based on cognitive complexity scores).
 
 **WordComplexityAnalyzer** (`Engine/WordComplexityAnalyzer.swift`): Scores each word's cognitive complexity (0.0–1.0) using NLTagger lexical class, named entity recognition, word frequency (built-in common word list), character composition, and word length. Scores are computed at import time and stored as a parallel `[Float]` blob via `ComplexityStorage`.
 
@@ -68,7 +68,7 @@ Strobe/
 - **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
 - **Typography**: Fraunces (`titleFont`) for headings and for large display numerals in Settings cards (WPM, text size — `titleFont(size: 32)` in `textPrimary`); body text and captions use `bodyFont`. Keep sibling numerals styled identically.
 - **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `epubDRMProtected`, `pdfLoadFailed`, `pdfPasswordProtected`, `noReadableText`)
-- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `readerFontSelection`, `textCleaningLevel` — all registered in `ReaderSettings.Keys` (plus app flags `hasSeenTutorial`, `didCompactLegacyWordStorage`); never use raw key strings
+- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `smartTimingMinimumWordLength`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `holdSpeedAdjustEnabled`, `readerFontSelection`, `textCleaningLevel` — all registered in `ReaderSettings.Keys` (plus app flags `hasSeenTutorial`, `didCompactLegacyWordStorage`); never use raw key strings
 - **Navigation**: value-based (`NavigationLink(value:)` + `navigationDestination` in `ContentView`, `ReaderRoute` for chapter entries) — eager `destination:` links would decode word blobs for every visible row. `ReaderView` loads word blobs asynchronously in `.task`, never in `init`.
 - **Platform conditionals**: `#if os(iOS)` / `#if os(macOS)` for UIKit/AppKit imports, haptics, presentation modifiers, and hint text. Engine, import pipeline, and models are fully cross-platform.
 - **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader) — via `.onKeyPress`, also works on iPad with hardware keyboard

@@ -124,6 +124,48 @@ struct StrobeTests {
         #expect(punctuated > plain)
     }
 
+    @Test func smartTimingMultiplierSkipsWordsBelowMinimumLength() {
+        let multiplier = RSVPEngine.smartTimingMultiplier(for: "cat", minimumWordLength: 6)
+        #expect(multiplier == 1.0)
+    }
+
+    /// Once a word reaches the threshold, the full per-letter calculation
+    /// applies — the threshold gates the slowdown, it doesn't rescale it, so
+    /// existing per-letter tuning keeps producing the same long-word durations.
+    @Test func smartTimingMultiplierAppliesFullSlowdownAtMinimumLength() {
+        let exact = RSVPEngine.smartTimingMultiplier(for: "strobe", minimumWordLength: 6)
+        let long = RSVPEngine.smartTimingMultiplier(for: "characteristically", minimumWordLength: 6)
+        #expect(exact == RSVPEngine.smartTimingMultiplier(for: "strobe"))
+        #expect(long == RSVPEngine.smartTimingMultiplier(for: "characteristically"))
+        #expect(exact > 1.0)
+    }
+
+    /// Punctuation doesn't count toward the threshold, and the clause-boundary
+    /// bonus survives it — a short word with a trailing comma still gets its
+    /// brief pause even when the length slowdown is gated off.
+    @Test func smartTimingMultiplierKeepsPunctuationBonusBelowMinimumLength() {
+        let multiplier = RSVPEngine.smartTimingMultiplier(for: "and,", minimumWordLength: 6)
+        #expect(multiplier == 1.2)
+    }
+
+    /// The default threshold (1) must reproduce the historical behavior for
+    /// every token shape, including punctuation-only tokens like an em-dash
+    /// (0 letters, so it clears no threshold but keeps its 0.2 bonus).
+    @Test func smartTimingMinimumLengthOfOneMatchesLegacyBehavior() {
+        let expected: [(word: String, multiplier: Double)] = [
+            ("a", 1.04),                     // 1 letter
+            ("cat", 1.12),                   // 3 letters
+            ("and,", 1.32),                  // 3 letters + punctuation bonus
+            ("reading.", 1.48),              // 7 letters + punctuation bonus
+            ("—", 1.2),                      // 0 letters, punctuation bonus only
+            ("characteristically", 1.72),    // 18 letters
+        ]
+        for (word, multiplier) in expected {
+            let gated = RSVPEngine.smartTimingMultiplier(for: word, minimumWordLength: 1)
+            #expect(abs(gated - multiplier) < 0.0001, "mismatch for \(word)")
+        }
+    }
+
     // MARK: - Sentence pause
 
     @Test func sentencePauseDetectsFullStops() {
@@ -474,6 +516,7 @@ struct StrobeTests {
         #expect(snapshot.smartTimingEnabled == engine.smartTimingEnabled)
         #expect(snapshot.sentencePauseEnabled == engine.sentencePauseEnabled)
         #expect(snapshot.smartTimingPercentPerLetter == engine.smartTimingPercentPerLetter)
+        #expect(snapshot.smartTimingMinimumWordLength == engine.smartTimingMinimumWordLength)
         #expect(snapshot.sentencePauseMultiplier == engine.sentencePauseMultiplier)
         #expect(snapshot.complexityTimingEnabled == engine.complexityTimingEnabled)
         #expect(snapshot.complexityIntensity == engine.complexityIntensity)
@@ -486,11 +529,13 @@ struct StrobeTests {
 
         defaults.set(true, forKey: ReaderSettings.Keys.smartTimingEnabled)
         defaults.set(7.0, forKey: ReaderSettings.Keys.smartTimingPercentPerLetter)
+        defaults.set(6, forKey: ReaderSettings.Keys.smartTimingMinimumWordLength)
         defaults.set(2.5, forKey: ReaderSettings.Keys.sentencePauseMultiplier)
 
         let snapshot = ReaderSettings.timingSnapshot(from: defaults)
         #expect(snapshot.smartTimingEnabled == true)
         #expect(snapshot.smartTimingPercentPerLetter == 7.0)
+        #expect(snapshot.smartTimingMinimumWordLength == 6)
         #expect(snapshot.sentencePauseMultiplier == 2.5)
         // Unset keys still fall back to defaults.
         #expect(snapshot.complexityTimingEnabled == ReaderSettings.Defaults.complexityTimingEnabled)

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.smartTimingEnabled) private var smartTimingEnabled: Bool = ReaderSettings.Defaults.smartTimingEnabled
     @AppStorage(ReaderSettings.Keys.sentencePauseEnabled) private var sentencePauseEnabled: Bool = ReaderSettings.Defaults.sentencePauseEnabled
     @AppStorage(ReaderSettings.Keys.smartTimingPercentPerLetter) private var smartTimingPercentPerLetter: Double = ReaderSettings.Defaults.smartTimingPercentPerLetter
+    @AppStorage(ReaderSettings.Keys.smartTimingMinimumWordLength) private var smartTimingMinimumWordLength: Int = ReaderSettings.Defaults.smartTimingMinimumWordLength
     @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
@@ -36,6 +37,20 @@ struct SettingsView: View {
             get: { textCleaningLevel == TextCleaningLevel.standard.rawValue },
             set: { textCleaningLevel = $0 ? TextCleaningLevel.standard.rawValue : TextCleaningLevel.none.rawValue }
         )
+    }
+
+    /// Bridges the Int-backed minimum word length setting to `Slider`'s Double binding.
+    private var smartTimingMinimumWordLengthSlider: Binding<Double> {
+        Binding(
+            get: { Double(smartTimingMinimumWordLength) },
+            set: { smartTimingMinimumWordLength = Int($0.rounded()) }
+        )
+    }
+
+    /// At the minimum (1) smart timing applies to every word — the label makes
+    /// that off-state legible instead of showing a cryptic "1+ letters".
+    private var minimumWordLengthLabel: String {
+        smartTimingMinimumWordLength <= 1 ? "All words" : "\(smartTimingMinimumWordLength)+ letters"
     }
 
     var body: some View {
@@ -186,6 +201,28 @@ struct SettingsView: View {
                                             .frame(minHeight: 44)
                                             .accessibilityLabel("Slowdown per letter")
                                             .accessibilityValue("\(Int(smartTimingPercentPerLetter)) percent")
+
+                                        HStack {
+                                            Text("Minimum word length")
+                                                .font(StrobeTheme.bodyFont(size: 14))
+                                                .foregroundStyle(StrobeTheme.textSecondary)
+                                            Spacer()
+                                            Text(minimumWordLengthLabel)
+                                                .font(StrobeTheme.bodyFont(size: 14, bold: true))
+                                                .foregroundStyle(StrobeTheme.textPrimary)
+                                        }
+                                        .padding(.top, 8)
+                                        Slider(value: smartTimingMinimumWordLengthSlider, in: 1...15, step: 1)
+                                            .tint(StrobeTheme.accent)
+                                            .frame(minHeight: 44)
+                                            .accessibilityLabel("Minimum word length")
+                                            .accessibilityValue(smartTimingMinimumWordLength <= 1
+                                                ? "All words"
+                                                : "\(smartTimingMinimumWordLength) or more letters")
+                                        Text("Shorter words show at your exact speed.")
+                                            .font(StrobeTheme.bodyFont(size: 11))
+                                            .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .padding(.leading, 4)
                                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
