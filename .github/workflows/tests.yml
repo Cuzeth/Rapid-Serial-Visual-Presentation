@@ -83,12 +83,17 @@ jobs:
       - name: Run tests
         run: |
           set -o pipefail
+          # Parallel testing makes xcodebuild boot a fresh *clone* of the
+          # destination (log: "Clone 1 of iPhone 17 Pro"), discarding the
+          # pre-booted device — and with a single unit-test bundle it only
+          # ever creates one worker anyway. Run directly on the booted sim.
           xcodebuild test \
             -project Strobe.xcodeproj \
             -scheme Strobe \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             -resultBundlePath TestResults.xcresult \
             -skipPackagePluginValidation \
+            -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO | xcbeautify --renderer github-actions
 
       - name: Upload test results
