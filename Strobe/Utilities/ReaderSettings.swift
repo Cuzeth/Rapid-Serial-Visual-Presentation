@@ -15,6 +15,7 @@ enum ReaderSettings {
         nonisolated static let smartTimingEnabled = "smartTimingEnabled"
         nonisolated static let sentencePauseEnabled = "sentencePauseEnabled"
         nonisolated static let smartTimingPercentPerLetter = "smartTimingPercentPerLetter"
+        nonisolated static let smartTimingMinimumWordLength = "smartTimingMinimumWordLength"
         nonisolated static let sentencePauseMultiplier = "sentencePauseMultiplier"
         nonisolated static let complexityTimingEnabled = "complexityTimingEnabled"
         nonisolated static let complexityIntensity = "complexityIntensity"
@@ -33,6 +34,7 @@ enum ReaderSettings {
         nonisolated static let smartTimingEnabled = false
         nonisolated static let sentencePauseEnabled = false
         nonisolated static let smartTimingPercentPerLetter = 4.0
+        nonisolated static let smartTimingMinimumWordLength = 1
         nonisolated static let sentencePauseMultiplier = 1.5
         nonisolated static let complexityTimingEnabled = false
         nonisolated static let complexityIntensity = 0.5
@@ -51,6 +53,7 @@ enum ReaderSettings {
         let smartTimingEnabled: Bool
         let sentencePauseEnabled: Bool
         let smartTimingPercentPerLetter: Double
+        let smartTimingMinimumWordLength: Int
         let sentencePauseMultiplier: Double
         let complexityTimingEnabled: Bool
         let complexityIntensity: Double
@@ -65,6 +68,8 @@ enum ReaderSettings {
                 ?? Defaults.sentencePauseEnabled,
             smartTimingPercentPerLetter: defaults.object(forKey: Keys.smartTimingPercentPerLetter) as? Double
                 ?? Defaults.smartTimingPercentPerLetter,
+            smartTimingMinimumWordLength: defaults.object(forKey: Keys.smartTimingMinimumWordLength) as? Int
+                ?? Defaults.smartTimingMinimumWordLength,
             sentencePauseMultiplier: defaults.object(forKey: Keys.sentencePauseMultiplier) as? Double
                 ?? Defaults.sentencePauseMultiplier,
             complexityTimingEnabled: defaults.object(forKey: Keys.complexityTimingEnabled) as? Bool

@@ -51,6 +51,13 @@ final class RSVPEngine {
         didSet { onPlaybackSettingChanged() }
     }
 
+    /// Minimum letter count (punctuation excluded) a word needs before the
+    /// per-letter slowdown applies; shorter words display at the base rate so
+    /// the overall pace stays close to the configured WPM. 1 slows every word.
+    var smartTimingMinimumWordLength: Int {
+        didSet { onPlaybackSettingChanged() }
+    }
+
     /// Multiplier applied to the interval at sentence-ending punctuation when sentence pauses are on.
     var sentencePauseMultiplier: Double {
         didSet { onPlaybackSettingChanged() }
@@ -106,6 +113,7 @@ final class RSVPEngine {
         smartTimingEnabled: Bool = false,
         sentencePauseEnabled: Bool = false,
         smartTimingPercentPerLetter: Double = 4.0,
+        smartTimingMinimumWordLength: Int = 1,
         sentencePauseMultiplier: Double = 1.5,
         complexityTimingEnabled: Bool = false,
         complexityIntensity: Double = 0.5,
@@ -117,6 +125,7 @@ final class RSVPEngine {
         self.smartTimingEnabled = smartTimingEnabled
         self.sentencePauseEnabled = sentencePauseEnabled
         self.smartTimingPercentPerLetter = smartTimingPercentPerLetter
+        self.smartTimingMinimumWordLength = smartTimingMinimumWordLength
         self.sentencePauseMultiplier = sentencePauseMultiplier
         self.complexityTimingEnabled = complexityTimingEnabled
         self.complexityIntensity = complexityIntensity
@@ -232,7 +241,11 @@ final class RSVPEngine {
         var interval = baseInterval
 
         if smartTimingEnabled {
-            interval *= Self.smartTimingMultiplier(for: currentWord, percentPerLetter: smartTimingPercentPerLetter)
+            interval *= Self.smartTimingMultiplier(
+                for: currentWord,
+                percentPerLetter: smartTimingPercentPerLetter,
+                minimumWordLength: smartTimingMinimumWordLength
+            )
         }
 
         if sentencePauseEnabled && Self.endsWithSentencePunctuation(currentWord) {
@@ -259,14 +272,25 @@ final class RSVPEngine {
     }
 
     /// Returns a timing multiplier based on word length.
-    /// Each letter contributes `percentPerLetter`% to the interval increase.
-    /// E.g. at 4%, an 8-letter word yields a 1.32× multiplier.
-    /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus when `percentPerLetter > 0`.
-    nonisolated static func smartTimingMultiplier(for word: String, percentPerLetter: Double = 4.0) -> Double {
+    /// Each letter contributes `percentPerLetter`% to the interval increase,
+    /// but only for words with at least `minimumWordLength` letters (after
+    /// trimming punctuation) — shorter words return 1.0 so they display at
+    /// exactly the base rate. E.g. at 4%, an 8-letter word yields 1.32×.
+    /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus when
+    /// `percentPerLetter > 0` regardless of length — it marks a clause
+    /// boundary, not a long word.
+    nonisolated static func smartTimingMultiplier(
+        for word: String,
+        percentPerLetter: Double = 4.0,
+        minimumWordLength: Int = 1
+    ) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
         let letterCount = trimmed.count
 
-        var multiplier = 1.0 + Double(letterCount) * (percentPerLetter / 100.0)
+        var multiplier = 1.0
+        if letterCount >= minimumWordLength {
+            multiplier += Double(letterCount) * (percentPerLetter / 100.0)
+        }
 
         if percentPerLetter > 0, hasTrailingPunctuation(word) {
             multiplier += 0.2

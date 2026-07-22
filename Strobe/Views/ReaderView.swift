@@ -23,6 +23,7 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.smartTimingEnabled) private var smartTimingEnabled: Bool = ReaderSettings.Defaults.smartTimingEnabled
     @AppStorage(ReaderSettings.Keys.sentencePauseEnabled) private var sentencePauseEnabled: Bool = ReaderSettings.Defaults.sentencePauseEnabled
     @AppStorage(ReaderSettings.Keys.smartTimingPercentPerLetter) private var smartTimingPercentPerLetter: Double = ReaderSettings.Defaults.smartTimingPercentPerLetter
+    @AppStorage(ReaderSettings.Keys.smartTimingMinimumWordLength) private var smartTimingMinimumWordLength: Int = ReaderSettings.Defaults.smartTimingMinimumWordLength
     @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
@@ -68,6 +69,7 @@ struct ReaderView: View {
             smartTimingEnabled: timing.smartTimingEnabled,
             sentencePauseEnabled: timing.sentencePauseEnabled,
             smartTimingPercentPerLetter: timing.smartTimingPercentPerLetter,
+            smartTimingMinimumWordLength: timing.smartTimingMinimumWordLength,
             sentencePauseMultiplier: timing.sentencePauseMultiplier,
             complexityTimingEnabled: timing.complexityTimingEnabled,
             complexityIntensity: timing.complexityIntensity
@@ -224,6 +226,9 @@ struct ReaderView: View {
         }
         .onChange(of: smartTimingPercentPerLetter) { _, newValue in
             engine.smartTimingPercentPerLetter = newValue
+        }
+        .onChange(of: smartTimingMinimumWordLength) { _, newValue in
+            engine.smartTimingMinimumWordLength = newValue
         }
         .onChange(of: sentencePauseMultiplierValue) { _, newValue in
             engine.sentencePauseMultiplier = newValue
