@@ -31,10 +31,16 @@ struct PassageView: View {
     static let chunkSize = 200
 
     @State private var searchQuery: String = ""
+    /// Start word index of each match, ascending. Phrase queries span several
+    /// words; navigation, counting, and scrolling all key off the start.
     @State private var matchIndices: [Int] = []
-    /// Mirror of `matchIndices` for O(1) per-word lookups so chunk renders
-    /// don't rebuild a Set. Only ever assigned through ``setMatches(_:precomputedSet:)``
-    /// so it can't drift from `matchIndices`.
+    /// Number of consecutive words each match covers — 1 unless the query is
+    /// a multi-word phrase.
+    @State private var matchSpan: Int = 1
+    /// Every word index inside a match, for O(1) per-word highlight lookups
+    /// so chunk renders don't rebuild a Set. Only ever assigned through
+    /// ``setMatches(_:span:precomputedSet:)`` so it can't drift from
+    /// `matchIndices`.
     @State private var matchSet: Set<Int> = []
     @State private var currentMatchPosition: Int = 0
     @State private var renderedChunks: Set<Int> = []
@@ -93,6 +99,14 @@ struct PassageView: View {
     private var currentMatchWord: Int? {
         guard !matchIndices.isEmpty, currentMatchPosition < matchIndices.count else { return nil }
         return matchIndices[currentMatchPosition]
+    }
+
+    /// Word range of the active match — one word for plain queries, the full
+    /// span for phrases. Clamped defensively; matches always fit by
+    /// construction.
+    private var currentMatchRange: Range<Int>? {
+        guard let start = currentMatchWord else { return nil }
+        return start..<min(start + matchSpan, words.count)
     }
 
     var body: some View {
@@ -297,7 +311,7 @@ struct PassageView: View {
                                 range: chunkRange(idx),
                                 currentIndex: engine.currentIndex,
                                 matchSet: matchSet,
-                                currentMatchWord: currentMatchWord,
+                                currentMatchRange: currentMatchRange,
                                 font: readerFont,
                                 onTap: handleWordTap
                             )
@@ -413,12 +427,14 @@ struct PassageView: View {
         HapticManager.shared.scrubTick()
     }
 
-    /// Single funnel for updating the search results: assigns `matchIndices`
-    /// and its `matchSet` mirror together. `precomputedSet` lets the search
-    /// task reuse the Set it already built off the main thread.
-    private func setMatches(_ indices: [Int], precomputedSet: Set<Int>? = nil) {
+    /// Single funnel for updating the search results: assigns `matchIndices`,
+    /// `matchSpan`, and the covering `matchSet` together. `precomputedSet`
+    /// lets the search task reuse the Set it already built off the main
+    /// thread.
+    private func setMatches(_ indices: [Int], span: Int = 1, precomputedSet: Set<Int>? = nil) {
         matchIndices = indices
-        matchSet = precomputedSet ?? Set(indices)
+        matchSpan = span
+        matchSet = precomputedSet ?? Self.coveredIndices(matchStarts: indices, span: span)
     }
 
     private func runSearch(immediate: Bool = false) {
@@ -444,12 +460,13 @@ struct PassageView: View {
             let lowered = await lowercasedWordsCache()
             guard !Task.isCancelled else { return }
 
-            let (results, resultSet) = await Task.detached(priority: .userInitiated) {
+            let (results, resultSet, span) = await Task.detached(priority: .userInitiated) {
                 let matches = Self.findMatches(query: query, inLowercasedWords: lowered)
-                return (matches, Set(matches))
+                let span = Self.matchSpan(for: query)
+                return (matches, Self.coveredIndices(matchStarts: matches, span: span), span)
             }.value
             guard !Task.isCancelled, query == searchQuery else { return }
-            setMatches(results, precomputedSet: resultSet)
+            setMatches(results, span: span, precomputedSet: resultSet)
             lastCompletedQuery = query
             if results.isEmpty {
                 currentMatchPosition = 0
@@ -517,9 +534,13 @@ struct PassageView: View {
         return max(0, min(wordIndex / chunkSize, count - 1))
     }
 
-    /// Case-insensitive substring search over `words`. Whitespace is trimmed
-    /// from the query, and empty/whitespace-only queries yield no matches.
-    /// Returned indices are sorted ascending by construction.
+    /// Case-insensitive search over `words`. A single-word query matches as a
+    /// substring inside any word; a query containing whitespace matches as a
+    /// phrase across consecutive words, exactly as the phrase reads in the
+    /// space-joined passage text. Empty/whitespace-only queries yield no
+    /// matches. Returned indices are the first word of each match, sorted
+    /// ascending by construction; each match covers ``matchSpan(for:)``
+    /// consecutive words.
     nonisolated static func findMatches(query: String, in words: [String]) -> [Int] {
         findMatches(query: query, inLowercasedWords: words.map { $0.lowercased() })
     }
@@ -528,15 +549,57 @@ struct PassageView: View {
     /// per-keystroke search path can reuse a cached lowercased copy instead of
     /// re-lowercasing the whole document each time.
     nonisolated static func findMatches(query: String, inLowercasedWords words: [String]) -> [Int] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        let needle = trimmed.lowercased()
+        let tokens = queryTokens(query)
+        guard let first = tokens.first else { return [] }
         var results: [Int] = []
         results.reserveCapacity(min(words.count, 256))
-        for (i, word) in words.enumerated() where word.contains(needle) {
-            results.append(i)
+
+        if tokens.count == 1 {
+            for (i, word) in words.enumerated() where word.contains(first) {
+                results.append(i)
+            }
+            return results
+        }
+
+        // Phrase query: the passage renders words separated by single spaces,
+        // so the query matches wherever it occurs as a substring of that
+        // joined text — the first token must end a word, middle tokens must
+        // equal whole words, and the last token must begin the word after.
+        let lastOffset = tokens.count - 1
+        guard words.count >= tokens.count else { return [] }
+        starts: for start in 0...(words.count - tokens.count) {
+            guard words[start].hasSuffix(first),
+                  words[start + lastOffset].hasPrefix(tokens[lastOffset]) else { continue }
+            for k in 1..<lastOffset where words[start + k] != tokens[k] {
+                continue starts
+            }
+            results.append(start)
         }
         return results
+    }
+
+    /// Number of consecutive words each match of `query` covers: 1 for
+    /// single-word queries, the token count for phrase queries.
+    nonisolated static func matchSpan(for query: String) -> Int {
+        max(1, queryTokens(query).count)
+    }
+
+    /// Every word index inside a match, given the match start indices and the
+    /// per-match span — the set driving per-word highlight lookups.
+    nonisolated static func coveredIndices(matchStarts: [Int], span: Int) -> Set<Int> {
+        guard span > 1 else { return Set(matchStarts) }
+        var covered = Set<Int>(minimumCapacity: matchStarts.count * span)
+        for start in matchStarts {
+            for i in start..<(start + span) { covered.insert(i) }
+        }
+        return covered
+    }
+
+    /// Lowercased whitespace-separated tokens of `query`; empty for
+    /// whitespace-only queries. Splitting also normalizes runs of interior
+    /// whitespace, mirroring how the tokenizer collapsed the document text.
+    nonisolated private static func queryTokens(_ query: String) -> [String] {
+        query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     }
 
     /// Whether the words are dominantly right-to-left script (Arabic or
@@ -592,7 +655,7 @@ private struct WordChunkView: View {
     let range: Range<Int>
     let currentIndex: Int
     let matchSet: Set<Int>
-    let currentMatchWord: Int?
+    let currentMatchRange: Range<Int>?
     let font: ReaderFont
     let onTap: (Int) -> Void
 
@@ -602,7 +665,7 @@ private struct WordChunkView: View {
                 WordToken(
                     text: words[i],
                     isCurrent: i == currentIndex,
-                    isPrimaryMatch: i == currentMatchWord,
+                    isPrimaryMatch: currentMatchRange?.contains(i) ?? false,
                     isMatch: matchSet.contains(i),
                     font: font
                 ) {

@@ -1329,12 +1329,87 @@ struct StrobeTests {
         #expect(PassageView.findMatches(query: "delta", in: words).isEmpty)
     }
 
+    // Issue #6: queries containing whitespace always returned zero matches
+    // because each word was tested for containing the space-joined needle.
+
+    @Test func findMatchesPhraseAcrossConsecutiveWords() {
+        let words = ["we", "ate", "banana", "pie", "today"]
+        #expect(PassageView.findMatches(query: "banana pie", in: words) == [2])
+        #expect(PassageView.findMatches(query: "ate banana pie", in: words) == [1])
+    }
+
+    @Test func findMatchesPhraseIsCaseInsensitive() {
+        let words = ["Banana", "Pie"]
+        #expect(PassageView.findMatches(query: "banana PIE", in: words) == [0])
+    }
+
+    @Test func findMatchesPhraseAllowsTrailingPunctuationOnLastWord() {
+        // Tokenized words keep punctuation attached; "pie." still begins
+        // with "pie", matching how the passage text reads.
+        let words = ["we", "ate", "banana", "pie.", "yum"]
+        #expect(PassageView.findMatches(query: "banana pie", in: words) == [2])
+    }
+
+    @Test func findMatchesPhraseUsesSuffixAndPrefixAtBoundaries() {
+        // Substring-of-passage semantics: the first token may end a word and
+        // the last may begin one — "na pie" occurs inside "banana pies".
+        let words = ["banana", "pies"]
+        #expect(PassageView.findMatches(query: "na pie", in: words) == [0])
+    }
+
+    @Test func findMatchesPhraseRequiresExactMiddleWords() {
+        let words = ["big", "banana", "cream", "pie"]
+        #expect(PassageView.findMatches(query: "banana cream pie", in: words) == [1])
+        #expect(PassageView.findMatches(query: "banana creamy pie", in: words).isEmpty)
+        // Punctuation between the words means the passage doesn't read as the
+        // queried phrase, so strict adjacency correctly rejects it.
+        let punctuated = ["big", "banana,", "cream", "pie"]
+        #expect(PassageView.findMatches(query: "banana cream pie", in: punctuated).isEmpty)
+    }
+
+    @Test func findMatchesPhraseFindsOverlappingOccurrences() {
+        let words = ["fish", "fish", "fish"]
+        #expect(PassageView.findMatches(query: "fish fish", in: words) == [0, 1])
+    }
+
+    @Test func findMatchesPhraseNormalizesInteriorWhitespace() {
+        let words = ["banana", "pie"]
+        #expect(PassageView.findMatches(query: "  banana   pie  ", in: words) == [0])
+    }
+
+    @Test func findMatchesPhraseLongerThanDocumentIsEmpty() {
+        let words = ["banana"]
+        #expect(PassageView.findMatches(query: "banana pie", in: words).isEmpty)
+        #expect(PassageView.findMatches(query: "a b", in: []).isEmpty)
+    }
+
+    @Test func findMatchesPhraseSupportsCJKWords() {
+        let words = ["你好", "世界", "你好啊"]
+        #expect(PassageView.findMatches(query: "你好 世界", in: words) == [0])
+    }
+
+    @Test func matchSpanCountsQueryTokens() {
+        #expect(PassageView.matchSpan(for: "banana") == 1)
+        #expect(PassageView.matchSpan(for: "banana pie") == 2)
+        #expect(PassageView.matchSpan(for: "  banana   cream  pie ") == 3)
+        #expect(PassageView.matchSpan(for: "") == 1)
+        #expect(PassageView.matchSpan(for: "   ") == 1)
+    }
+
+    @Test func coveredIndicesSpanEveryMatchedWord() {
+        #expect(PassageView.coveredIndices(matchStarts: [2, 7], span: 2) == [2, 3, 7, 8])
+        #expect(PassageView.coveredIndices(matchStarts: [1], span: 1) == [1])
+        #expect(PassageView.coveredIndices(matchStarts: [0, 1], span: 2) == [0, 1, 2])
+        #expect(PassageView.coveredIndices(matchStarts: [], span: 3).isEmpty)
+    }
+
     /// The per-keystroke search path uses a cached lowercased copy of the
     /// words; the pre-lowered overload must agree with the general one.
     @Test func findMatchesLowercasedOverloadAgreesWithGeneralOverload() {
         let words = ["Hello", "WORLD", "hello", "don't", "end.", "你好啊"]
         let lowered = words.map { $0.lowercased() }
-        for query in ["HELLO", "world", "don", "end", "你好", "missing", "  quick  ", ""] {
+        for query in ["HELLO", "world", "don", "end", "你好", "missing", "  quick  ", "",
+                      "hello world", "WORLD hello", "the end", "missing phrase"] {
             #expect(
                 PassageView.findMatches(query: query, inLowercasedWords: lowered)
                     == PassageView.findMatches(query: query, in: words),
