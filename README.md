@@ -38,7 +38,9 @@ Each word is anchored at its Optimal Recognition Point so your eyes lock on inst
 Import files from the system picker, drag and drop, or paste raw text for quick reads.
 
 ### Chapter Navigation
-Jump between chapters with a full chapter list and progress tracking.
+Jump between chapters, parts, and sections with a full chapter list and progress tracking. Playback briefly fades in each title at a structural break, then resumes automatically. Releasing a hold or pausing cancels the announcement.
+
+EPUB imports use nested table-of-contents links, in-file anchors, and headings. PDF imports include nested bookmarks at page-level positions. Reimport an existing book to pick up newly detected sections; saved books use their existing chapter markers for announcements.
 
 ### 7 Font Choices
 Curated typefaces tuned for single-word display and sustained reading comfort.

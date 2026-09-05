@@ -85,7 +85,7 @@ struct ReaderView: View {
         let words = await document.loadReadingWordsAsync()
         let scores = await document.loadComplexityScoresAsync()
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
-        engine.load(words: words, currentIndex: effectiveIndex, complexityScores: scores)
+        engine.load(words: words, currentIndex: effectiveIndex, complexityScores: scores, chapters: document.chapters)
         isLoaded = true
         // A document resumed at its last word (with more than one word) opens
         // onto the completion card; single-word documents show their word.
@@ -722,10 +722,32 @@ struct ReaderView: View {
 private struct CurrentWordView: View {
     let engine: RSVPEngine
     let fontSize: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         WordView(word: engine.currentWord, fontSize: fontSize)
             .equatable()
+            .opacity(engine.chapterAnnouncement == nil ? 1 : 0)
+            .animation(nil, value: engine.chapterAnnouncement != nil)
+            .accessibilityHidden(engine.chapterAnnouncement != nil)
+            .overlay {
+                if let chapter = engine.chapterAnnouncement {
+                    Text(chapter.title)
+                        .font(StrobeTheme.titleFont(size: max(48, fontSize * 1.15)))
+                        .foregroundStyle(StrobeTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 600)
+                        .padding(.horizontal, 24)
+                        .accessibilityAddTraits(.isHeader)
+                        .opacity(engine.isChapterTitleVisible ? 1 : 0)
+                        .transition(.opacity)
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: RSVPEngine.chapterFadeDuration),
+                       value: engine.isChapterTitleVisible)
     }
 }
 

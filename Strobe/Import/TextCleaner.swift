@@ -53,7 +53,9 @@ enum TextCleaner {
 
     /// Cleans an array of page-level or section-level text strings.
     /// Cross-page analysis detects repeated headers/footers, then per-page rules strip boilerplate.
-    nonisolated static func cleanPages(_ pages: [String], level: TextCleaningLevel) -> [String] {
+    nonisolated static func cleanPages(
+        _ pages: [String], level: TextCleaningLevel, preserveOffsets: Bool = false
+    ) -> [String] {
         guard level != .none else {
             logger.debug("Text cleaning: OFF")
             return pages
@@ -71,7 +73,10 @@ enum TextCleaner {
 
         var totalRemoved = 0
         let result = pages.enumerated().map { (pageIndex, page) -> String in
-            let (cleaned, removedCount) = cleanPage(page, repeatedPatterns: repeatedPatterns, pageIndex: pageIndex)
+            let (cleaned, removedCount) = cleanPage(
+                page, repeatedPatterns: repeatedPatterns, pageIndex: pageIndex,
+                preserveOffsets: preserveOffsets
+            )
             totalRemoved += removedCount
             return cleaned
         }
@@ -133,7 +138,8 @@ enum TextCleaner {
     nonisolated private static func cleanPage(
         _ text: String,
         repeatedPatterns: Set<String>,
-        pageIndex: Int?
+        pageIndex: Int?,
+        preserveOffsets: Bool = false
     ) -> (cleaned: String, removedCount: Int) {
         let lines = text.components(separatedBy: .newlines)
         var removedCount = 0
@@ -157,7 +163,9 @@ enum TextCleaner {
                 } else {
                     logger.debug("  \(reason.rawValue): \"\(trimmed)\"")
                 }
-                return nil
+                // EPUB anchors refer to UTF-16 offsets in extracted text.
+                // Blank removed lines without shifting those positions.
+                return preserveOffsets ? String(repeating: " ", count: line.utf16.count) : nil
             }
 
             // 1. Repeated header/footer patterns

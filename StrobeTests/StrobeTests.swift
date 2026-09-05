@@ -9,6 +9,7 @@ import Testing
 import NaturalLanguage
 import CoreGraphics
 import CoreText
+import PDFKit
 @testable import Strobe
 internal import UniformTypeIdentifiers
 
@@ -252,6 +253,106 @@ struct StrobeTests {
         let engine = RSVPEngine(words: ["only"])
         #expect(engine.progress == 1.0)
         #expect(engine.isAtEnd)
+    }
+
+    // MARK: - Chapter announcements
+
+    @MainActor
+    @Test func chapterAnnouncementHoldsAndResumesAtItsFirstWord() {
+        let chapter = Chapter(title: "Part Two", wordIndex: 1)
+        let engine = RSVPEngine(words: ["before", "first", "next"], wordsPerMinute: 1, chapters: [chapter])
+        defer { engine.pause() }
+        engine.play()
+        engine.advance()
+        #expect(engine.chapterAnnouncement == chapter)
+        #expect(engine.isChapterTitleVisible)
+        #expect(engine.isPlaying)
+        #expect(engine.currentWord == "first")
+        engine.advance() // Begin fade-out; words remain frozen.
+        #expect(!engine.isChapterTitleVisible)
+        #expect(engine.chapterAnnouncement == chapter)
+        #expect(engine.currentWord == "first")
+        engine.advance() // Reveal the first word for a full interval.
+        #expect(engine.chapterAnnouncement == nil)
+        #expect(engine.currentWord == "first")
+        #expect(engine.isPlaying)
+        engine.advance()
+        #expect(engine.currentWord == "next")
+    }
+
+    @MainActor
+    @Test(arguments: [false, true])
+    func pausingAnAnnouncementCancelsBothPhases(duringFade: Bool) {
+        let engine = RSVPEngine(words: ["first", "next"], wordsPerMinute: 1,
+                                chapters: [Chapter(title: "Chapter One", wordIndex: 0)])
+        engine.play()
+        if duringFade { engine.advance() }
+        engine.pause() // Hold release, Space, background, or leaving the reader.
+        engine.advance() // A stale timer callback cannot resume playback.
+        #expect(!engine.isPlaying)
+        #expect(engine.chapterAnnouncement == nil)
+        #expect(engine.currentIndex == 0)
+        engine.play()
+        #expect(engine.chapterAnnouncement == nil) // Do not repeat on every hold.
+        engine.pause()
+    }
+
+    @MainActor
+    @Test func seekingAndLoadingCancelAnnouncements() {
+        let chapter = Chapter(title: "Chapter", wordIndex: 0)
+        let engine = RSVPEngine(words: ["a", "b", "c"], chapters: [chapter])
+        engine.play()
+        engine.seek(to: 1)
+        engine.advance()
+        #expect(!engine.isPlaying)
+        #expect(engine.chapterAnnouncement == nil)
+        #expect(engine.currentIndex == 1)
+        engine.restart()
+        engine.play()
+        #expect(engine.chapterAnnouncement == chapter)
+        engine.load(words: ["new", "book"], currentIndex: 0, complexityScores: nil)
+        engine.advance()
+        #expect(!engine.isPlaying)
+        #expect(engine.chapterAnnouncement == nil)
+        engine.play()
+        #expect(engine.chapterAnnouncement == nil) // Old chapter map was replaced.
+        engine.pause()
+    }
+
+    @MainActor
+    @Test func chapterAtFinalWordCompletesOnlyAfterAnnouncementAndWord() {
+        let engine = RSVPEngine(words: ["before", "last"], wordsPerMinute: 1,
+                                chapters: [Chapter(title: "Epilogue", wordIndex: 1)])
+        engine.play()
+        engine.advance()
+        #expect(engine.isAtEnd)
+        #expect(engine.isPlaying)
+        engine.advance()
+        engine.advance()
+        #expect(engine.isPlaying)
+        #expect(engine.currentWord == "last")
+        engine.advance()
+        #expect(!engine.isPlaying)
+    }
+
+    @MainActor
+    @Test func chapterTimerIgnoresSpeedChangesAndResumesAutomatically() async throws {
+        let engine = RSVPEngine(words: ["first", "last"], wordsPerMinute: 60,
+                                chapters: [Chapter(title: "Chapter One", wordIndex: 0)])
+        defer { engine.pause() }
+        engine.play()
+        engine.wpmOverride = 6000
+        engine.smartTimingEnabled = true
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(engine.chapterAnnouncement != nil)
+        #expect(engine.isChapterTitleVisible)
+        #expect(engine.currentIndex == 0)
+        for _ in 0..<400 where engine.isPlaying {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(engine.chapterAnnouncement == nil)
+        #expect(engine.isAtEnd)
+        #expect(!engine.isPlaying)
     }
 
     // MARK: - Hold-to-read speed control
@@ -1155,6 +1256,138 @@ struct StrobeTests {
         #expect(result == input)
     }
 
+    // MARK: - EPUB structural markers
+
+    private func importStructuredEPUB(body: String, nav: String? = nil, ncx: String? = nil,
+                                      cleaning: TextCleaningLevel = .standard) throws -> EPUBExtractionResult {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let container = #"<container><rootfiles><rootfile full-path="OEBPS/book.opf"/></rootfiles></container>"#
+        let opf = """
+        <package><metadata><title>Structure</title></metadata><manifest>
+        <item id="body" href="Text/./book%20one.xhtml"/>
+        <item id="nav" href="Navigation/nav.xhtml" properties="nav"/>
+        <item id="ncx" href="Navigation/toc.ncx"/>
+        </manifest><spine toc="ncx"><itemref idref="body"/></spine></package>
+        """
+        var entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("META-INF/container.xml", Data(container.utf8), false),
+            ("OEBPS/book.opf", Data(opf.utf8), false),
+            ("OEBPS/Text/book one.xhtml", Data(body.utf8), false),
+        ]
+        if let nav { entries.append(("OEBPS/Navigation/nav.xhtml", Data(nav.utf8), false)) }
+        if let ncx { entries.append(("OEBPS/Navigation/toc.ncx", Data(ncx.utf8), false)) }
+        let url = dir.appendingPathComponent("book.epub")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: url)
+        return try EPUBTextExtractor.extractWordsAndChapters(from: url, cleaningLevel: cleaning)
+    }
+
+    @Test(arguments: [TextCleaningLevel.none, .standard])
+    func epubPreservesNestedFragmentTargetsAndIgnoresOtherNavigation(cleaning: TextCleaningLevel) throws {
+        let body = """
+        <html><head><title>Hidden title</title></head><body>
+        Copyright notice to remove
+        <h1 id="part">Part One</h1><p>Opening words.</p>
+        <h2 id="chapter">First Chapter</h2><p>Chapter body.</p>
+        <h3 id="séc%20">Section &amp; <em>detail</em></h3><p>Section body.</p>
+        <h4>Unlisted subdivision</h4><p>Last body.</p><a id="end"/>
+        </body></html>
+        """
+        let nav = """
+        <html><body>
+        <nav epub:type="page-list"><a href="../Text/book%20one.xhtml#part">Page 1</a></nav>
+        <nav epub:type="toc"><ol>
+          <li><a href="../Text/book%20one.xhtml#part">Part One</a><ol>
+            <li><a href="../Text/book%20one.xhtml#chapter">Chapter label</a><ol>
+              <li><a href="../Text/book%20one.xhtml#s%C3%A9c%2520"><span>Section label</span></a></li>
+            </ol></li>
+          </ol></li>
+          <li><a href="../Text/book%20one.xhtml#missing">Broken link</a></li>
+          <li><a href="../Text/book%20one.xhtml#end">Empty tail</a></li>
+        </ol></nav>
+        <nav epub:type="landmarks"><a href="../Text/book%20one.xhtml#chapter">Body matter</a></nav>
+        </body></html>
+        """
+        let result = try importStructuredEPUB(body: body, nav: nav, cleaning: cleaning)
+        #expect(result.chapters.map(\.title) == ["Part One", "Chapter label", "Section label", "Unlisted subdivision"])
+        #expect(result.chapters.map { result.words[$0.wordIndex] } == ["Part", "First", "Section&", "Unlisted"])
+        #expect(!result.words.contains("Hidden"))
+        #expect(Set(result.chapters.map(\.wordIndex)).count == result.chapters.count)
+    }
+
+    @Test func epubNCXRetainsParentsChildrenAndDeepSiblings() throws {
+        let body = """
+        <body><p id="part">Part words</p><p id="chapter">Chapter words</p>
+        <p id="section">Section words</p><p id="subsection">Subsection words</p>
+        <p id="sibling">Sibling words</p></body>
+        """
+        let ncx = """
+        <ncx><navMap><navPoint><navLabel><text>Part</text></navLabel><content src="../Text/book%20one.xhtml#part"/>
+          <navPoint><navLabel><text>Chapter</text></navLabel><content src="../Text/book%20one.xhtml#chapter"/>
+            <navPoint><navLabel><text>Section</text></navLabel><content src="../Text/book%20one.xhtml#section"/>
+              <navPoint><navLabel><text>Subsection</text></navLabel><content src="../Text/book%20one.xhtml#subsection"/></navPoint>
+            </navPoint>
+            <navPoint><navLabel><text>Sibling</text></navLabel><content src="../Text/book%20one.xhtml#sibling"/></navPoint>
+          </navPoint>
+        </navPoint></navMap></ncx>
+        """
+        let result = try importStructuredEPUB(body: body, ncx: ncx)
+        #expect(result.chapters.map(\.title) == ["Part", "Chapter", "Section", "Subsection", "Sibling"])
+        #expect(result.chapters.map(\.wordIndex) == [0, 2, 4, 6, 8])
+    }
+
+    @Test func epubHeadingsWorkWithoutTOCAndKeepInlineWordsIntact() throws {
+        let body = """
+        <body><!-- <h1>Fake heading</h1> -->
+        <h1 data-note="a > b">Part <em>One</em></h1>
+        <p>he<a id="inline"/>llo world. 中文测试</p>
+        <script><h2>Hidden script</h2></script><table><tr><td>123</td></tr></table>
+        <h2>1</h2><p>Next subchapter.</p></body>
+        """
+        let result = try importStructuredEPUB(body: body)
+        #expect(result.chapters.map(\.title) == ["Part One", "1"])
+        #expect(result.words.contains("hello"))
+        #expect(!result.words.contains("Hidden"))
+        #expect(!result.words.contains("Fake"))
+        #expect(result.words[result.chapters[1].wordIndex] == "1")
+    }
+
+    @Test func epubMarkerMappingPreservesTokenizerOutput() {
+        let source = """
+        <body><p id="a">infor-</p><p id="b">mation and one-in-a-</p>
+        <p id="c">lifetime he<span id="d"/>llo 中文测试 &amp; more.</p>
+        <p>unmerged-</p><h2 id="e">Chapter two</h2></body>
+        """
+        let content = EPUBContent.parse(Data(source.utf8))
+        var words: [String] = []
+        var carry: String?
+        let positions = content.appendWords(cleanedText: content.text, into: &words, carry: &carry)
+        if let carry { words.append(carry) }
+        #expect(words == Tokenizer.tokenize(content.text))
+        #expect(words[positions[content.anchors["b"]!]!] == "information")
+        #expect(words[positions[content.anchors["d"]!]!] == "hello")
+        #expect(words[positions[content.anchors["e"]!]!] == "Chapter")
+    }
+
+    @Test func cleaningCanPreserveUTF16PositionsForEPUBMarkers() {
+        let input = "Copyright © 😀\n42\nActual readable words."
+        let preserved = TextCleaner.cleanPages([input], level: .standard, preserveOffsets: true)[0]
+        #expect(preserved.utf16.count == input.utf16.count)
+        #expect((preserved as NSString).range(of: "Actual").location == (input as NSString).range(of: "Actual").location)
+        #expect(Tokenizer.tokenize(preserved) == Tokenizer.tokenize(TextCleaner.cleanText(input, level: .standard)))
+    }
+
+    @Test func epubEmptyAndTrailingAnchorsDoNotPointIntoTheNextFile() {
+        for source in ["<body><a id='empty'/></body>", "<body>words<a id='empty'/></body>"] {
+            let content = EPUBContent.parse(Data(source.utf8))
+            var words: [String] = []
+            var carry: String?
+            let positions = content.appendWords(cleanedText: content.text, into: &words, carry: &carry)
+            #expect(positions[content.anchors["empty"]!] == nil)
+        }
+    }
+
     // MARK: - ZIP test helpers
 
     /// Builds a ZIP archive with stored (uncompressed) entries, a full central
@@ -1974,6 +2207,27 @@ struct StrobeTests {
         }
         context.closePDF()
         return url
+    }
+
+    @Test func pdfOutlineIncludesSubsectionsBeyondTwoLevels() throws {
+        let url = try makeTextPDF(pages: ["Part begins", "Chapter begins", "Section begins", "Subsection begins"])
+        defer { try? FileManager.default.removeItem(at: url) }
+        let pdf = try #require(PDFDocument(url: url))
+        let root = PDFOutline()
+        var parent = root
+        for (index, label) in ["Part", "Chapter", "Section", "Subsection"].enumerated() {
+            let item = PDFOutline()
+            item.label = label
+            item.destination = PDFDestination(page: try #require(pdf.page(at: index)), at: .zero)
+            parent.insertChild(item, at: 0)
+            parent = item
+        }
+        pdf.outlineRoot = root
+        // Exercise PDFKit's outline directly: serializing a synthetic outline
+        // is OS-dependent and can drop the bookmarks on write.
+        let chapters = PDFTextExtractor.extractChapters(from: pdf, pageWordOffsets: [0, 2, 4, 6])
+        #expect(chapters.map(\.title) == ["Part", "Chapter", "Section", "Subsection"])
+        #expect(chapters.map(\.wordIndex) == [0, 2, 4, 6])
     }
 
     @Test func pdfExtractionReadsTextFromPages() throws {
