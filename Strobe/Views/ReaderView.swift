@@ -732,16 +732,7 @@ private struct CurrentWordView: View {
             .accessibilityHidden(engine.chapterAnnouncement != nil)
             .overlay {
                 if let chapter = engine.chapterAnnouncement {
-                    Text(chapter.title)
-                        .font(StrobeTheme.titleFont(size: max(48, fontSize * 1.15)))
-                        .foregroundStyle(StrobeTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(4)
-                        .minimumScaleFactor(0.5)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 600)
-                        .padding(.horizontal, 24)
-                        .accessibilityAddTraits(.isHeader)
+                    ChapterAnnouncementView(title: chapter.title)
                         .opacity(engine.isChapterTitleVisible ? 1 : 0)
                         .transition(.opacity)
                 }
