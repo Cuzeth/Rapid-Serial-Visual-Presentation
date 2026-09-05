@@ -43,38 +43,43 @@ enum EPUBTextExtractor {
         )
 
         // Phase 1: Collect raw text from spine-ordered XHTML files
-        var sectionTexts: [(href: String, text: String)] = []
+        var sectionTexts: [(path: String, content: EPUBContent)] = []
         sectionTexts.reserveCapacity(opf.spineItems.count)
 
         for (i, itemID) in opf.spineItems.enumerated() {
             // Keep a cancelled import (user tapped Cancel) responsive.
             if i % 16 == 0 { try Task.checkCancellation() }
             guard let href = opf.manifest[itemID] else { continue }
-            let fileURL = opfDir.appendingPathComponent(href)
+            let fileURL = opfDir.appendingPathComponent(href).standardizedFileURL
 
             autoreleasepool {
-                guard let data = try? Data(contentsOf: fileURL),
-                      let text = stripHTML(data) else { return }
-                sectionTexts.append((href: href, text: text))
+                guard let data = try? Data(contentsOf: fileURL) else { return }
+                sectionTexts.append((path: fileURL.path, content: EPUBContent.parse(data)))
             }
         }
 
         // Phase 2: Clean text
         let cleanedTexts = TextCleaner.cleanPages(
-            sectionTexts.map(\.text),
-            level: cleaningLevel
+            sectionTexts.map { $0.content.text },
+            level: cleaningLevel, preserveOffsets: true
         )
 
         // Phase 3: Tokenize cleaned sections
         var words: [String] = []
         words.reserveCapacity(sectionTexts.count * 500)
         var spineWordOffsets: [String: Int] = [:]
+        var anchorWordOffsets: [String: [String: Int]] = [:]
+        var headingChapters: [Chapter] = []
         var carry: String?
 
         for (i, pair) in sectionTexts.enumerated() {
-            spineWordOffsets[pair.href] = words.count
-            let text = i < cleanedTexts.count ? cleanedTexts[i] : pair.text
-            Tokenizer.appendTokenizedText(text, into: &words, carry: &carry)
+            if i % 16 == 0 { try Task.checkCancellation() }
+            let positions = pair.content.appendWords(cleanedText: cleanedTexts[i], into: &words, carry: &carry)
+            spineWordOffsets[pair.path] = positions[0]
+            anchorWordOffsets[pair.path] = pair.content.anchors.compactMapValues { positions[$0] }
+            headingChapters += pair.content.headings.compactMap { heading in
+                positions[heading.offset].map { Chapter(title: heading.title, wordIndex: $0) }
+            }
         }
 
         if let carry, !carry.isEmpty {
@@ -86,10 +91,13 @@ enum EPUBTextExtractor {
             opf: opf,
             opfDir: opfDir,
             spineWordOffsets: spineWordOffsets,
-            totalWordCount: words.count
+            anchorWordOffsets: anchorWordOffsets
         )
+        // Explicit TOC labels take precedence over headings at the same word.
+        let allChapters = deduplicateChapters(chapters + headingChapters)
+            .filter { words.indices.contains($0.wordIndex) }
 
-        return EPUBExtractionResult(words: words, chapters: chapters, title: opf.title)
+        return EPUBExtractionResult(words: words, chapters: allChapters, title: opf.title)
     }
 
     // MARK: - DRM detection
@@ -245,15 +253,14 @@ enum EPUBTextExtractor {
         opf: OPFResult,
         opfDir: URL,
         spineWordOffsets: [String: Int],
-        totalWordCount: Int
+        anchorWordOffsets: [String: [String: Int]]
     ) -> [Chapter] {
         // Try EPUB3 nav first, then NCX
         if let navHref = opf.navHref {
             let navURL = opfDir.appendingPathComponent(navHref)
-            let navDir = navURL.deletingLastPathComponent()
             if let chapters = parseNavDocument(
-                at: navURL, navDir: navDir, opfDir: opfDir,
-                spineWordOffsets: spineWordOffsets
+                at: navURL,
+                spineWordOffsets: spineWordOffsets, anchorWordOffsets: anchorWordOffsets
             ), !chapters.isEmpty {
                 return chapters
             }
@@ -262,10 +269,9 @@ enum EPUBTextExtractor {
         if let tocID = opf.tocID,
            let tocHref = opf.manifest[tocID] {
             let ncxURL = opfDir.appendingPathComponent(tocHref)
-            let ncxDir = ncxURL.deletingLastPathComponent()
             if let chapters = parseNCX(
-                at: ncxURL, ncxDir: ncxDir, opfDir: opfDir,
-                spineWordOffsets: spineWordOffsets
+                at: ncxURL,
+                spineWordOffsets: spineWordOffsets, anchorWordOffsets: anchorWordOffsets
             ), !chapters.isEmpty {
                 return chapters
             }
@@ -279,9 +285,8 @@ enum EPUBTextExtractor {
     /// Parses an EPUB 3 navigation document (`<nav>`) for chapter titles and hrefs.
     nonisolated private static func parseNavDocument(
         at url: URL,
-        navDir: URL,
-        opfDir: URL,
-        spineWordOffsets: [String: Int]
+        spineWordOffsets: [String: Int],
+        anchorWordOffsets: [String: [String: Int]]
     ) -> [Chapter]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         let parser = SimpleXMLParser()
@@ -290,18 +295,15 @@ enum EPUBTextExtractor {
         var chapters: [Chapter] = []
 
         // Nav documents use <a href="...">Title</a> inside <li> elements
-        for element in parser.elements where element.name == "a" {
+        for element in parser.elements where element.name == "a" && element.isInTOC {
             guard let href = element.attributes["href"],
                   let rawTitle = element.text else { continue }
             let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty else { continue }
 
-            let fileHref = href.components(separatedBy: "#").first ?? href
-            guard !fileHref.isEmpty else { continue }
-
             if let wordIndex = resolveWordIndex(
-                href: fileHref, referenceDir: navDir, opfDir: opfDir,
-                spineWordOffsets: spineWordOffsets
+                href: href, referenceURL: url,
+                spineWordOffsets: spineWordOffsets, anchorWordOffsets: anchorWordOffsets
             ) {
                 chapters.append(Chapter(title: title, wordIndex: wordIndex))
             }
@@ -315,9 +317,8 @@ enum EPUBTextExtractor {
     /// Parses an EPUB 2 NCX file for chapter titles and content sources.
     nonisolated private static func parseNCX(
         at url: URL,
-        ncxDir: URL,
-        opfDir: URL,
-        spineWordOffsets: [String: Int]
+        spineWordOffsets: [String: Int],
+        anchorWordOffsets: [String: [String: Int]]
     ) -> [Chapter]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         let parser = NCXParser()
@@ -325,17 +326,14 @@ enum EPUBTextExtractor {
 
         var chapters: [Chapter] = []
 
-        // Top-level navPoints only
+        // All nested navPoints, in document order
         for navPoint in parser.navPoints {
             guard let title = navPoint.title, !title.isEmpty,
                   let src = navPoint.src else { continue }
 
-            let fileHref = src.components(separatedBy: "#").first ?? src
-            guard !fileHref.isEmpty else { continue }
-
             if let wordIndex = resolveWordIndex(
-                href: fileHref, referenceDir: ncxDir, opfDir: opfDir,
-                spineWordOffsets: spineWordOffsets
+                href: src, referenceURL: url,
+                spineWordOffsets: spineWordOffsets, anchorWordOffsets: anchorWordOffsets
             ) {
                 chapters.append(Chapter(title: title, wordIndex: wordIndex))
             }
@@ -346,104 +344,30 @@ enum EPUBTextExtractor {
 
     // MARK: - Href resolution
 
-    /// Resolves a chapter href to a word index by mapping the file path to its spine word offset.
+    /// Resolve relative paths and fragment identifiers separately, decoding
+    /// exactly once so escaped filenames and case-sensitive IDs stay intact.
     nonisolated private static func resolveWordIndex(
         href: String,
-        referenceDir: URL,
-        opfDir: URL,
-        spineWordOffsets: [String: Int]
+        referenceURL: URL,
+        spineWordOffsets: [String: Int],
+        anchorWordOffsets: [String: [String: Int]]
     ) -> Int? {
-        let decodedHref = href.removingPercentEncoding ?? href
-        let resolvedURL = referenceDir.appendingPathComponent(decodedHref).standardized
-
-        // Make relative to opfDir for spine lookup
-        let opfDirPath = opfDir.standardized.path + "/"
-        let resolvedPath = resolvedURL.path
-        guard resolvedPath.hasPrefix(opfDirPath) else { return nil }
-        let relativeToOPF = String(resolvedPath.dropFirst(opfDirPath.count))
-
-        return spineWordOffsets[relativeToOPF]
-    }
-
-    /// Sorts chapters by word index and removes duplicates at the same position.
-    nonisolated private static func deduplicateChapters(_ chapters: [Chapter]) -> [Chapter] {
-        guard !chapters.isEmpty else { return [] }
-        var result = chapters.sorted { $0.wordIndex < $1.wordIndex }
-        var seen = Set<Int>()
-        result = result.filter { seen.insert($0.wordIndex).inserted }
-        return result
-    }
-
-    // MARK: - HTML stripping
-
-    /// Block-level elements whose boundaries get a space to prevent word joining.
-    nonisolated private static let blockTags: Set<String> = [
-        "p", "/p", "div", "/div", "br", "br/",
-        "h1", "/h1", "h2", "/h2", "h3", "/h3",
-        "h4", "/h4", "h5", "/h5", "h6", "/h6",
-        "li", "/li", "blockquote", "/blockquote",
-        "section", "/section", "article", "/article"
-    ]
-
-    /// Strips HTML tags from raw XHTML data, producing plain text.
-    ///
-    /// Skips `<script>`, `<style>`, and `<table>` content entirely.
-    /// Inserts spaces at block-level element boundaries to prevent word joining.
-    /// Resolves common HTML entities (`&amp;`, `&nbsp;`, etc.).
-    nonisolated private static func stripHTML(_ data: Data) -> String? {
-        let html = String(decoding: data, as: UTF8.self)
-        guard !html.isEmpty else { return nil }
-
-        var output = String()
-        output.reserveCapacity(html.count / 3)
-
-        var inTag = false
-        var inScript = false
-        var inStyle = false
-        var tableDepth = 0
-        var tagBuffer = String()
-
-        for char in html {
-            if char == "<" {
-                inTag = true
-                tagBuffer.removeAll(keepingCapacity: true)
-                continue
-            }
-
-            if inTag {
-                if char == ">" {
-                    inTag = false
-                    let tag = tagBuffer.lowercased().trimmingCharacters(in: .whitespaces)
-                    let tagName = tag.split(separator: " ").first.map(String.init) ?? tag
-
-                    if tagName == "script" { inScript = true }
-                    else if tagName == "/script" { inScript = false }
-                    else if tagName == "style" { inStyle = true }
-                    else if tagName == "/style" { inStyle = false }
-
-                    // Skip <table>…</table> entirely — table/chart data
-                    // produces meaningless word sequences in an RSVP reader.
-                    if tagName == "table" { tableDepth += 1 }
-                    else if tagName == "/table" { tableDepth = max(0, tableDepth - 1) }
-
-                    // Block-level elements get a space to prevent word joining
-                    if Self.blockTags.contains(tagName) {
-                        output.append(" ")
-                    }
-
-                    tagBuffer.removeAll(keepingCapacity: true)
-                } else {
-                    tagBuffer.append(char)
-                }
-                continue
-            }
-
-            if inScript || inStyle || tableDepth > 0 { continue }
-
-            output.append(char)
+        guard let resolved = URL(string: href, relativeTo: referenceURL)?.absoluteURL,
+              resolved.isFileURL else { return nil }
+        let path = resolved.standardizedFileURL.path
+        if let fragment = resolved.fragment, !fragment.isEmpty {
+            let id = fragment.removingPercentEncoding ?? fragment
+            // A missing fragment must not silently point at the file's start.
+            return anchorWordOffsets[path]?[id]
         }
+        return spineWordOffsets[path]
+    }
 
-        return resolveHTMLEntities(output)
+    /// Keep the first label for each unique position, then put it in reading order.
+    nonisolated private static func deduplicateChapters(_ chapters: [Chapter]) -> [Chapter] {
+        var seen = Set<Int>()
+        return chapters.filter { seen.insert($0.wordIndex).inserted }
+            .sorted { $0.wordIndex < $1.wordIndex }
     }
 
     // MARK: - HTML entity resolution
@@ -561,6 +485,7 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
         let name: String
         let attributes: [String: String]
         var text: String?
+        var isInTOC: Bool = false
     }
 
     /// Text is attributed to at most this many enclosing ancestors. Real
@@ -595,7 +520,10 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
         attributes: [String: String]
     ) {
         let localName = elementName.components(separatedBy: ":").last ?? elementName
-        elements.append(Element(name: localName, attributes: attributes))
+        let parentIsTOC = openElementIndices.last.map { elements[$0].isInTOC } ?? false
+        let types = (attributes["epub:type"] ?? "").split(whereSeparator: \.isWhitespace)
+        let isTOC = localName == "nav" && (types.contains("toc") || attributes["role"] == "doc-toc")
+        elements.append(Element(name: localName, attributes: attributes, isInTOC: parentIsTOC || isTOC))
         openElementIndices.append(elements.count - 1)
     }
 
@@ -629,12 +557,8 @@ private final class SimpleXMLParser: NSObject, XMLParserDelegate, @unchecked Sen
 
 // MARK: - NCX Parser (navPoint extraction)
 
-/// Specialized XML parser for EPUB 2 NCX (Navigation Control for XML) files.
-/// Extracts `navPoint` elements up to two levels deep to support
-/// "Part > Chapter" nesting common in non-fiction books.
-///
-/// `@unchecked Sendable` is safe here: instances are created, used, and discarded
-/// within a single synchronous scope and are never shared across threads.
+/// Reads navPoints at every depth without mixing parent and child labels.
+/// Instances are confined to a single synchronous parse.
 private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable {
     struct NavPoint {
         var title: String?
@@ -642,95 +566,49 @@ private final class NCXParser: NSObject, XMLParserDelegate, @unchecked Sendable 
     }
 
     nonisolated(unsafe) private(set) var navPoints: [NavPoint] = []
-    nonisolated(unsafe) private var navPointDepth = 0
+    nonisolated(unsafe) private var stack: [Int] = []
     nonisolated(unsafe) private var inText = false
-    nonisolated(unsafe) private var currentTitle: String?
-    nonisolated(unsafe) private var currentSrc: String?
-    /// Tracks which navPoint depth we're currently collecting for.
-    /// We collect navPoints at depths 1 and 2 (handles Part > Chapter nesting).
-    nonisolated(unsafe) private var activeNavPointDepth: Int?
 
     nonisolated override init() { super.init() }
 
     nonisolated func parse(data: Data) {
         let parser = XMLParser(data: data)
         parser.delegate = self
-        parser.shouldProcessNamespaces = false
         parser.parse()
     }
 
     nonisolated func parser(
-        _ parser: XMLParser,
-        didStartElement elementName: String,
-        namespaceURI: String?,
-        qualifiedName: String?,
-        attributes: [String: String]
+        _ parser: XMLParser, didStartElement elementName: String,
+        namespaceURI: String?, qualifiedName: String?, attributes: [String: String]
     ) {
-        let localName = elementName.components(separatedBy: ":").last ?? elementName
-
-        switch localName {
+        let name = elementName.components(separatedBy: ":").last ?? elementName
+        switch name {
         case "navPoint":
-            navPointDepth += 1
-            // Collect navPoints at depths 1 and 2 (top-level and one level nested)
-            if navPointDepth <= 2 {
-                // Save any in-progress navPoint before starting a new one
-                finishCurrentNavPoint()
-                activeNavPointDepth = navPointDepth
-                currentTitle = nil
-                currentSrc = nil
-            }
+            navPoints.append(NavPoint(title: nil, src: nil))
+            stack.append(navPoints.count - 1)
         case "text":
-            if activeNavPointDepth != nil {
-                inText = true
-            }
+            inText = !stack.isEmpty
         case "content":
-            if activeNavPointDepth != nil, currentSrc == nil {
-                currentSrc = attributes["src"]?.removingPercentEncoding ?? attributes["src"]
-            }
-        default:
-            break
+            if let index = stack.last { navPoints[index].src = attributes["src"] }
+        default: break
         }
     }
 
     nonisolated func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if inText {
-            if currentTitle == nil {
-                currentTitle = string
-            } else {
-                currentTitle?.append(string)
-            }
+        if inText, let index = stack.last {
+            if navPoints[index].title == nil { navPoints[index].title = "" }
+            navPoints[index].title?.append(string)
         }
     }
 
     nonisolated func parser(
-        _ parser: XMLParser,
-        didEndElement elementName: String,
-        namespaceURI: String?,
-        qualifiedName: String?
+        _ parser: XMLParser, didEndElement elementName: String,
+        namespaceURI: String?, qualifiedName: String?
     ) {
-        let localName = elementName.components(separatedBy: ":").last ?? elementName
-
-        switch localName {
-        case "navPoint":
-            if activeNavPointDepth == navPointDepth {
-                finishCurrentNavPoint()
-            }
-            navPointDepth -= 1
-        case "text":
-            inText = false
-        default:
-            break
+        let name = elementName.components(separatedBy: ":").last ?? elementName
+        if name == "text" { inText = false }
+        if name == "navPoint", let index = stack.popLast() {
+            navPoints[index].title = navPoints[index].title?.trimmingCharacters(in: .whitespacesAndNewlines)
         }
-    }
-
-    nonisolated private func finishCurrentNavPoint() {
-        guard activeNavPointDepth != nil else { return }
-        let trimmedTitle = currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedTitle != nil || currentSrc != nil {
-            navPoints.append(NavPoint(title: trimmedTitle, src: currentSrc))
-        }
-        activeNavPointDepth = nil
-        currentTitle = nil
-        currentSrc = nil
     }
 }

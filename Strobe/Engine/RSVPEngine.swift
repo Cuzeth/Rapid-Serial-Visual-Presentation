@@ -18,6 +18,14 @@ final class RSVPEngine {
     /// Whether playback is currently running.
     private(set) var isPlaying: Bool = false
 
+    /// Playback stays active during an announcement, so hold release, Space,
+    /// and scene changes cancel it through the normal pause path.
+    private(set) var chapterAnnouncement: Chapter?
+    private(set) var isChapterTitleVisible = false
+    nonisolated static let chapterFadeDuration: TimeInterval = 0.25
+    private var chaptersByIndex: [Int: Chapter] = [:]
+    private var lastAnnouncedIndex: Int?
+
     /// The target reading speed. Changing this during playback reschedules the timer.
     var wordsPerMinute: Int {
         didSet { onPlaybackSettingChanged() }
@@ -117,7 +125,8 @@ final class RSVPEngine {
         sentencePauseMultiplier: Double = 1.5,
         complexityTimingEnabled: Bool = false,
         complexityIntensity: Double = 0.5,
-        complexityScores: [Float]? = nil
+        complexityScores: [Float]? = nil,
+        chapters: [Chapter] = []
     ) {
         self.words = words
         self.currentIndex = words.isEmpty ? 0 : max(0, min(currentIndex, words.count - 1))
@@ -130,15 +139,27 @@ final class RSVPEngine {
         self.complexityTimingEnabled = complexityTimingEnabled
         self.complexityIntensity = complexityIntensity
         self.complexityScores = complexityScores
+        setChapters(chapters)
     }
 
     /// Replaces the word array, position, and complexity scores after
     /// asynchronous loading. The position is clamped to the new bounds.
     /// Intended to be called once, while paused, on an engine created empty.
-    func load(words: [String], currentIndex: Int, complexityScores: [Float]?) {
+    func load(words: [String], currentIndex: Int, complexityScores: [Float]?, chapters: [Chapter] = []) {
+        pause()
         self.words = words
         self.complexityScores = complexityScores
         self.currentIndex = words.isEmpty ? 0 : max(0, min(currentIndex, words.count - 1))
+        lastAnnouncedIndex = nil
+        setChapters(chapters)
+    }
+
+    private func setChapters(_ chapters: [Chapter]) {
+        chaptersByIndex = Dictionary(
+            chapters.filter { words.indices.contains($0.wordIndex) && !$0.title.isEmpty }
+                .map { ($0.wordIndex, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     /// Replaces the complexity scores (e.g. after a background backfill for a
@@ -152,7 +173,7 @@ final class RSVPEngine {
     func play() {
         guard !isPlaying, !words.isEmpty, !isAtEnd else { return }
         isPlaying = true
-        scheduleNextWord()
+        if !announceChapterIfNeeded() { scheduleNextWord() }
     }
 
     /// Stops playback, invalidates the timer, and discards any hold-to-read
@@ -160,11 +181,15 @@ final class RSVPEngine {
     func pause() {
         isPlaying = false
         stopTimer()
+        chapterAnnouncement = nil
+        isChapterTitleVisible = false
         wpmOverride = nil
     }
 
     /// Jumps to a specific word index, clamped to valid bounds.
     func seek(to index: Int) {
+        pause()
+        lastAnnouncedIndex = nil
         currentIndex = max(0, min(index, words.count - 1))
     }
 
@@ -182,7 +207,7 @@ final class RSVPEngine {
     }
 
     private func onPlaybackSettingChanged() {
-        guard isPlaying else { return }
+        guard isPlaying, chapterAnnouncement == nil else { return }
         guard let source = timerSource, let scheduled = scheduledDeadline else {
             scheduleNextWord()
             return
@@ -203,6 +228,10 @@ final class RSVPEngine {
     /// clamped to now so a long stall (app suspension) can't cause a burst of
     /// catch-up ticks.
     private func scheduleNextWord(anchor: DispatchTime? = nil) {
+        scheduleTimer(after: nextInterval(), anchor: anchor)
+    }
+
+    private func scheduleTimer(after interval: TimeInterval, anchor: DispatchTime? = nil) {
         guard isPlaying else { return }
         if timerSource == nil {
             let source = DispatchSource.makeTimerSource(queue: .main)
@@ -213,7 +242,7 @@ final class RSVPEngine {
             timerSource = source
         }
         let now = DispatchTime.now()
-        let deadline = max((anchor ?? now) + nextInterval(), now)
+        let deadline = max((anchor ?? now) + interval, now)
         scheduledDeadline = deadline
         timerSource?.schedule(deadline: deadline)
     }
@@ -226,15 +255,39 @@ final class RSVPEngine {
         scheduledDeadline = nil
     }
 
-    private func advance() {
+    /// Handles one timer deadline. Internal so phase transitions can be
+    /// exercised deterministically without wall-clock sleeps in tests.
+    func advance() {
         guard isPlaying else { return }
+        if chapterAnnouncement != nil {
+            if isChapterTitleVisible {
+                isChapterTitleVisible = false
+                scheduleTimer(after: Self.chapterFadeDuration)
+            } else {
+                chapterAnnouncement = nil
+                // The first word gets its full interval after the fade.
+                scheduleNextWord()
+            }
+            return
+        }
         if currentIndex < words.count - 1 {
             let previousDeadline = scheduledDeadline
             currentIndex += 1
-            scheduleNextWord(anchor: previousDeadline)
+            if !announceChapterIfNeeded() { scheduleNextWord(anchor: previousDeadline) }
         } else {
             pause()
         }
+    }
+
+    private func announceChapterIfNeeded() -> Bool {
+        guard lastAnnouncedIndex != currentIndex,
+              let chapter = chaptersByIndex[currentIndex] else { return false }
+        lastAnnouncedIndex = currentIndex
+        chapterAnnouncement = chapter
+        isChapterTitleVisible = true
+        let titleWords = chapter.title.split(whereSeparator: \.isWhitespace).count
+        scheduleTimer(after: max(1.6, min(4.0, Double(titleWords) * 0.3)))
+        return true
     }
 
     private func nextInterval() -> TimeInterval {

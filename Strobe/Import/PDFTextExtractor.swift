@@ -91,14 +91,15 @@ enum PDFTextExtractor {
         }
 
         let chapters = extractChapters(from: document, pageWordOffsets: pageWordOffsets)
+            .filter { result.indices.contains($0.wordIndex) }
         return PDFExtractionResult(words: result, chapters: chapters, title: title)
     }
 
     // MARK: - Chapter extraction
 
-    /// Extracts chapters from the PDF outline (bookmarks), walking up to two
-    /// levels deep to handle "Part > Chapter" nesting.
-    nonisolated private static func extractChapters(
+    /// Walks the full PDF outline, including parts, chapters, and subsections.
+    /// Destinations retain the importer's page-level positioning.
+    nonisolated static func extractChapters(
         from document: PDFDocument,
         pageWordOffsets: [Int]
     ) -> [Chapter] {
@@ -108,26 +109,23 @@ enum PDFTextExtractor {
 
         func addOutlineItem(_ item: PDFOutline) {
             guard let label = item.label, !label.isEmpty else { return }
-            guard let destination = item.destination,
+            guard let destination = item.destination ?? (item.action as? PDFActionGoTo)?.destination,
                   let page = destination.page else { return }
             let pageIndex = document.index(for: page)
-
-            let wordIndex = pageIndex < pageWordOffsets.count
-                ? pageWordOffsets[pageIndex]
-                : 0
+            guard pageWordOffsets.indices.contains(pageIndex) else { return }
+            let wordIndex = pageWordOffsets[pageIndex]
             chapters.append(Chapter(title: label, wordIndex: wordIndex))
         }
 
-        // Walk up to two levels: handles both flat outlines and
-        // "Part > Chapter" nesting common in non-fiction books.
-        for i in 0..<outlineRoot.numberOfChildren {
-            guard let child = outlineRoot.child(at: i) else { continue }
-            addOutlineItem(child)
-
-            // If this top-level item has children, include them too
-            for j in 0..<child.numberOfChildren {
-                guard let grandchild = child.child(at: j) else { continue }
-                addOutlineItem(grandchild)
+        // Iterative depth-first traversal avoids call-stack growth for deeply
+        // nested outlines. Bound traversal and reject cycles in malformed PDFs.
+        var stack = [outlineRoot]
+        var visited = Set<ObjectIdentifier>()
+        while let item = stack.popLast(), visited.count < 100_000 {
+            guard visited.insert(ObjectIdentifier(item)).inserted else { continue }
+            if item !== outlineRoot { addOutlineItem(item) }
+            for index in (0..<min(item.numberOfChildren, 100_000 - visited.count)).reversed() {
+                if let child = item.child(at: index) { stack.append(child) }
             }
         }
 
