@@ -827,6 +827,92 @@ struct StrobeTests {
         #expect(!FileManager.default.fileExists(atPath: escapedFile.path))
     }
 
+    @Test func zipEntryURLStaysInsideDestination() {
+        let destination = URL(fileURLWithPath: "/private/var/mobile/tmp/epub_x", isDirectory: true)
+
+        func path(_ name: String) -> String? {
+            ZIPExtractor.entryURL(forEntryNamed: name, in: destination)?.path
+        }
+
+        #expect(path("mimetype") == "/private/var/mobile/tmp/epub_x/mimetype")
+        #expect(path("META-INF/container.xml") == "/private/var/mobile/tmp/epub_x/META-INF/container.xml")
+        #expect(path("./OEBPS//ch1.xhtml") == "/private/var/mobile/tmp/epub_x/OEBPS/ch1.xhtml")
+        #expect(path("/etc/passwd") == "/private/var/mobile/tmp/epub_x/etc/passwd")
+        #expect(path("..hidden/notes..txt") == "/private/var/mobile/tmp/epub_x/..hidden/notes..txt")
+        #expect(ZIPExtractor.entryURL(forEntryNamed: "OEBPS/", in: destination)?.hasDirectoryPath == true)
+        #expect(ZIPExtractor.entryURL(forEntryNamed: "OEBPS/ch1.xhtml", in: destination)?.hasDirectoryPath == false)
+
+        #expect(path("") == nil)
+        #expect(path("/") == nil)
+        #expect(path("./") == nil)
+        #expect(path("..") == nil)
+        #expect(path("../evil.txt") == nil)
+        #expect(path("a/../../evil.txt") == nil)
+        #expect(path("a/b\u{0}.txt") == nil)
+    }
+
+    /// U+0600 (Prepend) and U+0301 (combining) each fuse with an adjacent `/`
+    /// into one grapheme cluster, so a `Character`-level split never sees a
+    /// bare `..` component even though the kernel does.
+    @Test func zipExtractorRejectsGraphemeFusedPathTraversal() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let fused = "\u{0600}/../../\u{0301}evil.txt"
+        #expect(!fused.split(separator: "/").contains(".."))
+        #expect(ZIPExtractor.entryURL(forEntryNamed: fused, in: tempDir) == nil)
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("\u{0600}/placeholder.txt", Data("ok".utf8), false),
+            (fused, Data("pwned".utf8), false),
+        ]
+        let zipURL = tempDir.appendingPathComponent("malicious.zip")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("extracted")
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        let outside = try FileManager.default.contentsOfDirectory(atPath: tempDir.path)
+        #expect(Set(outside) == ["malicious.zip", "extracted"])
+    }
+
+    /// iOS devices place the temp directory under `/private/var`. macOS exposes
+    /// the same path shape via the `/var` symlink; the simulator does not, so
+    /// there this only exercises the plain temp directory.
+    @Test func zipExtractorExtractsIntoPrivatePrefixedDestination() throws {
+        let plainTemp = FileManager.default.temporaryDirectory
+        let privateTemp = URL(fileURLWithPath: "/private" + plainTemp.path, isDirectory: true)
+        var isDirectory: ObjCBool = false
+        let hasPrivateAlias = FileManager.default.fileExists(atPath: privateTemp.path, isDirectory: &isDirectory)
+            && isDirectory.boolValue
+        #if os(macOS)
+        #expect(hasPrivateAlias)
+        #endif
+
+        let tempDir = (hasPrivateAlias ? privateTemp : plainTemp)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let entries: [(name: String, content: Data, useDataDescriptor: Bool)] = [
+            ("mimetype", Data("application/epub+zip".utf8), false),
+            ("META-INF/container.xml", Data("<container/>".utf8), false),
+            ("OEBPS/content.opf", Data("<package/>".utf8), true),
+        ]
+        let zipURL = tempDir.appendingPathComponent("book.epub")
+        try buildZIPWithCentralDirectory(entries: entries).write(to: zipURL)
+
+        let extractDir = tempDir.appendingPathComponent("epub_extract", isDirectory: true)
+        try ZIPExtractor.extract(zipAt: zipURL, to: extractDir)
+
+        for entry in entries {
+            let extracted = extractDir.appendingPathComponent(entry.name)
+            #expect(try Data(contentsOf: extracted) == entry.content, "missing \(entry.name)")
+        }
+    }
+
     @Test func zipInflateCapsDecompressionBuffer() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

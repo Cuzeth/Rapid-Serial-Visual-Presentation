@@ -254,17 +254,14 @@ enum ZIPExtractor {
         fm: FileManager,
         budget: inout ExtractionBudget
     ) throws {
-        let fileURL = destination.appendingPathComponent(name)
-
         // Prevent Zip Slip path traversal. Entry names come from the (possibly
         // malicious) archive, so they're logged with default privacy.
-        guard fileURL.standardizedFileURL.path
-            .hasPrefix(destination.standardizedFileURL.path + "/") else {
-            logger.warning("Skipping ZIP entry with path traversal: \(name, privacy: .private)")
+        guard let fileURL = entryURL(forEntryNamed: name, in: destination) else {
+            logger.warning("Skipping ZIP entry with unsafe name: \(name, privacy: .private)")
             return
         }
 
-        if name.hasSuffix("/") {
+        if fileURL.hasDirectoryPath {
             try fm.createDirectory(at: fileURL, withIntermediateDirectories: true)
             return
         }
@@ -302,6 +299,36 @@ enum ZIPExtractor {
     }
 
     // MARK: - Helpers
+
+    /// Maps a ZIP entry name to a URL inside `destination`, or `nil` when the
+    /// name has a `..` component, embeds a NUL, or names nothing.
+    ///
+    /// Must stay lexical and byte-level. `standardizedFileURL` strips a leading
+    /// `/private` only from paths that exist, so on iOS devices (temp directory
+    /// under `/private/var`) it rewrites the created destination but not an
+    /// unwritten entry, and a prefix comparison between the two rejects every
+    /// entry. `String.split` works on grapheme clusters, which can absorb a `/`
+    /// the kernel still treats as a separator.
+    nonisolated static func entryURL(forEntryNamed name: String, in destination: URL) -> URL? {
+        let separator = UInt8(ascii: "/")
+        let dot = UInt8(ascii: ".")
+
+        guard !name.utf8.contains(0) else { return nil }
+
+        let components = name.utf8
+            .split(separator: separator)
+            .filter { !$0.elementsEqual([dot]) }
+        guard !components.isEmpty,
+              !components.contains(where: { $0.elementsEqual([dot, dot]) }) else { return nil }
+
+        let relativePath = components
+            .map { String(decoding: $0, as: UTF8.self) }
+            .joined(separator: "/")
+        return destination.appendingPathComponent(
+            relativePath,
+            isDirectory: name.utf8.last == separator
+        )
+    }
 
     /// Reads a little-endian UInt16 from the byte buffer.
     nonisolated private static func readUInt16(_ bytes: UnsafePointer<UInt8>, at offset: Int) -> UInt16 {
