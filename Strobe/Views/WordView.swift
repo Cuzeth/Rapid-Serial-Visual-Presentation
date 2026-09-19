@@ -10,7 +10,7 @@ import AppKit
 /// Displays a single word with Optimal Recognition Point (ORP) highlighting.
 ///
 /// The ORP anchor letter (approximately at the 1/3 position of the word's letters)
-/// is displayed in red and centered on screen. The rest of the word is offset
+/// is displayed in the tone's anchor color and centered on screen. The rest of the word is offset
 /// so the reader's eye stays fixed at the center. Font size scales down
 /// automatically for very long words.
 ///
@@ -20,14 +20,20 @@ struct WordView: View, Equatable {
     let word: String
     let fontSize: CGFloat
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+    @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     static func == (lhs: WordView, rhs: WordView) -> Bool {
         lhs.word == rhs.word && lhs.fontSize == rhs.fontSize
             && lhs.readerFontSelection == rhs.readerFontSelection
+            && lhs.readerTextToneSelection == rhs.readerTextToneSelection
     }
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
+    }
+
+    private var textTone: ReaderTextTone {
+        ReaderTextTone.resolve(readerTextToneSelection)
     }
 
     /// Everything derived from `word` that the body needs, computed once per
@@ -120,7 +126,7 @@ struct WordView: View, Equatable {
         }
     }
 
-    /// Builds an `AttributedString` with the anchor letter colored red.
+    /// Builds an `AttributedString` with the anchor letter in the tone's anchor color.
     /// For non-Arabic scripts the anchor is also bolded. For Arabic, only
     /// color is changed to avoid breaking cursive glyph connections.
     private func attributedWord(fontSize: CGFloat, parts: WordParts) -> AttributedString {
@@ -129,7 +135,7 @@ struct WordView: View, Equatable {
         // of Dynamic Type scaling here — otherwise accessibility sizes would
         // compound with the chosen size and overflow the fitted layout.
         attributed.font = readerFont.regularFont(size: fontSize, relativeTo: nil)
-        attributed.foregroundColor = .primary
+        attributed.foregroundColor = textTone.textColor
 
         guard parts.redIndex < word.count else { return attributed }
 
@@ -137,7 +143,7 @@ struct WordView: View, Equatable {
         let end = word.index(after: start)
         if let attrStart = AttributedString.Index(start, within: attributed),
            let attrEnd = AttributedString.Index(end, within: attributed) {
-            attributed[attrStart..<attrEnd].foregroundColor = .red
+            attributed[attrStart..<attrEnd].foregroundColor = textTone.anchorColor
             // Bold breaks Arabic cursive shaping — only apply for non-Arabic.
             if !parts.isArabic {
                 attributed[attrStart..<attrEnd].font = readerFont.boldFont(size: fontSize, relativeTo: nil)
@@ -164,7 +170,7 @@ struct WordView: View, Equatable {
                 ZStack {
                     // Subtle vertical guide line at the anchor position
                     Rectangle()
-                        .fill(Color.red.opacity(0.12))
+                        .fill(textTone.anchorColor.opacity(0.12))
                         .frame(width: 1.5, height: metrics.fontSize * 1.6)
 
                     Text(attributedWord(fontSize: metrics.fontSize, parts: parts))

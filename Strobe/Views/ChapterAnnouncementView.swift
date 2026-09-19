@@ -3,9 +3,11 @@ import SwiftUI
 /// A quiet chapter break with its own type scale, independent of RSVP word size.
 struct ChapterAnnouncementView: View {
     let title: String
+    @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     var body: some View {
         let parts = titleParts
+        let tone = ReaderTextTone.resolve(readerTextToneSelection)
 
         VStack(spacing: 14) {
             if let label = parts.label {
@@ -19,14 +21,14 @@ struct ChapterAnnouncementView: View {
 
             Text(parts.heading)
                 .font(ReaderFont.fraunces.regularFont(size: 34, relativeTo: .title))
-                .foregroundStyle(StrobeTheme.textPrimary.opacity(0.94))
+                .foregroundStyle(tone.textColor.opacity(0.94))
                 .lineSpacing(4)
                 .lineLimit(4)
                 .minimumScaleFactor(0.75)
                 .fixedSize(horizontal: false, vertical: true)
 
             Capsule()
-                .fill(StrobeTheme.accent.opacity(0.8))
+                .fill(tone.anchorColor.opacity(0.8))
                 .frame(width: 24, height: 2)
                 .padding(.top, 8)
                 .accessibilityHidden(true)

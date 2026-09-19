@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+    @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -167,6 +168,21 @@ struct SettingsView: View {
                                     endPoint: .trailing
                                 )
                             )
+                        }
+
+                        // Text tone
+                        settingCard(title: "Text Color") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 8) {
+                                    ForEach(ReaderTextTone.allCases) { tone in
+                                        toneButton(tone: tone)
+                                    }
+                                }
+
+                                Text("Softer tones are easier on the eyes when reading in the dark.")
+                                    .font(StrobeTheme.bodyFont(size: 11))
+                                    .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                            }
                         }
 
                         // Behavior
@@ -532,6 +548,49 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         // Selection is otherwise color-only — invisible to VoiceOver.
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// A tone swatch rendered the way the reader draws a word: the name in
+    /// the tone's text color on the reader background, with the ORP letter in
+    /// the tone's anchor color.
+    private func toneButton(tone: ReaderTextTone) -> some View {
+        let isSelected = readerTextToneSelection == tone.rawValue
+        return Button {
+            readerTextToneSelection = tone.rawValue
+        } label: {
+            Text(toneSample(for: tone))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 12)
+                .background(StrobeTheme.background)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            isSelected ? StrobeTheme.accent : StrobeTheme.textSecondary.opacity(0.2),
+                            lineWidth: isSelected ? 2 : 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tone.displayName)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private func toneSample(for tone: ReaderTextTone) -> AttributedString {
+        let font = ReaderFont.resolve(readerFontSelection)
+        var sample = AttributedString(tone.displayName)
+        sample.font = font.regularFont(size: 15)
+        sample.foregroundColor = tone.textColor
+
+        let anchorOffset = WordView.orpLetterPosition(letterCount: tone.displayName.count)
+        let anchorStart = sample.index(sample.startIndex, offsetByCharacters: anchorOffset)
+        let anchorEnd = sample.index(anchorStart, offsetByCharacters: 1)
+        sample[anchorStart..<anchorEnd].foregroundColor = tone.anchorColor
+        sample[anchorStart..<anchorEnd].font = font.boldFont(size: 15)
+        return sample
     }
 
     private var appVersionLabel: String {

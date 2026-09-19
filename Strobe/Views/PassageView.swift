@@ -13,6 +13,7 @@ struct PassageView: View {
     let document: Document
     let engine: RSVPEngine
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
+    @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     /// Whether the passage content is dominantly right-to-left script.
     /// Computed once at init — it drives the flow layout's direction, which
@@ -68,6 +69,10 @@ struct PassageView: View {
 
     private var readerFont: ReaderFont {
         ReaderFont.resolve(readerFontSelection)
+    }
+
+    private var textTone: ReaderTextTone {
+        ReaderTextTone.resolve(readerTextToneSelection)
     }
 
     private var contentMaxWidth: CGFloat {
@@ -313,6 +318,7 @@ struct PassageView: View {
                                 matchSet: matchSet,
                                 currentMatchRange: currentMatchRange,
                                 font: readerFont,
+                                tone: textTone,
                                 onTap: handleWordTap
                             )
                             .id(idx)
@@ -657,6 +663,7 @@ private struct WordChunkView: View {
     let matchSet: Set<Int>
     let currentMatchRange: Range<Int>?
     let font: ReaderFont
+    let tone: ReaderTextTone
     let onTap: (Int) -> Void
 
     var body: some View {
@@ -667,7 +674,8 @@ private struct WordChunkView: View {
                     isCurrent: i == currentIndex,
                     isPrimaryMatch: currentMatchRange?.contains(i) ?? false,
                     isMatch: matchSet.contains(i),
-                    font: font
+                    font: font,
+                    tone: tone
                 ) {
                     onTap(i)
                 }
@@ -686,6 +694,7 @@ private struct WordToken: View {
     let isPrimaryMatch: Bool
     let isMatch: Bool
     let font: ReaderFont
+    let tone: ReaderTextTone
     let action: () -> Void
 
     var body: some View {
@@ -714,11 +723,11 @@ private struct WordToken: View {
     private var textColor: Color {
         if isCurrent { return .white }
         if isPrimaryMatch { return .black }
-        return StrobeTheme.textPrimary
+        return tone.textColor
     }
 
     private var backgroundColor: Color {
-        if isCurrent { return StrobeTheme.accent }
+        if isCurrent { return tone.anchorColor }
         if isPrimaryMatch { return Color.yellow.opacity(0.9) }
         if isMatch { return Color.yellow.opacity(0.28) }
         return .clear

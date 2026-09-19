@@ -783,6 +783,31 @@ struct StrobeTests {
         }
     }
 
+    // MARK: - Reader text tone
+
+    @Test func readerTextToneResolvesStoredValues() {
+        for tone in ReaderTextTone.allCases {
+            #expect(ReaderTextTone.resolve(tone.rawValue) == tone)
+        }
+        #expect(ReaderTextTone.resolve("") == ReaderTextTone.defaultValue)
+        #expect(ReaderTextTone.resolve("magenta") == ReaderTextTone.defaultValue)
+    }
+
+    /// The anchor letter is only useful if it reads as a different color from
+    /// the rest of the word, and no softer tone may out-shine the default.
+    @Test func readerTextToneKeepsAnchorDistinctAndNeverBrighterThanDefault() {
+        func luminance(_ rgb: UInt32) -> Double {
+            let r = Double(rgb >> 16 & 0xFF), g = Double(rgb >> 8 & 0xFF), b = Double(rgb & 0xFF)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        let defaultTone = ReaderTextTone.defaultValue
+        for tone in ReaderTextTone.allCases {
+            #expect(tone.textRGB != tone.anchorRGB)
+            #expect(luminance(tone.textRGB) <= luminance(defaultTone.textRGB))
+            #expect(luminance(tone.anchorRGB) <= luminance(defaultTone.anchorRGB))
+        }
+    }
+
     @Test func complexityStorageRoundTrip() {
         let scores: [Float] = [0.1, 0.5, 0.9, 0.0, 1.0]
         let encoded = ComplexityStorage.encode(scores)

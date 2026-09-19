@@ -56,7 +56,7 @@ Strobe/
 ├── Models/       SwiftData models (Document, Chapter, WordStorage, ComplexityStorage)
 ├── Views/        All SwiftUI views
 ├── Theme/        StrobeTheme (colors, typography, hex parser)
-├── Utilities/    HapticManager, ReaderFont
+├── Utilities/    HapticManager, ReaderFont, ReaderTextTone
 ├── Fonts/        Custom font files (Fraunces, Inter, JetBrainsMono, PT*, SpaceGrotesk)
 ```
 
@@ -66,9 +66,10 @@ Strobe/
 - **Concurrency**: `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, `SWIFT_APPROACHABLE_CONCURRENCY = YES`
 - **Logging**: `os.Logger` with subsystem/category
 - **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
+- **Reader colors**: the RSVP word, ORP anchor, chapter announcement, and passage text take their colors from `ReaderTextTone` (`bright`, `soft`, `sepia`, `night`), never from `StrobeTheme` or system colors. App chrome stays on `StrobeTheme`.
 - **Typography**: Fraunces (`titleFont`) for headings and for large display numerals in Settings cards (WPM, text size — `titleFont(size: 32)` in `textPrimary`); body text and captions use `bodyFont`. Keep sibling numerals styled identically.
 - **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `epubDRMProtected`, `pdfLoadFailed`, `pdfPasswordProtected`, `noReadableText`)
-- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `smartTimingMinimumWordLength`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `holdSpeedAdjustEnabled`, `readerFontSelection`, `textCleaningLevel` — all registered in `ReaderSettings.Keys` (plus app flags `hasSeenTutorial`, `didCompactLegacyWordStorage`); never use raw key strings
+- **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `smartTimingMinimumWordLength`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `holdToReadEnabled`, `holdSpeedAdjustEnabled`, `readerFontSelection`, `readerTextTone`, `textCleaningLevel` — all registered in `ReaderSettings.Keys` (plus app flags `hasSeenTutorial`, `didCompactLegacyWordStorage`); never use raw key strings
 - **Navigation**: value-based (`NavigationLink(value:)` + `navigationDestination` in `ContentView`, `ReaderRoute` for chapter entries) — eager `destination:` links would decode word blobs for every visible row. `ReaderView` loads word blobs asynchronously in `.task`, never in `init`.
 - **Platform conditionals**: `#if os(iOS)` / `#if os(macOS)` for UIKit/AppKit imports, haptics, presentation modifiers, and hint text. Engine, import pipeline, and models are fully cross-platform.
 - **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader) — via `.onKeyPress`, also works on iPad with hardware keyboard
