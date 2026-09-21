@@ -18,18 +18,11 @@ struct ChapterNavigationView: View {
     private static let nearChapterStartThreshold = 2
 
     /// Index of the chapter containing the current word (largest chapter whose
-    /// `wordIndex` is at or before `engine.currentIndex`). Nil if no chapters.
+    /// `wordIndex` is at or before `engine.currentIndex`), or the first chapter
+    /// while the position is still before its start. Nil if no chapters.
     private var currentChapterIndex: Int? {
         guard !chapters.isEmpty else { return nil }
-        var result = 0
-        for (i, chapter) in chapters.enumerated() {
-            if chapter.wordIndex <= engine.currentIndex {
-                result = i
-            } else {
-                break
-            }
-        }
-        return result
+        return ChapterTimeline.index(in: chapters, containing: engine.currentIndex) ?? 0
     }
 
     private var canGoPreviousChapter: Bool {

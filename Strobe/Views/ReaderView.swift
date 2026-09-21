@@ -175,6 +175,16 @@ struct ReaderView: View {
                         .readerStageRole(.bottomBar)
                 }
                 .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                // Overlay (not a stage subview) so the word never shifts
+                // whether the header is on or off.
+                .overlay(alignment: .top) {
+                    ReaderHeaderView(
+                        title: document.title,
+                        chapters: document.chapters,
+                        engine: engine,
+                        fadeDuration: navFadeDuration
+                    )
+                }
             }
             // The reader never hosts a keyboard; one dismissing from the
             // passage view's search must not move the fixation line.

@@ -22,6 +22,8 @@ enum ReaderSettings {
         nonisolated static let holdToReadEnabled = "holdToReadEnabled"
         nonisolated static let holdSpeedAdjustEnabled = "holdSpeedAdjustEnabled"
         nonisolated static let trueBlackBackgroundEnabled = "trueBlackBackgroundEnabled"
+        nonisolated static let readingHeaderTitleEnabled = "readingHeaderTitleEnabled"
+        nonisolated static let readingHeaderChapterEnabled = "readingHeaderChapterEnabled"
 
         // App-level flags (not reader settings, but registered here so key
         // strings never drift between files).
@@ -42,6 +44,8 @@ enum ReaderSettings {
         nonisolated static let holdToReadEnabled = true
         nonisolated static let holdSpeedAdjustEnabled = true
         nonisolated static let trueBlackBackgroundEnabled = false
+        nonisolated static let readingHeaderTitleEnabled = false
+        nonisolated static let readingHeaderChapterEnabled = false
     }
 
     /// Shared words-per-minute domain: the reader slider, the settings slider,
