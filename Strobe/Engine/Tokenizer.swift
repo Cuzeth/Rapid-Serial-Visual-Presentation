@@ -5,7 +5,9 @@ import NaturalLanguage
 ///
 /// Handles whitespace splitting, soft-hyphen removal (U+00AD),
 /// non-breaking-hyphen normalization (U+2011 → ASCII hyphen),
-/// line-break hyphenation merging, and standalone punctuation attachment.
+/// line-break hyphenation merging, splitting of dash-joined words
+/// (`elements—stone` → `elements—`, `stone`), and standalone punctuation
+/// attachment.
 ///
 /// For CJK text (Chinese, Japanese, Korean), uses `NLTokenizer` for
 /// word segmentation since these scripts don't use spaces between words.
@@ -53,7 +55,7 @@ enum Tokenizer {
             if CJKUtilities.isCJK(scalar) {
                 // Flush any pending Latin token before switching to CJK
                 if !tokenBuffer.isEmpty {
-                    appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
+                    appendSplittingAtDashes(tokenBuffer, into: &output, carry: &carry)
                     tokenBuffer.removeAll(keepingCapacity: true)
                 }
                 // A hyphenated Latin fragment can't merge with CJK — emit it
@@ -73,7 +75,7 @@ enum Tokenizer {
             }
 
             if scalar.properties.isWhitespace {
-                appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
+                appendSplittingAtDashes(tokenBuffer, into: &output, carry: &carry)
                 tokenBuffer.removeAll(keepingCapacity: true)
                 continue
             }
@@ -95,7 +97,7 @@ enum Tokenizer {
         if !cjkBuffer.isEmpty {
             flushCJKBuffer(&cjkBuffer, into: &output)
         }
-        appendBufferedToken(tokenBuffer, into: &output, carry: &carry)
+        appendSplittingAtDashes(tokenBuffer, into: &output, carry: &carry)
     }
 
     // MARK: - Private
@@ -107,17 +109,137 @@ enum Tokenizer {
         "a", "an", "and", "at", "by", "for", "in", "of", "on", "or", "the", "to"
     ]
 
+    /// Returns `true` for a letter or digit — a scalar that makes a token
+    /// readable rather than punctuation.
+    nonisolated private static func isWordScalar(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.properties.isAlphabetic || scalar.properties.numericType != nil
+    }
+
     /// Returns `true` when a token contains at least one letter or digit,
     /// meaning it is a real word rather than isolated punctuation like `'` or `.`.
     nonisolated private static func isReadableWord(_ token: String) -> Bool {
-        token.unicodeScalars.contains { $0.properties.isAlphabetic || $0.properties.numericType != nil }
+        token.unicodeScalars.contains(where: isWordScalar)
     }
 
-    /// Processes a completed whitespace-delimited token: merges it with
-    /// a carried hyphenated prefix, attaches standalone punctuation to
-    /// the previous word, or appends it as a new word.
+    /// Returns `true` for the em dash (U+2014) and horizontal bar (U+2015),
+    /// which separate words even when written without surrounding spaces.
+    nonisolated private static func isWordBreakingDash(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.value == 0x2014 || scalar.value == 0x2015
+    }
+
+    /// Returns `true` for scalars that can form a dash run: the ASCII hyphen,
+    /// the en dash (U+2013), and the word-breaking dashes.
+    nonisolated private static func isDashRunScalar(_ scalar: Unicode.Scalar) -> Bool {
+        scalar.value == 0x002D || scalar.value == 0x2013 || isWordBreakingDash(scalar)
+    }
+
+    /// Returns `true` for marks that can close a quotation or bracket,
+    /// including straight quotes, which may also open one.
+    nonisolated private static func isClosingMark(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .closePunctuation, .finalPunctuation:
+            return true
+        default:
+            return scalar == "\"" || scalar == "'"
+        }
+    }
+
+    /// Returns `true` when a token ends with a single hyphen that may be a
+    /// line-break hyphenation. A hyphen that ends a longer dash run
+    /// (`word--`) is a dash, never a fragment to merge with the next token.
+    nonisolated private static func endsWithLineBreakHyphen(_ token: String) -> Bool {
+        var trailing = token.unicodeScalars.reversed().makeIterator()
+        guard trailing.next() == "-" else { return false }
+        guard let previous = trailing.next() else { return true }
+        return !isDashRunScalar(previous)
+    }
+
+    /// Splits a whitespace-delimited token at dashes that join two words
+    /// (`elements—stone,` → `elements—`, `stone,`) and processes each piece
+    /// as its own token. The dash stays on the preceding word, together with
+    /// any closing quotes or brackets that directly follow it.
+    ///
+    /// A dash run is a word boundary when it contains an em dash (U+2014) or
+    /// horizontal bar (U+2015), or when it is two or more hyphens or en
+    /// dashes long (`word--word`). A single hyphen or en dash never splits,
+    /// so compounds and ranges (`wedge-shaped`, `1990–1995`) stay whole.
+    /// A run with no letter or digit before it (`—Hello`) or after it
+    /// (`wait—”`) has no second word to separate and is left in place.
+    nonisolated private static func appendSplittingAtDashes(
+        _ token: String,
+        into output: inout [String],
+        carry: inout String?
+    ) {
+        guard token.unicodeScalars.contains(where: isDashRunScalar) else {
+            appendBufferedToken(token, into: &output, carry: &carry)
+            return
+        }
+
+        let scalars = Array(token.unicodeScalars)
+        var pieceStart = 0
+        var pieceIsReadable = false
+        var index = 0
+
+        func appendPiece(upTo end: Int) {
+            var piece = String()
+            piece.unicodeScalars.append(contentsOf: scalars[pieceStart..<end])
+            appendBufferedToken(piece, canCarry: end == scalars.count, into: &output, carry: &carry)
+        }
+
+        while index < scalars.count {
+            guard isDashRunScalar(scalars[index]) else {
+                if isWordScalar(scalars[index]) { pieceIsReadable = true }
+                index += 1
+                continue
+            }
+
+            var end = index
+            var isBoundary = false
+            while end < scalars.count, isDashRunScalar(scalars[end]) {
+                if isWordBreakingDash(scalars[end]) { isBoundary = true }
+                end += 1
+            }
+            if end - index >= 2 { isBoundary = true }
+
+            guard isBoundary, pieceIsReadable else {
+                index = end
+                continue
+            }
+
+            // Closing marks (and any dashes after them) stay with the dash:
+            // `thought—”—she` → `thought—”—`, `she`. A mark directly before a
+            // letter or digit opens the next word instead: `said—"Hello"`.
+            while end < scalars.count {
+                if isDashRunScalar(scalars[end]) {
+                    end += 1
+                } else if isClosingMark(scalars[end]),
+                          end + 1 == scalars.count || !isWordScalar(scalars[end + 1]) {
+                    end += 1
+                } else {
+                    break
+                }
+            }
+
+            guard scalars[end...].contains(where: isWordScalar) else { break }
+
+            appendPiece(upTo: end)
+            pieceStart = end
+            pieceIsReadable = false
+            index = end
+        }
+
+        appendPiece(upTo: scalars.count)
+    }
+
+    /// Processes a completed token: merges it with a carried hyphenated
+    /// prefix, attaches standalone punctuation to the previous word, or
+    /// appends it as a new word.
+    ///
+    /// `canCarry` is `false` for a piece cut from the middle of a token: text
+    /// follows it directly, so a trailing hyphen there is not a line break.
     nonisolated private static func appendBufferedToken(
         _ token: String,
+        canCarry: Bool = true,
         into output: inout [String],
         carry: inout String?
     ) {
@@ -141,7 +263,7 @@ enum Tokenizer {
         if var pending = carry {
             if shouldMerge(pending: pending, with: token) {
                 pending = merge(pending: pending, with: token)
-                if pending.hasSuffix("-") {
+                if canCarry, endsWithLineBreakHyphen(pending) {
                     carry = pending
                 } else {
                     output.append(pending)
@@ -154,7 +276,7 @@ enum Tokenizer {
             carry = nil
         }
 
-        if token.hasSuffix("-") {
+        if canCarry, endsWithLineBreakHyphen(token) {
             carry = token
         } else {
             output.append(token)
