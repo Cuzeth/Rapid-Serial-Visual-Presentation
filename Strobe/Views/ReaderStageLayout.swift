@@ -24,11 +24,11 @@ struct ReaderStageLayout: Layout {
     }
 
     /// Where the fixation line sits, as a fraction of the full container
-    /// height (safe-area insets included). Above 0.5 on purpose: the eye
-    /// places the middle of a vertical extent a few percent above its
-    /// geometric midpoint, so a word at exactly 0.5 reads as low. A fraction
-    /// rather than a point offset so the bias scales from a landscape phone
-    /// to a 13" iPad.
+    /// height (safe-area insets included). Higher on screen than the midpoint
+    /// on purpose: the eye places the middle of a vertical extent a few
+    /// percent above its geometric midpoint, so a word at exactly 0.5 reads
+    /// as low. A fraction rather than a point offset so the bias scales from
+    /// a landscape phone to a 13" iPad.
     nonisolated static let fixationFraction: CGFloat = 0.47
 
     var topInset: CGFloat
