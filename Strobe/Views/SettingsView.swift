@@ -17,6 +17,9 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.bracketPauseMultiplier) private var bracketPauseMultiplier: Double = ReaderSettings.Defaults.bracketPauseMultiplier
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
+    @AppStorage(ReaderSettings.Keys.trueBlackBackgroundEnabled) private var trueBlackBackgroundEnabled: Bool = ReaderSettings.Defaults.trueBlackBackgroundEnabled
+    @AppStorage(ReaderSettings.Keys.readingHeaderTitleEnabled) private var readingHeaderTitleEnabled: Bool = ReaderSettings.Defaults.readingHeaderTitleEnabled
+    @AppStorage(ReaderSettings.Keys.readingHeaderChapterEnabled) private var readingHeaderChapterEnabled: Bool = ReaderSettings.Defaults.readingHeaderChapterEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
@@ -232,6 +235,55 @@ struct SettingsView: View {
                                     .font(StrobeTheme.bodyFont(size: 11))
                                     .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
                             }
+                        }
+
+                        // Display
+                        settingCard(title: "Reading Display") {
+                            VStack(spacing: 16) {
+                                Toggle(isOn: $trueBlackBackgroundEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("True Black Background")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Pure black behind the words, for reading in the dark")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $readingHeaderTitleEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Title While Reading")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Shows the document's title faintly at the top")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $readingHeaderChapterEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Chapter While Reading")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Shows the current chapter faintly at the top")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+                            }
+                            .toggleStyle(.switch)
                         }
 
                         // Behavior
@@ -666,7 +718,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 12)
-                .background(StrobeTheme.background)
+                .background { ReaderBackdrop() }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)

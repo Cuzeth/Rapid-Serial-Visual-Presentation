@@ -136,7 +136,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             // Immersive Background
-            StrobeTheme.Gradients.mainBackground
+            ReaderBackdrop()
                 .ignoresSafeArea()
             
             // Gesture Layer
@@ -144,46 +144,67 @@ struct ReaderView: View {
                 .ignoresSafeArea()
                 .gesture(unifiedGesture)
 
-            VStack {
-                topBar
-                Spacer()
+            // The reader sits inside the safe area; the proxy's insets tell
+            // the layout how far the screen extends beyond it.
+            GeometryReader { geo in
+                ReaderStageLayout(
+                    topInset: geo.safeAreaInsets.top,
+                    bottomInset: geo.safeAreaInsets.bottom
+                ) {
+                    topBar
+                        .readerStageRole(.topBar)
 
-                if showCompletion {
-                    completionView
-                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
-                } else {
-                    CurrentWordView(engine: engine, fontSize: CGFloat(fontSize))
-                    .id("wordview") // stabilize identity
-                    .transition(.opacity)
-                    // Overlay (not a sibling) so the word never shifts when
-                    // the readout appears.
-                    .overlay {
-                        HoldSpeedReadoutView(engine: engine)
-                            .offset(y: CGFloat(fontSize) * 1.4)
-                            .accessibilityHidden(true)
+                    if showCompletion {
+                        completionView
+                            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                            .readerStageRole(.betweenBars)
+                    } else {
+                        CurrentWordView(engine: engine, fontSize: CGFloat(fontSize))
+                        .id("wordview") // stabilize identity
+                        .transition(.opacity)
+                        // Overlay (not a sibling) so the word never shifts when
+                        // the readout appears.
+                        .overlay {
+                            HoldSpeedReadoutView(engine: engine)
+                                .offset(y: CGFloat(fontSize) * 1.4)
+                                .accessibilityHidden(true)
+                        }
+                        // The word display sits above the gesture layer; without
+                        // this, holding directly on the word would swallow the
+                        // hold-to-read gesture.
+                        .allowsHitTesting(false)
+                        .accessibilityAction(named: engine.isPlaying ? "Pause" : "Play") {
+                            togglePlayback()
+                        }
+                        .accessibilityAction(named: "Increase speed") {
+                            nudgeSpeed(by: Int(ReaderSettings.wpmStep))
+                        }
+                        .accessibilityAction(named: "Decrease speed") {
+                            nudgeSpeed(by: -Int(ReaderSettings.wpmStep))
+                        }
                     }
-                    // The word display sits above the gesture layer; without
-                    // this, holding directly on the word would swallow the
-                    // hold-to-read gesture.
-                    .allowsHitTesting(false)
-                    .accessibilityAction(named: engine.isPlaying ? "Pause" : "Play") {
-                        togglePlayback()
-                    }
-                    .accessibilityAction(named: "Increase speed") {
-                        nudgeSpeed(by: Int(ReaderSettings.wpmStep))
-                    }
-                    .accessibilityAction(named: "Decrease speed") {
-                        nudgeSpeed(by: -Int(ReaderSettings.wpmStep))
-                    }
+
+                    bottomBar
+                        .opacity(engine.isPlaying ? 0.0 : 1.0)
+                        .allowsHitTesting(!engine.isPlaying)
+                        .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                        .readerStageRole(.bottomBar)
                 }
-
-                Spacer()
-                bottomBar
-                    .opacity(engine.isPlaying ? 0.0 : 1.0)
-                    .allowsHitTesting(!engine.isPlaying)
-                    .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                // Overlay (not a stage subview) so the word never shifts
+                // whether the header is on or off.
+                .overlay(alignment: .top) {
+                    ReaderHeaderView(
+                        title: document.title,
+                        chapters: document.chapters,
+                        engine: engine,
+                        fadeDuration: navFadeDuration
+                    )
+                }
             }
-            .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+            // The reader never hosts a keyboard; one dismissing from the
+            // passage view's search must not move the fixation line.
+            .ignoresSafeArea(.keyboard)
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
