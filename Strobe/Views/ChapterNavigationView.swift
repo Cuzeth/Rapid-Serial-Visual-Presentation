@@ -145,7 +145,9 @@ struct ChapterNavigationView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .background(StrobeTheme.background)
+            .background {
+                ReaderBackdrop().ignoresSafeArea()
+            }
             .onAppear {
                 guard let idx = activeIndex, chapters.indices.contains(idx) else { return }
                 // Defer one runloop so LazyVStack rows are registered before we scroll.

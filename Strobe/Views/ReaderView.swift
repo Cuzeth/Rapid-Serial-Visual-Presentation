@@ -120,7 +120,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             // Immersive Background
-            StrobeTheme.Gradients.mainBackground
+            ReaderBackdrop()
                 .ignoresSafeArea()
             
             // Gesture Layer

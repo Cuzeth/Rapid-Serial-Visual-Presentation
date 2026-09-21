@@ -21,6 +21,7 @@ enum ReaderSettings {
         nonisolated static let complexityIntensity = "complexityIntensity"
         nonisolated static let holdToReadEnabled = "holdToReadEnabled"
         nonisolated static let holdSpeedAdjustEnabled = "holdSpeedAdjustEnabled"
+        nonisolated static let trueBlackBackgroundEnabled = "trueBlackBackgroundEnabled"
 
         // App-level flags (not reader settings, but registered here so key
         // strings never drift between files).
@@ -40,6 +41,7 @@ enum ReaderSettings {
         nonisolated static let complexityIntensity = 0.5
         nonisolated static let holdToReadEnabled = true
         nonisolated static let holdSpeedAdjustEnabled = true
+        nonisolated static let trueBlackBackgroundEnabled = false
     }
 
     /// Shared words-per-minute domain: the reader slider, the settings slider,

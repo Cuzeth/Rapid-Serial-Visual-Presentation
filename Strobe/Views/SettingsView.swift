@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
+    @AppStorage(ReaderSettings.Keys.trueBlackBackgroundEnabled) private var trueBlackBackgroundEnabled: Bool = ReaderSettings.Defaults.trueBlackBackgroundEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
@@ -183,6 +184,25 @@ struct SettingsView: View {
                                     .font(StrobeTheme.bodyFont(size: 11))
                                     .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
                             }
+                        }
+
+                        // Display
+                        settingCard(title: "Reading Display") {
+                            VStack(spacing: 16) {
+                                Toggle(isOn: $trueBlackBackgroundEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("True Black Background")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Pure black behind the words, for reading in the dark")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+                            }
+                            .toggleStyle(.switch)
                         }
 
                         // Behavior
@@ -564,7 +584,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 12)
-                .background(StrobeTheme.background)
+                .background { ReaderBackdrop() }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)

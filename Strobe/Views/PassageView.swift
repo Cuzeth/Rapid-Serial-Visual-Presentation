@@ -116,7 +116,7 @@ struct PassageView: View {
 
     var body: some View {
         ZStack {
-            StrobeTheme.Gradients.mainBackground.ignoresSafeArea()
+            ReaderBackdrop().ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
