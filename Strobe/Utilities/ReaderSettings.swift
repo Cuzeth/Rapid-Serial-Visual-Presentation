@@ -19,6 +19,10 @@ enum ReaderSettings {
         nonisolated static let sentencePauseMultiplier = "sentencePauseMultiplier"
         nonisolated static let complexityTimingEnabled = "complexityTimingEnabled"
         nonisolated static let complexityIntensity = "complexityIntensity"
+        nonisolated static let clausePauseMultiplier = "clausePauseMultiplier"
+        nonisolated static let dashPauseMultiplier = "dashPauseMultiplier"
+        nonisolated static let ellipsisPauseMultiplier = "ellipsisPauseMultiplier"
+        nonisolated static let bracketPauseMultiplier = "bracketPauseMultiplier"
         nonisolated static let holdToReadEnabled = "holdToReadEnabled"
         nonisolated static let holdSpeedAdjustEnabled = "holdSpeedAdjustEnabled"
 
@@ -38,6 +42,10 @@ enum ReaderSettings {
         nonisolated static let sentencePauseMultiplier = 1.5
         nonisolated static let complexityTimingEnabled = false
         nonisolated static let complexityIntensity = 0.5
+        nonisolated static let clausePauseMultiplier = 1.3
+        nonisolated static let dashPauseMultiplier = 1.4
+        nonisolated static let ellipsisPauseMultiplier = 1.5
+        nonisolated static let bracketPauseMultiplier = 1.2
         nonisolated static let holdToReadEnabled = true
         nonisolated static let holdSpeedAdjustEnabled = true
     }
@@ -57,6 +65,7 @@ enum ReaderSettings {
         let sentencePauseMultiplier: Double
         let complexityTimingEnabled: Bool
         let complexityIntensity: Double
+        let punctuationPauses: PunctuationPauses
     }
 
     /// Reads the current timing settings for constructing an ``RSVPEngine``.
@@ -75,7 +84,17 @@ enum ReaderSettings {
             complexityTimingEnabled: defaults.object(forKey: Keys.complexityTimingEnabled) as? Bool
                 ?? Defaults.complexityTimingEnabled,
             complexityIntensity: defaults.object(forKey: Keys.complexityIntensity) as? Double
-                ?? Defaults.complexityIntensity
+                ?? Defaults.complexityIntensity,
+            punctuationPauses: PunctuationPauses(
+                clause: defaults.object(forKey: Keys.clausePauseMultiplier) as? Double
+                    ?? Defaults.clausePauseMultiplier,
+                dash: defaults.object(forKey: Keys.dashPauseMultiplier) as? Double
+                    ?? Defaults.dashPauseMultiplier,
+                ellipsis: defaults.object(forKey: Keys.ellipsisPauseMultiplier) as? Double
+                    ?? Defaults.ellipsisPauseMultiplier,
+                bracket: defaults.object(forKey: Keys.bracketPauseMultiplier) as? Double
+                    ?? Defaults.bracketPauseMultiplier
+            )
         )
     }
 }

@@ -27,6 +27,10 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
+    @AppStorage(ReaderSettings.Keys.clausePauseMultiplier) private var clausePauseMultiplier: Double = ReaderSettings.Defaults.clausePauseMultiplier
+    @AppStorage(ReaderSettings.Keys.dashPauseMultiplier) private var dashPauseMultiplier: Double = ReaderSettings.Defaults.dashPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.ellipsisPauseMultiplier) private var ellipsisPauseMultiplier: Double = ReaderSettings.Defaults.ellipsisPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.bracketPauseMultiplier) private var bracketPauseMultiplier: Double = ReaderSettings.Defaults.bracketPauseMultiplier
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @Bindable var document: Document
@@ -47,6 +51,17 @@ struct ReaderView: View {
     @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
+
+    /// The four per-type pause settings as the single value the engine takes,
+    /// so one `onChange` forwards a change to any of them.
+    private var punctuationPauses: PunctuationPauses {
+        PunctuationPauses(
+            clause: clausePauseMultiplier,
+            dash: dashPauseMultiplier,
+            ellipsis: ellipsisPauseMultiplier,
+            bracket: bracketPauseMultiplier
+        )
+    }
 
     /// On iPad (regular width) we constrain controls to a comfortable column so
     /// sliders and buttons don't stretch the full width of a 12.9" display.
@@ -71,6 +86,7 @@ struct ReaderView: View {
             smartTimingPercentPerLetter: timing.smartTimingPercentPerLetter,
             smartTimingMinimumWordLength: timing.smartTimingMinimumWordLength,
             sentencePauseMultiplier: timing.sentencePauseMultiplier,
+            punctuationPauses: timing.punctuationPauses,
             complexityTimingEnabled: timing.complexityTimingEnabled,
             complexityIntensity: timing.complexityIntensity
         ))
@@ -243,6 +259,9 @@ struct ReaderView: View {
         }
         .onChange(of: complexityIntensity) { _, newValue in
             engine.complexityIntensity = newValue
+        }
+        .onChange(of: punctuationPauses) { _, newValue in
+            engine.punctuationPauses = newValue
         }
         .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
             Button("OK") { persistenceError = nil }

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Manages a timer that advances through the word array at the configured
 /// words-per-minute rate. Supports smart timing (longer display for long words)
-/// and sentence pauses (extra delay at sentence-ending punctuation).
+/// and punctuation pauses (extra delay after punctuation, set per type).
 ///
 /// Conforms to `@Observable` so SwiftUI views automatically update when
 /// `currentIndex`, `isPlaying`, or settings change.
@@ -48,7 +48,9 @@ final class RSVPEngine {
         didSet { onPlaybackSettingChanged() }
     }
 
-    /// When enabled, words ending with `.`, `!`, or `?` receive extra display time.
+    /// When enabled, words carrying punctuation receive extra display time:
+    /// `sentencePauseMultiplier` at a sentence end, `punctuationPauses` at
+    /// every other type. Named after its persisted settings key.
     var sentencePauseEnabled: Bool {
         didSet { onPlaybackSettingChanged() }
     }
@@ -66,8 +68,14 @@ final class RSVPEngine {
         didSet { onPlaybackSettingChanged() }
     }
 
-    /// Multiplier applied to the interval at sentence-ending punctuation when sentence pauses are on.
+    /// Multiplier applied to the interval at sentence-ending punctuation when punctuation pauses are on.
     var sentencePauseMultiplier: Double {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// Multipliers for clause marks, dashes, ellipses, and closing brackets
+    /// and quotes when punctuation pauses are on.
+    var punctuationPauses: PunctuationPauses {
         didSet { onPlaybackSettingChanged() }
     }
 
@@ -123,6 +131,7 @@ final class RSVPEngine {
         smartTimingPercentPerLetter: Double = 4.0,
         smartTimingMinimumWordLength: Int = 1,
         sentencePauseMultiplier: Double = 1.5,
+        punctuationPauses: PunctuationPauses = PunctuationPauses(),
         complexityTimingEnabled: Bool = false,
         complexityIntensity: Double = 0.5,
         complexityScores: [Float]? = nil,
@@ -136,6 +145,7 @@ final class RSVPEngine {
         self.smartTimingPercentPerLetter = smartTimingPercentPerLetter
         self.smartTimingMinimumWordLength = smartTimingMinimumWordLength
         self.sentencePauseMultiplier = sentencePauseMultiplier
+        self.punctuationPauses = punctuationPauses
         self.complexityTimingEnabled = complexityTimingEnabled
         self.complexityIntensity = complexityIntensity
         self.complexityScores = complexityScores
@@ -290,19 +300,28 @@ final class RSVPEngine {
         return true
     }
 
-    private func nextInterval() -> TimeInterval {
+    /// The display time for the current word. Internal so the way the timing
+    /// features compose can be verified without wall-clock sleeps in tests.
+    func nextInterval() -> TimeInterval {
         var interval = baseInterval
 
+        // Punctuation pauses own all punctuation timing while they are on, so
+        // smart timing drops its own trailing-punctuation bonus rather than
+        // pausing twice for the same mark.
         if smartTimingEnabled {
             interval *= Self.smartTimingMultiplier(
                 for: currentWord,
                 percentPerLetter: smartTimingPercentPerLetter,
-                minimumWordLength: smartTimingMinimumWordLength
+                minimumWordLength: smartTimingMinimumWordLength,
+                punctuationBonus: !sentencePauseEnabled
             )
         }
 
-        if sentencePauseEnabled && Self.endsWithSentencePunctuation(currentWord) {
-            interval *= sentencePauseMultiplier
+        if sentencePauseEnabled {
+            interval *= punctuationPauses.multiplier(
+                for: PunctuationMarks.marks(in: currentWord),
+                sentenceEnd: sentencePauseMultiplier
+            )
         }
 
         if complexityTimingEnabled, let scores = complexityScores,
@@ -331,11 +350,13 @@ final class RSVPEngine {
     /// exactly the base rate. E.g. at 4%, an 8-letter word yields 1.32×.
     /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus when
     /// `percentPerLetter > 0` regardless of length — it marks a clause
-    /// boundary, not a long word.
+    /// boundary, not a long word. Pass `punctuationBonus: false` when
+    /// punctuation pauses already time that boundary.
     nonisolated static func smartTimingMultiplier(
         for word: String,
         percentPerLetter: Double = 4.0,
-        minimumWordLength: Int = 1
+        minimumWordLength: Int = 1,
+        punctuationBonus: Bool = true
     ) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
         let letterCount = trimmed.count
@@ -345,7 +366,7 @@ final class RSVPEngine {
             multiplier += Double(letterCount) * (percentPerLetter / 100.0)
         }
 
-        if percentPerLetter > 0, hasTrailingPunctuation(word) {
+        if punctuationBonus, percentPerLetter > 0, hasTrailingPunctuation(word) {
             multiplier += 0.2
         }
 
@@ -375,29 +396,11 @@ final class RSVPEngine {
         return CharacterSet.punctuationCharacters.contains(last)
     }
 
-    nonisolated private static let sentenceEnders: Set<Character> = [
-        ".", "!", "?",       // Latin
-        "\u{3002}",          // 。 CJK full stop
-        "\u{FF01}",          // ！ fullwidth exclamation
-        "\u{FF1F}",          // ？ fullwidth question mark
-        "\u{061F}",          // ؟ Arabic question mark
-        "\u{06D4}",          // ۔ Arabic/Urdu full stop
-    ]
-
-    /// Characters that may wrap sentence-ending punctuation (closing quotes, parens, brackets).
-    nonisolated private static let closingDelimiters: Set<Character> = [
-        "\"", "'", "\u{201D}", "\u{2019}", // " ' " '
-        ")", "]", "\u{00BB}",              // ) ] »
-    ]
-
     /// Returns `true` if the word ends with sentence-terminating punctuation,
     /// looking past any trailing closing delimiters (quotes, parentheses, brackets).
+    /// Three or more periods are an ellipsis, not a sentence end.
     nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
-        for char in word.reversed() {
-            if sentenceEnders.contains(char) { return true }
-            if !closingDelimiters.contains(char) { return false }
-        }
-        return false
+        PunctuationMarks.marks(in: word).contains(.sentenceEnd)
     }
 
     deinit {
