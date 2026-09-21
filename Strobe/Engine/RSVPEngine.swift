@@ -4,7 +4,9 @@ import Foundation
 ///
 /// Manages a timer that advances through the word array at the configured
 /// words-per-minute rate. Supports smart timing (longer display for long words)
-/// and punctuation pauses (extra delay after punctuation, set per type).
+/// and punctuation pauses (extra delay after punctuation, set per type). A
+/// compound such as `wedge-shaped` always displays for longer than a single
+/// word; see ``CompoundWord``.
 ///
 /// Conforms to `@Observable` so SwiftUI views automatically update when
 /// `currentIndex`, `isPlaying`, or settings change.
@@ -304,18 +306,26 @@ final class RSVPEngine {
     /// features compose can be verified without wall-clock sleeps in tests.
     func nextInterval() -> TimeInterval {
         var interval = baseInterval
+        var wordTime = 1.0
 
         // Punctuation pauses own all punctuation timing while they are on, so
         // smart timing drops its own trailing-punctuation bonus rather than
         // pausing twice for the same mark.
         if smartTimingEnabled {
-            interval *= Self.smartTimingMultiplier(
+            wordTime = Self.smartTimingMultiplier(
                 for: currentWord,
                 percentPerLetter: smartTimingPercentPerLetter,
                 minimumWordLength: smartTimingMinimumWordLength,
                 punctuationBonus: !sentencePauseEnabled
             )
         }
+
+        // A compound's further parts add to the word's time instead of scaling
+        // it: smart timing has already counted every letter, so each part
+        // contributes only its per-word share. Pauses and complexity then
+        // scale the whole word.
+        wordTime += CompoundWord.additionalIntervals(for: currentWord)
+        interval *= wordTime
 
         if sentencePauseEnabled {
             interval *= punctuationPauses.multiplier(
