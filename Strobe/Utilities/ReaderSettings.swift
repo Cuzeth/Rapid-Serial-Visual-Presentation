@@ -51,7 +51,7 @@ enum ReaderSettings {
         nonisolated static let bracketPauseMultiplier = 1.2
         nonisolated static let holdToReadEnabled = true
         nonisolated static let holdSpeedAdjustEnabled = true
-        nonisolated static let trueBlackBackgroundEnabled = false
+        nonisolated static let trueBlackBackgroundEnabled = true
         nonisolated static let readingHeaderTitleEnabled = false
         nonisolated static let readingHeaderChapterEnabled = false
     }

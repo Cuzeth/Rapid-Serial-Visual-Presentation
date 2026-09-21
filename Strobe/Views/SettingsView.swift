@@ -517,6 +517,10 @@ struct SettingsView: View {
                     .padding(.bottom, 28)
                     .frame(maxWidth: contentMaxWidth)
                     .frame(maxWidth: .infinity)
+                    // Content even a fraction of a point wider than the scroll
+                    // view (a floating sheet's width is fractional) lets it pan
+                    // sideways.
+                    .containerRelativeFrame(.horizontal)
                 }
             }
         }

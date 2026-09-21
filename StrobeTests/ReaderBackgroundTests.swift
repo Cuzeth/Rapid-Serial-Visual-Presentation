@@ -8,10 +8,10 @@ struct ReaderBackgroundTests {
         #expect(ReaderBackground.resolve(trueBlackEnabled: true) == .trueBlack)
     }
 
-    @Test func trueBlackIsOffByDefault() {
-        #expect(ReaderSettings.Defaults.trueBlackBackgroundEnabled == false)
+    @Test func trueBlackIsOnByDefault() {
+        #expect(ReaderSettings.Defaults.trueBlackBackgroundEnabled == true)
         #expect(ReaderBackground.resolve(
             trueBlackEnabled: ReaderSettings.Defaults.trueBlackBackgroundEnabled
-        ) == .standard)
+        ) == .trueBlack)
     }
 }
