@@ -23,11 +23,17 @@ final class RSVPEngine {
     private(set) var isPlaying: Bool = false
 
     /// Playback stays active during an announcement, so hold release, Space,
-    /// and scene changes cancel it through the normal pause path.
+    /// and scene changes cancel it through the normal pause path. The title
+    /// stands in for the words at the chapter's start that repeat it: once it
+    /// has shown, or when playback pauses during it, reading goes on after
+    /// them (see ``ChapterHeading``).
     private(set) var chapterAnnouncement: Chapter?
     private(set) var isChapterTitleVisible = false
     nonisolated static let chapterFadeDuration: TimeInterval = 0.25
     private var chaptersByIndex: [Int: Chapter] = [:]
+    /// Where reading goes on after a chapter's announcement, for the chapters
+    /// whose first words repeat their title.
+    private var readingStarts: [Int: Int] = [:]
     private var lastAnnouncedIndex: Int?
 
     /// Whether playback is in the blank between two sentences: the last word
@@ -198,6 +204,13 @@ final class RSVPEngine {
                 .map { ($0.wordIndex, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        readingStarts = ChapterHeading.readingStarts(for: chaptersByIndex, in: words)
+    }
+
+    /// Where reading goes on after the announcement of the chapter starting
+    /// at `index`: past the words there that repeat its title, if any.
+    func readingStart(ofChapterAt index: Int) -> Int {
+        readingStarts[index] ?? index
     }
 
     /// Replaces the complexity scores (e.g. after a background backfill for a
@@ -216,9 +229,14 @@ final class RSVPEngine {
 
     /// Stops playback, invalidates the timer, and discards any hold-to-read
     /// speed override so the next play resumes at the configured speed.
+    /// Pausing during a chapter announcement moves the position past the
+    /// words its title stands in for.
     func pause() {
         isPlaying = false
         stopTimer()
+        if let chapter = chapterAnnouncement {
+            currentIndex = readingStart(ofChapterAt: chapter.wordIndex)
+        }
         chapterAnnouncement = nil
         isChapterTitleVisible = false
         isInSentenceBreak = false
@@ -301,14 +319,16 @@ final class RSVPEngine {
     /// exercised deterministically without wall-clock sleeps in tests.
     func advance() {
         guard isPlaying else { return }
-        if chapterAnnouncement != nil {
+        if let chapter = chapterAnnouncement {
             if isChapterTitleVisible {
                 isChapterTitleVisible = false
                 scheduleTimer(after: Self.chapterFadeDuration)
             } else {
                 chapterAnnouncement = nil
-                // The first word gets its full interval after the fade.
-                scheduleNextWord()
+                // Another chapter can start where this one's heading ends.
+                // Otherwise the first word gets its full interval after the fade.
+                currentIndex = readingStart(ofChapterAt: chapter.wordIndex)
+                if !announceChapterIfNeeded() { scheduleNextWord() }
             }
             return
         }
