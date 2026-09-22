@@ -5,8 +5,8 @@ import Foundation
 /// Manages a timer that advances through the word array at the configured
 /// words-per-minute rate. Supports smart timing (longer display for long words)
 /// and punctuation pauses (extra delay after punctuation, set per type). A
-/// compound such as `wedge-shaped` always displays for longer than a single
-/// word; see ``CompoundWord``.
+/// compound such as `wedge-shaped` and an acronym such as `FBI` always display
+/// for longer than a single word; see ``CompoundWord`` and ``Acronym``.
 ///
 /// Conforms to `@Observable` so SwiftUI views automatically update when
 /// `currentIndex`, `isPlaying`, or settings change.
@@ -325,6 +325,8 @@ final class RSVPEngine {
         // contributes only its per-word share. Pauses and complexity then
         // scale the whole word.
         wordTime += CompoundWord.additionalIntervals(for: currentWord)
+        // An acronym's further letter names add their share the same way.
+        wordTime += Acronym.additionalIntervals(at: currentIndex, in: words)
         interval *= wordTime
 
         if sentencePauseEnabled {
