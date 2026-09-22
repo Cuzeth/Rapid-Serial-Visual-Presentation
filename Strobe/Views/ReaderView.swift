@@ -34,6 +34,7 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @AppStorage(ReaderSettings.Keys.contextWordsEnabled) private var contextWordsEnabled: Bool = ReaderSettings.Defaults.contextWordsEnabled
+    @AppStorage(ReaderSettings.Keys.enclosingMarksEnabled) private var enclosingMarksEnabled: Bool = ReaderSettings.Defaults.enclosingMarksEnabled
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -49,6 +50,7 @@ struct ReaderView: View {
     @State private var persistenceError: String?
     @State private var isLoaded = false
     @State private var isBackfillingComplexity = false
+    @State private var enclosingMarks: EnclosingMarks?
     @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
@@ -112,6 +114,18 @@ struct ReaderView: View {
         if scores == nil && complexityTimingEnabled {
             backfillComplexityScores()
         }
+    }
+
+    /// Pairs the document's quotation and bracket marks for the enclosing
+    /// marks display, once the words are loaded and the setting is on. Runs
+    /// off-main: it scans every word of the document.
+    private func pairEnclosingMarksIfNeeded() async {
+        guard enclosingMarksEnabled, isLoaded, enclosingMarks == nil else { return }
+        let words = engine.words
+        let chapters = document.chapters
+        enclosingMarks = await Task.detached(priority: .userInitiated) {
+            EnclosingMarks(words: words, chapters: chapters)
+        }.value
     }
 
     /// Computes and stores complexity scores for documents imported before
@@ -185,6 +199,16 @@ struct ReaderView: View {
                         .transition(.opacity)
                         .readerStageRole(.fixationSurround)
 
+                        EnclosingMarksView(
+                            engine: engine,
+                            marks: enclosingMarks,
+                            fontSize: CGFloat(fontSize),
+                            isEnabled: enclosingMarksEnabled,
+                            contextWordsEnabled: contextWordsEnabled
+                        )
+                        .transition(.opacity)
+                        .readerStageRole(.fixationSurround)
+
                         HoldSpeedReadoutView(
                             engine: engine,
                             fontSize: CGFloat(fontSize),
@@ -224,6 +248,9 @@ struct ReaderView: View {
         #endif
         .task {
             await loadDocumentIfNeeded()
+        }
+        .task(id: enclosingMarksEnabled && isLoaded) {
+            await pairEnclosingMarksIfNeeded()
         }
         .onAppear {
             readerFocused = true
