@@ -15,6 +15,8 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.dashPauseMultiplier) private var dashPauseMultiplier: Double = ReaderSettings.Defaults.dashPauseMultiplier
     @AppStorage(ReaderSettings.Keys.ellipsisPauseMultiplier) private var ellipsisPauseMultiplier: Double = ReaderSettings.Defaults.ellipsisPauseMultiplier
     @AppStorage(ReaderSettings.Keys.bracketPauseMultiplier) private var bracketPauseMultiplier: Double = ReaderSettings.Defaults.bracketPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.sentenceBreakEnabled) private var sentenceBreakEnabled: Bool = ReaderSettings.Defaults.sentenceBreakEnabled
+    @AppStorage(ReaderSettings.Keys.sentenceBreakLength) private var sentenceBreakLength: Double = ReaderSettings.Defaults.sentenceBreakLength
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @AppStorage(ReaderSettings.Keys.trueBlackBackgroundEnabled) private var trueBlackBackgroundEnabled: Bool = ReaderSettings.Defaults.trueBlackBackgroundEnabled
@@ -98,6 +100,12 @@ struct SettingsView: View {
     /// A multiplier of 1.0 adds no pause, so it reads as "Off" rather than "1.0x".
     private func pauseMultiplierLabel(_ multiplier: Double) -> String {
         multiplier < 1.05 ? "Off" : String(format: "%.1fx", multiplier)
+    }
+
+    /// The blank's length counted in words at the reader's speed: "1 word",
+    /// "1.5 words".
+    private var sentenceBreakLengthLabel: String {
+        sentenceBreakLength == 1 ? "1 word" : String(format: "%g words", sentenceBreakLength)
     }
 
     /// At the minimum (1) smart timing applies to every word — the label makes
@@ -365,6 +373,47 @@ struct SettingsView: View {
                                         .padding(.leading, 4)
                                         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                                 }
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $sentenceBreakEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Blank After Sentences")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("An empty screen for a moment after each sentence")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                if sentenceBreakEnabled {
+                                    VStack(spacing: 8) {
+                                        HStack {
+                                            Text("Blank for")
+                                                .font(StrobeTheme.bodyFont(size: 14))
+                                                .foregroundStyle(StrobeTheme.textSecondary)
+                                            Spacer()
+                                            Text(sentenceBreakLengthLabel)
+                                                .font(StrobeTheme.bodyFont(size: 14, bold: true))
+                                                .foregroundStyle(StrobeTheme.textPrimary)
+                                        }
+                                        Slider(value: $sentenceBreakLength, in: 0.5...4, step: 0.5)
+                                            .tint(StrobeTheme.accent)
+                                            .frame(minHeight: 44)
+                                            .accessibilityLabel("Blank length")
+                                            .accessibilityValue(sentenceBreakLengthLabel)
+                                        Text("Measured in words at your reading speed.")
+                                            .font(StrobeTheme.bodyFont(size: 11))
+                                            .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(.leading, 4)
+                                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                                }
+
                                 Divider().background(StrobeTheme.surface)
 
                                 Toggle(isOn: $complexityTimingEnabled) {
@@ -459,6 +508,7 @@ struct SettingsView: View {
                             .toggleStyle(.switch)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: smartTimingEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sentencePauseEnabled)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sentenceBreakEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: complexityTimingEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: holdToReadEnabled)
                         }
