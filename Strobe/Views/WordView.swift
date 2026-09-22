@@ -161,6 +161,10 @@ struct WordView: View, Equatable {
     /// falls back to plain centering and `minimumScaleFactor` takes over.
     private static let minimumDisplayFontSize: CGFloat = 12
 
+    /// The guide line's height as a multiple of the font size. Context words
+    /// are laid out past its ends.
+    nonisolated static let guideLineHeightRatio: CGFloat = 1.6
+
     var body: some View {
         let parts = makeParts()
         GeometryReader { geo in
@@ -171,7 +175,7 @@ struct WordView: View, Equatable {
                     // Subtle vertical guide line at the anchor position
                     Rectangle()
                         .fill(textTone.anchorColor.opacity(0.12))
-                        .frame(width: 1.5, height: metrics.fontSize * 1.6)
+                        .frame(width: 1.5, height: metrics.fontSize * Self.guideLineHeightRatio)
 
                     Text(attributedWord(fontSize: metrics.fontSize, parts: parts))
                         .offset(x: metrics.anchorOffset)
