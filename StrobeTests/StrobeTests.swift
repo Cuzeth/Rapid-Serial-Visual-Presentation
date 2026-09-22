@@ -1762,19 +1762,20 @@ struct StrobeTests {
         #expect(PassageView.findMatches(query: "你好 世界", in: words) == [0])
     }
 
-    @Test func matchSpanCountsQueryTokens() {
-        #expect(PassageView.matchSpan(for: "banana") == 1)
-        #expect(PassageView.matchSpan(for: "banana pie") == 2)
-        #expect(PassageView.matchSpan(for: "  banana   cream  pie ") == 3)
-        #expect(PassageView.matchSpan(for: "") == 1)
-        #expect(PassageView.matchSpan(for: "   ") == 1)
+    @Test func matchRangesCoverOneWordPerQueryToken() {
+        let words = ["i", "ate", "banana", "cream", "pie"]
+        #expect(PassageView.findMatchRanges(query: "banana", inLowercasedWords: words) == [2..<3])
+        #expect(PassageView.findMatchRanges(query: "banana cream", inLowercasedWords: words) == [2..<4])
+        #expect(PassageView.findMatchRanges(query: "  banana   cream  pie ", inLowercasedWords: words) == [2..<5])
+        #expect(PassageView.findMatchRanges(query: "", inLowercasedWords: words).isEmpty)
+        #expect(PassageView.findMatchRanges(query: "   ", inLowercasedWords: words).isEmpty)
     }
 
     @Test func coveredIndicesSpanEveryMatchedWord() {
-        #expect(PassageView.coveredIndices(matchStarts: [2, 7], span: 2) == [2, 3, 7, 8])
-        #expect(PassageView.coveredIndices(matchStarts: [1], span: 1) == [1])
-        #expect(PassageView.coveredIndices(matchStarts: [0, 1], span: 2) == [0, 1, 2])
-        #expect(PassageView.coveredIndices(matchStarts: [], span: 3).isEmpty)
+        #expect(PassageView.coveredIndices(of: [2..<4, 7..<9]) == [2, 3, 7, 8])
+        #expect(PassageView.coveredIndices(of: [1..<2]) == [1])
+        #expect(PassageView.coveredIndices(of: [0..<2, 1..<3]) == [0, 1, 2])
+        #expect(PassageView.coveredIndices(of: []).isEmpty)
     }
 
     /// The per-keystroke search path uses a cached lowercased copy of the

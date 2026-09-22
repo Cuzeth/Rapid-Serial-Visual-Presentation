@@ -72,12 +72,14 @@ struct WordView: View, Equatable {
     }
 
     /// The character index of the ORP anchor letter (the red letter).
-    /// Calculated from letter-only positions, skipping punctuation.
+    /// Calculated from the positions of letters and digits, skipping
+    /// punctuation and the space inside a number unit (`2000 BCE`), so a
+    /// number or unit is anchored like a word of the same length.
     /// For short CJK words (≤3 characters), centers the anchor instead.
-    nonisolated private static func redIndex(of word: String) -> Int {
-        // Collect indices of letter characters only (skip punctuation like apostrophes)
+    nonisolated static func redIndex(of word: String) -> Int {
+        // Collect indices of letters and digits only (skip punctuation like apostrophes)
         let letterIndices = word.enumerated().compactMap { offset, char in
-            char.isLetter ? offset : nil
+            char.isLetter || isDigit(char) ? offset : nil
         }
 
         guard !letterIndices.isEmpty else {
@@ -94,6 +96,12 @@ struct WordView: View, Equatable {
         }
 
         return letterIndices[Self.orpLetterPosition(letterCount: letterCount)]
+    }
+
+    /// Returns `true` for a decimal digit in any script. Superscripts and
+    /// subscripts (the `²` of `m²`, the `₂` of `H₂O`) are not digits here.
+    nonisolated private static func isDigit(_ character: Character) -> Bool {
+        character.unicodeScalars.first?.properties.generalCategory == .decimalNumber
     }
 
     /// Letter position (index into the word's letters) of the ORP anchor.

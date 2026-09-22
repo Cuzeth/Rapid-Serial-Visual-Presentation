@@ -369,7 +369,10 @@ final class RSVPEngine {
         punctuationBonus: Bool = true
     ) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
-        let letterCount = trimmed.count
+        // The space inside a number unit (`2000 BCE`) is not a letter.
+        let letterCount = trimmed.reduce(into: 0) { count, character in
+            if character != " " { count += 1 }
+        }
 
         var multiplier = 1.0
         if letterCount >= minimumWordLength {

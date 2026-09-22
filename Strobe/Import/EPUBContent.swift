@@ -6,6 +6,9 @@ struct EPUBContent {
     var text = ""
     var anchors: [String: Int] = [:]
     var headings: [(title: String, offset: Int)] = []
+    /// Where block elements (paragraphs, headings, list items) open or close,
+    /// ascending. Words on either side of one never join as a number unit.
+    var blockBreaks: [Int] = []
 
     nonisolated init() {}
 
@@ -70,7 +73,10 @@ struct EPUBContent {
                 if !title.isEmpty { result.headings.append((title, active.offset)) }
                 heading = nil
             }
-            if blockTags.contains(name) { append(" ") }
+            if blockTags.contains(name) {
+                result.blockBreaks.append(length)
+                append(" ")
+            }
             guard !closing else { return }
 
             let attributes = body as NSString
@@ -98,6 +104,7 @@ struct EPUBContent {
     ) -> [Int: Int] {
         let offsets = Set([0] + Array(anchors.values) + headings.map(\.offset)).sorted()
         var marker = 0
+        var blockBreak = 0
         var positions: [Int: Int] = [:]
         let text = cleanedText as NSString
         Self.tokenPattern.enumerateMatches(in: cleanedText, range: NSRange(location: 0, length: text.length)) { match, _, _ in
@@ -105,12 +112,23 @@ struct EPUBContent {
             let before = words.count
             let pending = carry
             let token = text.substring(with: match.range)
-            Tokenizer.appendTokenizedText(token, into: &words, carry: &carry)
+            var startsBlock = false
+            while blockBreak < blockBreaks.count, blockBreaks[blockBreak] < match.range.location {
+                startsBlock = true
+                blockBreak += 1
+            }
+            Tokenizer.appendTokenizedText(token, into: &words, carry: &carry, startsBlock: startsBlock)
             guard token.unicodeScalars.contains(where: {
                 $0.properties.isAlphabetic || $0.properties.numericType != nil
             }) else { return }
+            // A token that neither added a word nor became the carry was
+            // joined onto the previous word as the second half of a number
+            // unit (`2000` + `BCE`); its markers belong to that word.
+            let joinedPrevious = carry == nil && words.count == before
             // An unmerged carry belongs to the previous chunk, not this one.
-            let start = before + (pending != nil && words.count > before && words[before] == pending ? 1 : 0)
+            let start = joinedPrevious
+                ? before - 1
+                : before + (pending != nil && words.count > before && words[before] == pending ? 1 : 0)
             while marker < offsets.count, offsets[marker] < NSMaxRange(match.range) {
                 positions[offsets[marker]] = start
                 marker += 1
