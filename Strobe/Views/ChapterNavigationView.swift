@@ -13,8 +13,9 @@ struct ChapterNavigationView: View {
     /// Called after any chapter jump — the reader clears its completion overlay.
     var onNavigate: () -> Void = {}
 
-    /// A "previous chapter" tap within this many words of the chapter start
-    /// goes to the prior chapter instead of restarting the current one.
+    /// A "previous chapter" tap within this many words of where the chapter's
+    /// reading starts, after any heading its announcement stands in for, goes
+    /// to the prior chapter instead of restarting the current one.
     private static let nearChapterStartThreshold = 2
 
     /// Index of the chapter containing the current word (largest chapter whose
@@ -27,7 +28,11 @@ struct ChapterNavigationView: View {
 
     private var canGoPreviousChapter: Bool {
         guard let idx = currentChapterIndex else { return false }
-        return engine.currentIndex > chapters[idx].wordIndex + Self.nearChapterStartThreshold || idx > 0
+        return !isNearStart(ofChapterAt: idx) || idx > 0
+    }
+
+    private func isNearStart(ofChapterAt idx: Int) -> Bool {
+        engine.currentIndex <= engine.readingStart(ofChapterAt: chapters[idx].wordIndex) + Self.nearChapterStartThreshold
     }
 
     private var canGoNextChapter: Bool {
@@ -163,8 +168,7 @@ struct ChapterNavigationView: View {
 
     private func jumpToPreviousChapter() {
         guard let idx = currentChapterIndex else { return }
-        let chapterStart = chapters[idx].wordIndex
-        if engine.currentIndex > chapterStart + Self.nearChapterStartThreshold {
+        if !isNearStart(ofChapterAt: idx) {
             jumpToChapter(idx)
         } else if idx > 0 {
             jumpToChapter(idx - 1)

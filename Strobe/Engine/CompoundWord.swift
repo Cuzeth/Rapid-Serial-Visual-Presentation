@@ -1,12 +1,13 @@
 import Foundation
 
 /// Timing for tokens that join several words into one: `wedge-shaped`,
-/// `state-of-the-art`, `1990–1995`, `and/or`.
+/// `state-of-the-art`, `1990–1995`, `and/or`, and number units such as
+/// `2000 BCE`.
 ///
-/// The tokenizer splits on whitespace only, so a compound takes a single word
-/// slot however many words it holds. ``RSVPEngine`` adds
-/// ``additionalIntervals(for:)`` to the word's own display time so the parts
-/// after the first get their share.
+/// The tokenizer splits on whitespace and keeps number units whole, so a
+/// compound takes a single word slot however many words it holds.
+/// ``RSVPEngine`` adds ``additionalIntervals(for:)`` to the word's own
+/// display time so the parts after the first get their share.
 nonisolated enum CompoundWord {
 
     /// The share of a base interval each part after the first adds. A part
@@ -29,7 +30,8 @@ nonisolated enum CompoundWord {
     /// The number of parts in `word` that each take a word's worth of
     /// reading, never less than 1.
     ///
-    /// Parts are separated by a single hyphen, en dash, or slash.
+    /// Parts are separated by a single hyphen, en dash, or slash, or by the
+    /// space inside a number unit (`2000 BCE`, `10:30 PM`).
     ///
     /// - A part counts only when it holds two or more letters or digits, so
     ///   the prefix letter of `x-ray`, `e-mail`, and `T-shirt`, a stutter
@@ -44,7 +46,7 @@ nonisolated enum CompoundWord {
     ///   times as a dash pause.
     static func partCount(in word: String) -> Int {
         // 0xE2 leads the UTF-8 encoding of U+2010–U+2013.
-        guard word.utf8.contains(where: { $0 == 0x2D || $0 == 0x2F || $0 == 0xE2 }) else {
+        guard word.utf8.contains(where: { $0 == 0x2D || $0 == 0x2F || $0 == 0x20 || $0 == 0xE2 }) else {
             return 1
         }
         return scanParts(in: word)
@@ -77,7 +79,7 @@ nonisolated enum CompoundWord {
     @inline(__always)
     private static func isJoiner(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar {
-        case "-", "/",
+        case "-", "/", " ",
              "\u{2010}", "\u{2011}",              // ‐ hyphen, non-breaking hyphen
              "\u{2012}", "\u{2013}":              // ‒ figure dash, – en dash
             return true
