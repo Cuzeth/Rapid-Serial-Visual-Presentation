@@ -397,11 +397,15 @@ struct TokenizerUnitJoinTests {
         #expect(CompoundWord.additionalIntervals(for: "2000 BCE") == 0.5)
     }
 
-    /// 600 WPM gives a 0.1s base interval.
+    /// 600 WPM gives a 0.1s base interval. The designator is a further part
+    /// read letter by letter, so a unit takes compound and acronym time, as
+    /// `COVID-19` does.
     @MainActor
-    @Test func unitDisplaysLikeATwoPartCompound() {
-        let engine = RSVPEngine(words: ["2000 BCE"], wordsPerMinute: 600)
-        #expect(abs(engine.nextInterval() - 0.15) < 0.0001)
+    @Test func unitDisplaysLikeACompoundWithAnAcronym() {
+        let unit = RSVPEngine(words: ["2000 BCE"], wordsPerMinute: 600)
+        let compound = RSVPEngine(words: ["COVID-19"], wordsPerMinute: 600)
+        #expect(abs(unit.nextInterval() - 0.1 * (1 + 0.5 + 0.75)) < 0.0001)
+        #expect(abs(unit.nextInterval() - compound.nextInterval()) < 0.0001)
     }
 
     @Test func spaceInAUnitIsNotPunctuation() {
