@@ -19,11 +19,18 @@ import AppKit
 struct WordView: View, Equatable {
     let word: String
     let fontSize: CGFloat
+    /// The words before and after this one, shown dimmed beside it in reading
+    /// order. Nil shows the word alone.
+    var context: ContextWords.Neighbors? = nil
+    /// Whether the document reads right to left, which puts the previous word
+    /// on the right.
+    var contextIsRightToLeft = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     static func == (lhs: WordView, rhs: WordView) -> Bool {
         lhs.word == rhs.word && lhs.fontSize == rhs.fontSize
+            && lhs.context == rhs.context && lhs.contextIsRightToLeft == rhs.contextIsRightToLeft
             && lhs.readerFontSelection == rhs.readerFontSelection
             && lhs.readerTextToneSelection == rhs.readerTextToneSelection
     }
@@ -169,8 +176,8 @@ struct WordView: View, Equatable {
     /// falls back to plain centering and `minimumScaleFactor` takes over.
     private static let minimumDisplayFontSize: CGFloat = 12
 
-    /// The guide line's height as a multiple of the font size. Context words
-    /// are laid out past its ends.
+    /// The guide line's height as a multiple of the font size. The open quote
+    /// and parenthesis marks are laid out past its top end.
     nonisolated static let guideLineHeightRatio: CGFloat = 1.6
 
     var body: some View {
@@ -185,7 +192,22 @@ struct WordView: View, Equatable {
                         .fill(textTone.anchorColor.opacity(0.12))
                         .frame(width: 1.5, height: metrics.fontSize * Self.guideLineHeightRatio)
 
+                    let gap = textWidth(" ", fontSize: metrics.fontSize)
+
                     Text(attributedWord(fontSize: metrics.fontSize, parts: parts))
+                        // Overlays, so the neighbours never change the word's
+                        // own layout. The guides must sit on unconditional
+                        // views: an alignment guide inside an `if` is dropped.
+                        .overlay(alignment: .leadingFirstTextBaseline) {
+                            contextWord(contextIsRightToLeft ? context?.next : context?.previous,
+                                        fontSize: metrics.fontSize)
+                                .alignmentGuide(.leading) { $0.width + gap }
+                        }
+                        .overlay(alignment: .trailingFirstTextBaseline) {
+                            contextWord(contextIsRightToLeft ? context?.previous : context?.next,
+                                        fontSize: metrics.fontSize)
+                                .alignmentGuide(.trailing) { _ in -gap }
+                        }
                         .offset(x: metrics.anchorOffset)
                         .lineLimit(1)
                         .minimumScaleFactor(0.58)
@@ -197,6 +219,17 @@ struct WordView: View, Equatable {
         .frame(height: max(120, fontSize * 2.3))
         .accessibilityElement()
         .accessibilityLabel(word)
+    }
+
+    /// A neighbouring word at the word's size, in the reader's regular face
+    /// and the tone's faded color; empty when there is none. Never proposed a
+    /// width, so a long neighbour runs past the screen edge rather than
+    /// shrinking.
+    private func contextWord(_ text: String?, fontSize: CGFloat) -> some View {
+        Text(text ?? "")
+            .font(readerFont.regularFont(size: fontSize, relativeTo: nil))
+            .foregroundStyle(textTone.fadedTextColor)
+            .fixedSize()
     }
 
     private struct LayoutMetrics {

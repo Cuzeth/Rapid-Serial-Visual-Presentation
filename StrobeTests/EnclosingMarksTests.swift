@@ -266,43 +266,34 @@ struct EnclosingMarksTests {
     private static let textSizes = Array(stride(from: CGFloat(24), through: 72, by: 2))
 
     /// Whatever the room, the marks' slot starts past the end of the word's
-    /// guide line, above the previous word while context words show, and
-    /// ends before the bar margin.
+    /// guide line and ends before the bar margin.
     @Test func slotStaysAboveTheWordAndClearOfTheBars() {
         for size in Self.textSizes {
             for room in stride(from: CGFloat(0), through: 400, by: 2.5) {
-                let context = ContextWords.metrics(wordFontSize: size, clearHalfHeight: room)
-                for shown in [nil, context] {
-                    guard let metrics = EnclosingMarksLayout.metrics(
-                        wordFontSize: size, clearHalfHeight: room, contextWords: shown
-                    ) else { continue }
-                    let bottom = metrics.offset - metrics.slotHeight / 2
-                    #expect(bottom > size * WordView.guideLineHeightRatio / 2, "size \(size), room \(room)")
-                    if let shown {
-                        #expect(bottom > shown.reach, "size \(size), room \(room)")
-                    }
-                    #expect(metrics.reach <= room - ContextWords.barMargin + 0.001, "size \(size), room \(room)")
-                    #expect(metrics.fontSize >= ContextWords.minimumFontSize)
-                    #expect(metrics.fontSize <= EnclosingMarksLayout.preferredFontSize(wordFontSize: size))
-                }
+                guard let metrics = EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: room) else { continue }
+                let bottom = metrics.offset - metrics.slotHeight / 2
+                #expect(bottom > size * WordView.guideLineHeightRatio / 2, "size \(size), room \(room)")
+                #expect(metrics.reach <= room - EnclosingMarksLayout.barMargin + 0.001, "size \(size), room \(room)")
+                #expect(metrics.fontSize >= EnclosingMarksLayout.minimumFontSize)
+                #expect(metrics.fontSize <= EnclosingMarksLayout.preferredFontSize(wordFontSize: size))
             }
         }
     }
 
     @Test func tightRoomShrinksTheMarksThenHidesThem() throws {
         let size: CGFloat = 40
-        let full = try #require(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: 1_000, contextWords: nil))
+        let full = try #require(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: 1_000))
         #expect(abs(full.fontSize - size * EnclosingMarksLayout.fontSizeRatio) < 0.001)
-        let fullRoom = full.reach + ContextWords.barMargin
-        let minimumRoom = ContextWords.innerEdge(wordFontSize: size)
-            + ContextWords.minimumFontSize * ContextWords.slotHeightRatio
-            + ContextWords.barMargin
+        let fullRoom = full.reach + EnclosingMarksLayout.barMargin
+        let minimumRoom = EnclosingMarksLayout.innerEdge(wordFontSize: size)
+            + EnclosingMarksLayout.minimumFontSize * EnclosingMarksLayout.slotHeightRatio
+            + EnclosingMarksLayout.barMargin
         let shrunk = try #require(EnclosingMarksLayout.metrics(
-            wordFontSize: size, clearHalfHeight: (fullRoom + minimumRoom) / 2, contextWords: nil
+            wordFontSize: size, clearHalfHeight: (fullRoom + minimumRoom) / 2
         ))
         #expect(shrunk.fontSize < full.fontSize)
-        #expect(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: minimumRoom + 0.5, contextWords: nil) != nil)
-        #expect(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: minimumRoom - 0.5, contextWords: nil) == nil)
+        #expect(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: minimumRoom + 0.5) != nil)
+        #expect(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: minimumRoom - 0.5) == nil)
     }
 
     // Measured reader chrome, as in ReaderLayoutTests.
@@ -325,14 +316,11 @@ struct EnclosingMarksTests {
         )
     }
 
-    @Test func marksShowFullSizeOnADynamicIslandPhoneWithOrWithoutContextWords() throws {
+    @Test func marksShowFullSizeOnADynamicIslandPhone() throws {
         for size in Self.textSizes {
             let room = Self.room(boundsHeight: 759, topInset: 59, bottomInset: 34, fontSize: size)
-            let context = ContextWords.metrics(wordFontSize: size, clearHalfHeight: room)
-            for shown in [nil, context] {
-                let metrics = try #require(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: room, contextWords: shown))
-                #expect(abs(metrics.fontSize - EnclosingMarksLayout.preferredFontSize(wordFontSize: size)) < 0.001, "size \(size)")
-            }
+            let metrics = try #require(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: room))
+            #expect(abs(metrics.fontSize - EnclosingMarksLayout.preferredFontSize(wordFontSize: size)) < 0.001, "size \(size)")
         }
     }
 
@@ -341,7 +329,7 @@ struct EnclosingMarksTests {
         for (boundsHeight, topInset, bottomInset): (CGFloat, CGFloat, CGFloat) in [(759, 59, 34), (667, 0, 0), (568, 0, 0)] {
             for size in Self.textSizes {
                 let room = Self.room(boundsHeight: boundsHeight, topInset: topInset, bottomInset: bottomInset, fontSize: size)
-                #expect(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: room, contextWords: nil) != nil,
+                #expect(EnclosingMarksLayout.metrics(wordFontSize: size, clearHalfHeight: room) != nil,
                         "phone \(boundsHeight), size \(size)")
             }
         }
@@ -377,7 +365,6 @@ struct EnclosingMarksTests {
         let marks: EnclosingMarks
         let fontSize: CGFloat
         let variant: Variant
-        let contextWords: Bool
         let defaults: UserDefaults
 
         var body: some View {
@@ -387,9 +374,6 @@ struct EnclosingMarksTests {
                     .readerStageRole(.topBar)
 
                 WordView(word: engine.currentWord, fontSize: fontSize)
-
-                ContextWordsView(engine: engine, fontSize: fontSize, isEnabled: contextWords)
-                    .readerStageRole(.fixationSurround)
 
                 switch variant {
                 case .absent:
@@ -423,8 +407,7 @@ struct EnclosingMarksTests {
                 engine: engine,
                 marks: marks,
                 fontSize: fontSize,
-                isEnabled: isEnabled,
-                contextWordsEnabled: contextWords
+                isEnabled: isEnabled
             )
         }
     }
@@ -469,7 +452,7 @@ struct EnclosingMarksTests {
 
     /// The pixel rows of the marks' slot, or nil when there is no room for
     /// one, measured from the top of the screen.
-    private static func slotRows(_ screen: Screen, fontSize: CGFloat, contextWords: Bool) -> ClosedRange<Int>? {
+    private static func slotRows(_ screen: Screen, fontSize: CGFloat) -> ClosedRange<Int>? {
         let center = ReaderStageLayout.fixationCenterY(
             boundsHeight: screen.stageHeight, topInset: screen.topInset, bottomInset: screen.bottomInset,
             contentHeight: wordSlotHeight(fontSize: fontSize),
@@ -479,8 +462,7 @@ struct EnclosingMarksTests {
             centerY: center, boundsHeight: screen.stageHeight,
             topBarHeight: topBar, bottomBarHeight: bottomBarWithChapters
         )
-        let context = contextWords ? ContextWords.metrics(wordFontSize: fontSize, clearHalfHeight: room) : nil
-        guard let metrics = EnclosingMarksLayout.metrics(wordFontSize: fontSize, clearHalfHeight: room, contextWords: context) else {
+        guard let metrics = EnclosingMarksLayout.metrics(wordFontSize: fontSize, clearHalfHeight: room) else {
             return nil
         }
         let middle = screen.topInset + center - metrics.offset
@@ -489,9 +471,35 @@ struct EnclosingMarksTests {
         return top...bottom
     }
 
-    /// Rows that differ between two renders of the same screen.
-    private static func changedRows(_ a: Bitmap, _ b: Bitmap) -> [Int] {
-        (0..<a.height).filter { a.row($0) != b.row($0) }
+    /// A channel moving by more than this between two renders is a change;
+    /// rendering can vary by a few levels from run to run.
+    private static let changeThreshold: UInt8 = 32
+
+    /// How many pixels changed in each row that changed, between two renders
+    /// of the same screen.
+    private static func changedPixelsByRow(_ a: Bitmap, _ b: Bitmap) -> [Int: Int] {
+        var counts: [Int: Int] = [:]
+        for y in 0..<a.height {
+            let before = a.row(y), after = b.row(y)
+            var changed = 0
+            var index = before.startIndex
+            while index < before.endIndex {
+                let pixelEnd = index + 4
+                if zip(before[index..<pixelEnd], after[index..<pixelEnd]).contains(where: { max($0, $1) - min($0, $1) > changeThreshold }) {
+                    changed += 1
+                }
+                index = pixelEnd
+            }
+            if changed > 0 { counts[y] = changed }
+        }
+        return counts
+    }
+
+    /// Whether two renders of the same screen show the same picture. A
+    /// handful of stray pixels is rendering noise; anything that moves or
+    /// draws changes far more.
+    private static func matches(_ a: Bitmap, _ b: Bitmap) -> Bool {
+        changedPixelsByRow(a, b).values.reduce(0, +) <= 8
     }
 
     /// Words shown inside a span: a short one, a long one, a nested pair.
@@ -515,20 +523,18 @@ struct EnclosingMarksTests {
         let defaults = try Self.isolatedDefaults()
         for screen in [Screen.phone, .smallWindow] {
             for fontSize: CGFloat in [24, 40, 72] {
-                for contextWords in [false, true] {
-                    for sample in Self.cases {
-                        let (engine, marks) = try Self.engine(sample)
-                        func stage(_ variant: Variant) -> Stage {
-                            Stage(screen: screen, engine: engine, marks: marks, fontSize: fontSize,
-                                  variant: variant, contextWords: contextWords, defaults: defaults)
-                        }
-                        // Early renders in a process can differ from later ones.
-                        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-                        let absent = try Self.render(stage(.absent))
-                        let label = "\(screen.width)pt, \(fontSize)pt, context \(contextWords), \(sample.word)"
-                        #expect(try Self.render(stage(.disabled)) == absent, "\(label)")
-                        #expect(try Self.render(stage(.invisible)) == absent, "\(label)")
+                for sample in Self.cases {
+                    let (engine, marks) = try Self.engine(sample)
+                    func stage(_ variant: Variant) -> Stage {
+                        Stage(screen: screen, engine: engine, marks: marks, fontSize: fontSize,
+                              variant: variant, defaults: defaults)
                     }
+                    // Early renders in a process can differ from later ones.
+                    for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
+                    let absent = try Self.render(stage(.absent))
+                    let label = "\(screen.width)pt, \(fontSize)pt, \(sample.word)"
+                    #expect(Self.matches(try Self.render(stage(.disabled)), absent), "\(label)")
+                    #expect(Self.matches(try Self.render(stage(.invisible)), absent), "\(label)")
                 }
             }
         }
@@ -539,23 +545,24 @@ struct EnclosingMarksTests {
         let defaults = try Self.isolatedDefaults()
         for screen in [Screen.phone, .smallWindow] {
             for fontSize: CGFloat in [24, 40, 72] {
-                for contextWords in [false, true] {
-                    for sample in Self.cases {
-                        let (engine, marks) = try Self.engine(sample)
-                        func stage(_ variant: Variant) -> Stage {
-                            Stage(screen: screen, engine: engine, marks: marks, fontSize: fontSize,
-                                  variant: variant, contextWords: contextWords, defaults: defaults)
-                        }
-                        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-                        let changed = Self.changedRows(try Self.render(stage(.absent)), try Self.render(stage(.visible)))
-                        let label = "\(screen.width)pt, \(fontSize)pt, context \(contextWords), \(sample.word)"
-                        guard let slot = Self.slotRows(screen, fontSize: fontSize, contextWords: contextWords) else {
-                            #expect(changed.isEmpty, "\(label): marks drew without room")
-                            continue
-                        }
-                        #expect(!changed.isEmpty, "\(label): no marks drawn")
-                        #expect(changed.allSatisfy { slot.contains($0) }, "\(label): drew outside the slot")
+                for sample in Self.cases {
+                    let (engine, marks) = try Self.engine(sample)
+                    func stage(_ variant: Variant) -> Stage {
+                        Stage(screen: screen, engine: engine, marks: marks, fontSize: fontSize,
+                              variant: variant, defaults: defaults)
                     }
+                    for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
+                    let absent = try Self.render(stage(.absent))
+                    let visible = try Self.render(stage(.visible))
+                    let changed = Self.changedPixelsByRow(absent, visible)
+                    let label = "\(screen.width)pt, \(fontSize)pt, \(sample.word)"
+                    guard let slot = Self.slotRows(screen, fontSize: fontSize) else {
+                        #expect(Self.matches(absent, visible), "\(label): marks drew without room")
+                        continue
+                    }
+                    #expect(!changed.isEmpty, "\(label): no marks drawn")
+                    let outside = changed.filter { !slot.contains($0.key) }.values.reduce(0, +)
+                    #expect(outside <= 8, "\(label): drew outside the slot")
                 }
             }
         }
@@ -570,10 +577,10 @@ struct EnclosingMarksTests {
         #expect(marks.stack(at: 6).isEmpty)
         func stage(_ variant: Variant) -> Stage {
             Stage(screen: .phone, engine: engine, marks: marks, fontSize: 40,
-                  variant: variant, contextWords: false, defaults: defaults)
+                  variant: variant, defaults: defaults)
         }
         for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-        #expect(try Self.render(stage(.visible)) == Self.render(stage(.absent)))
+        #expect(Self.matches(try Self.render(stage(.visible)), try Self.render(stage(.absent))))
     }
 
     @MainActor
@@ -589,10 +596,10 @@ struct EnclosingMarksTests {
         #expect(engine.chapterAnnouncement != nil)
         func stage(_ variant: Variant) -> Stage {
             Stage(screen: .phone, engine: engine, marks: marks, fontSize: 40,
-                  variant: variant, contextWords: false, defaults: defaults)
+                  variant: variant, defaults: defaults)
         }
         for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-        #expect(try Self.render(stage(.visible)) == Self.render(stage(.absent)))
+        #expect(Self.matches(try Self.render(stage(.visible)), try Self.render(stage(.absent))))
     }
 
     /// At 1 WPM the real timer never fires during the test; `advance()`
@@ -610,9 +617,9 @@ struct EnclosingMarksTests {
         #expect(engine.isInSentenceBreak)
         func stage(_ variant: Variant) -> Stage {
             Stage(screen: .phone, engine: engine, marks: marks, fontSize: 40,
-                  variant: variant, contextWords: false, defaults: defaults)
+                  variant: variant, defaults: defaults)
         }
         for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-        #expect(try Self.render(stage(.visible)) == Self.render(stage(.absent)))
+        #expect(Self.matches(try Self.render(stage(.visible)), try Self.render(stage(.absent))))
     }
 }

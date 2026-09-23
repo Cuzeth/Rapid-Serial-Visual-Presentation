@@ -898,7 +898,11 @@ struct StrobeTests {
         let hasPrivateAlias = FileManager.default.fileExists(atPath: privateTemp.path, isDirectory: &isDirectory)
             && isDirectory.boolValue
         #if os(macOS)
-        #expect(hasPrivateAlias)
+        // A sandboxed test host keeps its temp directory in its container,
+        // outside `/var`, where there is no `/private` alias to exercise.
+        if plainTemp.path.hasPrefix("/var/") {
+            #expect(hasPrivateAlias)
+        }
         #endif
 
         let tempDir = (hasPrivateAlias ? privateTemp : plainTemp)

@@ -176,4 +176,16 @@ struct ReaderLayoutTests {
         #expect(center - slot / 2 >= 0)
         #expect(center + slot / 2 <= container.fullHeight)
     }
+
+    // MARK: - Room around the word
+
+    @Test func clearHalfHeightIsTheRoomToTheNearerBar() {
+        #expect(ReaderStageLayout.clearHalfHeight(centerY: 300, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 160)
+        #expect(ReaderStageLayout.clearHalfHeight(centerY: 500, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 94)
+    }
+
+    @Test func clearHalfHeightIsZeroInsideABar() {
+        #expect(ReaderStageLayout.clearHalfHeight(centerY: 100, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 0)
+        #expect(ReaderStageLayout.clearHalfHeight(centerY: 650, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 0)
+    }
 }

@@ -9,44 +9,52 @@ nonisolated enum EnclosingMarksLayout {
         let offset: CGFloat
 
         /// Height of the slot the marks are centered in.
-        var slotHeight: CGFloat { fontSize * ContextWords.slotHeightRatio }
+        var slotHeight: CGFloat { fontSize * EnclosingMarksLayout.slotHeightRatio }
 
         /// Distance from the word's center to the top of the marks' slot.
         var reach: CGFloat { offset + slotHeight / 2 }
     }
 
-    /// Mark size as a fraction of the word's. Larger than the context words'
-    /// ratio: a lone mark carries far less ink than a word.
+    /// Mark size as a fraction of the word's: a lone mark carries far less
+    /// ink than a word.
     static let fontSizeRatio: CGFloat = 0.6
-    /// Space between the previous word's slot and the marks' slot, as a
+    /// Keeps the marks legible above the smallest word sizes.
+    static let preferredMinimumFontSize: CGFloat = 14
+    /// Below this the marks hide rather than shrinking further.
+    static let minimumFontSize: CGFloat = 12
+    /// Slot height as a multiple of the marks' font size: room for every
+    /// reader font's line box and for marks that overhang it.
+    static let slotHeightRatio: CGFloat = 1.5
+    /// Space between the end of the word's guide line and the slot, as a
     /// fraction of the word's font size.
-    static let gapRatio: CGFloat = ContextWords.gapRatio
+    static let gapRatio: CGFloat = 0.1
+    /// Space kept between the slot and the top bar.
+    static let barMargin: CGFloat = 8
 
     /// The marks' font size wherever there is room for it.
     static func preferredFontSize(wordFontSize: CGFloat) -> CGFloat {
-        max(ContextWords.preferredMinimumFontSize, wordFontSize * fontSizeRatio)
+        max(preferredMinimumFontSize, wordFontSize * fontSizeRatio)
+    }
+
+    /// Distance from the word's center to the bottom of the slot, just past
+    /// the end of the word's guide line.
+    static func innerEdge(wordFontSize: CGFloat) -> CGFloat {
+        wordFontSize * (WordView.guideLineHeightRatio / 2 + gapRatio)
     }
 
     /// Sizes the marks' slot for a word set at `wordFontSize`, given how far
-    /// the room around the word's center reaches before a bar and the context
-    /// words shown in it, if any.
+    /// the room around the word's center reaches before a bar.
     ///
-    /// The slot sits right above the word, or above the previous word while
-    /// context words show. It depends on settings and layout only, never on
-    /// the words, so the marks hold still from word to word. Where the
-    /// preferred size doesn't fit, the marks shrink; below
-    /// `ContextWords.minimumFontSize` there are none (nil).
-    static func metrics(
-        wordFontSize: CGFloat,
-        clearHalfHeight: CGFloat,
-        contextWords: ContextWords.Metrics?
-    ) -> Metrics? {
-        let inner = contextWords.map { $0.reach + wordFontSize * gapRatio }
-            ?? ContextWords.innerEdge(wordFontSize: wordFontSize)
-        let fitting = (clearHalfHeight - ContextWords.barMargin - inner) / ContextWords.slotHeightRatio
+    /// The slot sits right above the word. It depends on settings and layout
+    /// only, never on the words, so the marks hold still from word to word.
+    /// Where the preferred size doesn't fit, the marks shrink; below
+    /// `minimumFontSize` there are none (nil).
+    static func metrics(wordFontSize: CGFloat, clearHalfHeight: CGFloat) -> Metrics? {
+        let inner = innerEdge(wordFontSize: wordFontSize)
+        let fitting = (clearHalfHeight - barMargin - inner) / slotHeightRatio
         let fontSize = min(preferredFontSize(wordFontSize: wordFontSize), fitting)
-        guard fontSize >= ContextWords.minimumFontSize else { return nil }
-        return Metrics(fontSize: fontSize, offset: inner + fontSize * ContextWords.slotHeightRatio / 2)
+        guard fontSize >= minimumFontSize else { return nil }
+        return Metrics(fontSize: fontSize, offset: inner + fontSize * slotHeightRatio / 2)
     }
 }
 
@@ -58,9 +66,9 @@ nonisolated enum EnclosingMarksLayout {
 /// with them or, at a fixed spot, be run into by long words. The word's line
 /// never reaches the slot above it.
 ///
-/// Takes the `fixationSurround` stage role, like the context words: the
-/// height it is proposed is the room the bars leave around the word, and the
-/// marks shrink or hide to fit it.
+/// Takes the `fixationSurround` stage role: the height it is proposed is the
+/// room the bars leave around the word, and the marks shrink or hide to fit
+/// it.
 struct EnclosingMarksView: View {
     let engine: RSVPEngine
     /// Nil until the document's marks are paired.
@@ -68,24 +76,14 @@ struct EnclosingMarksView: View {
     /// The reader's text size setting; a long word may display smaller.
     let fontSize: CGFloat
     let isEnabled: Bool
-    let contextWordsEnabled: Bool
 
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     var body: some View {
         GeometryReader { geo in
-            let clearHalfHeight = geo.size.height / 2
-            let context = contextWordsEnabled
-                ? ContextWords.metrics(wordFontSize: fontSize, clearHalfHeight: clearHalfHeight)
-                : nil
-
             if isEnabled, let marks,
-               let metrics = EnclosingMarksLayout.metrics(
-                   wordFontSize: fontSize,
-                   clearHalfHeight: clearHalfHeight,
-                   contextWords: context
-               ) {
+               let metrics = EnclosingMarksLayout.metrics(wordFontSize: fontSize, clearHalfHeight: geo.size.height / 2) {
                 EnclosingMarksSlot(
                     engine: engine,
                     marks: marks,

@@ -48,12 +48,9 @@ Pausing or seeking ends either phase.
 
 **WordView** (`Views/WordView.swift`): Renders words with Optimal Recognition Point (ORP) highlighting — anchor character at ~1/3 of the word's letters and digits, in red. Uses single `AttributedString` to preserve Arabic cursive shaping (color-only highlight, no bold) and correct glyph order. CJK short words use centered anchor.
 
-**Around the word** (all opt-in, each a `fixationSurround` subview of `ReaderStageLayout` that sizes itself to the room between the bars, shrinking or hiding rather than moving the word):
-- `ContextWordsView`: the faded previous word above and next word below.
-- `EnclosingMarksView`: the opening marks of any quotation or parenthetical the word is inside, above it. The spans are computed once per document by `Engine/EnclosingMarks.swift`, off the main thread.
-- The hold-speed readout.
-
-These hide with the word during chapter announcements and sentence breaks. Their per-tick reads stay in small child views.
+**Around the word** (both opt-in; they hide with the word during chapter announcements and sentence breaks, and their per-tick reads stay in small child views):
+- **Context words:** the previous and next words sit inline on either side of the word, at its size, in the tone's faded color, with no anchor letter. They are overlays inside `WordView`, so the word never moves. A right-to-left document puts the previous word on the right.
+- **`EnclosingMarksView`:** a `fixationSurround` subview of `ReaderStageLayout` showing the opening marks of any quotation or parenthetical the word is inside, above it. It sizes itself to the room between the bars, shrinking or hiding rather than moving the word. `Engine/EnclosingMarks.swift` computes the spans once per document, off the main thread.
 
 **Persistence**: SwiftData `Document` model stores words externally as newline-delimited UTF-8 blob (`WordStorage`) and per-word complexity scores as raw Float binary (`ComplexityStorage`). In-memory caches (`cachedWords`, `cachedComplexity`) avoid repeated deserialization.
 

@@ -37,190 +37,54 @@ struct ContextWordsTests {
         #expect(ContextWords.neighbors(of: 2, in: ["a", "b"]) == none)
     }
 
-    // MARK: - Sizing
-
-    /// Every size the Settings text size slider offers.
-    private static let textSizes = Array(stride(from: CGFloat(24), through: 72, by: 2))
-
-    @Test func contextScalesWithTheWordAboveAFloor() throws {
-        let roomy: CGFloat = 1_000
-        let at40 = try #require(ContextWords.metrics(wordFontSize: 40, clearHalfHeight: roomy))
-        let at72 = try #require(ContextWords.metrics(wordFontSize: 72, clearHalfHeight: roomy))
-        let at24 = try #require(ContextWords.metrics(wordFontSize: 24, clearHalfHeight: roomy))
-        #expect(abs(at40.fontSize - 40 * ContextWords.fontSizeRatio) < 0.001)
-        #expect(abs(at72.fontSize - 72 * ContextWords.fontSizeRatio) < 0.001)
-        #expect(at24.fontSize == ContextWords.preferredMinimumFontSize)
-    }
-
-    /// Whatever the room, a context slot starts past the end of the word's
-    /// guide line and ends before the bar margin.
-    @Test func slotsStayPastTheGuideLineAndClearOfTheBars() {
-        for size in Self.textSizes {
-            for room in stride(from: CGFloat(0), through: 400, by: 2.5) {
-                guard let metrics = ContextWords.metrics(wordFontSize: size, clearHalfHeight: room) else { continue }
-                let innerEdge = metrics.offset - metrics.slotHeight / 2
-                #expect(innerEdge > size * WordView.guideLineHeightRatio / 2, "size \(size), room \(room)")
-                #expect(metrics.reach <= room - ContextWords.barMargin + 0.001, "size \(size), room \(room)")
-                #expect(metrics.fontSize >= ContextWords.minimumFontSize)
-                #expect(metrics.fontSize <= ContextWords.preferredFontSize(wordFontSize: size))
-            }
-        }
-    }
-
-    @Test func tightRoomShrinksTheContextThenHidesIt() throws {
-        let size: CGFloat = 40
-        let full = try #require(ContextWords.metrics(wordFontSize: size, clearHalfHeight: 1_000))
-        let fullRoom = full.reach + ContextWords.barMargin
-        let exact = try #require(ContextWords.metrics(wordFontSize: size, clearHalfHeight: fullRoom))
-        #expect(abs(exact.fontSize - full.fontSize) < 0.001)
-
-        let minimumRoom = ContextWords.innerEdge(wordFontSize: size)
-            + ContextWords.minimumFontSize * ContextWords.slotHeightRatio
-            + ContextWords.barMargin
-        let shrunk = try #require(ContextWords.metrics(wordFontSize: size, clearHalfHeight: (fullRoom + minimumRoom) / 2))
-        #expect(shrunk.fontSize < full.fontSize)
-        #expect(shrunk.fontSize > ContextWords.minimumFontSize)
-
-        #expect(ContextWords.metrics(wordFontSize: size, clearHalfHeight: minimumRoom + 0.5) != nil)
-        #expect(ContextWords.metrics(wordFontSize: size, clearHalfHeight: minimumRoom - 0.5) == nil)
-        #expect(ContextWords.metrics(wordFontSize: size, clearHalfHeight: 0) == nil)
-    }
-
-    /// A slot shorter than a font's line box would shrink the context text
-    /// to fit it.
-    @MainActor
-    @Test func slotHoldsEveryReaderFontsLineBox() {
-        let size: CGFloat = 100
-        for font in ReaderFont.allCases {
-            let platform = font.platformFont(size: size)
-            let lineBox = platform.ascender - platform.descender + platform.leading
-            #expect(lineBox <= size * ContextWords.slotHeightRatio, "\(font.rawValue): \(lineBox)")
-        }
-    }
-
-    // MARK: - Stage layout
-
-    // Measured reader chrome, as in ReaderLayoutTests: the top bar and the
-    // bottom bar with chapter navigation.
-    private static let topBar: CGFloat = 140
-    private static let bottomBarWithChapters: CGFloat = 166
-
-    private static func wordSlotHeight(fontSize: CGFloat) -> CGFloat {
-        max(120, fontSize * 2.3)
-    }
-
-    @Test func clearHalfHeightIsTheRoomToTheNearerBar() {
-        #expect(ReaderStageLayout.clearHalfHeight(centerY: 300, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 160)
-        #expect(ReaderStageLayout.clearHalfHeight(centerY: 500, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 94)
-    }
-
-    @Test func clearHalfHeightIsZeroInsideABar() {
-        #expect(ReaderStageLayout.clearHalfHeight(centerY: 100, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 0)
-        #expect(ReaderStageLayout.clearHalfHeight(centerY: 650, boundsHeight: 700, topBarHeight: 140, bottomBarHeight: 106) == 0)
-    }
-
-    /// Safe-area heights and insets of the portrait phones in
-    /// ReaderLayoutTests: Dynamic Island, home button, and zoomed home button.
-    private static let portraitPhones: [(boundsHeight: CGFloat, topInset: CGFloat, bottomInset: CGFloat)] = [
-        (759, 59, 34), (667, 0, 0), (568, 0, 0),
-    ]
-
-    @Test func contextShowsFullSizeOnPortraitPhonesAtEveryTextSize() throws {
-        for phone in Self.portraitPhones {
-            for size in Self.textSizes {
-                let center = ReaderStageLayout.fixationCenterY(
-                    boundsHeight: phone.boundsHeight, topInset: phone.topInset, bottomInset: phone.bottomInset,
-                    contentHeight: Self.wordSlotHeight(fontSize: size),
-                    topBarHeight: Self.topBar, bottomBarHeight: Self.bottomBarWithChapters
-                )
-                let room = ReaderStageLayout.clearHalfHeight(
-                    centerY: center, boundsHeight: phone.boundsHeight,
-                    topBarHeight: Self.topBar, bottomBarHeight: Self.bottomBarWithChapters
-                )
-                let metrics = try #require(ContextWords.metrics(wordFontSize: size, clearHalfHeight: room))
-                #expect(abs(metrics.fontSize - ContextWords.preferredFontSize(wordFontSize: size)) < 0.001,
-                        "phone \(phone.boundsHeight), size \(size)")
-            }
-        }
-    }
-
     // MARK: - Rendering
 
-    private enum ContextVariant {
-        case absent, disabled, invisible, visible
-    }
-
-    /// One reader screen: its full size and safe-area insets.
-    private struct Screen {
-        let width: CGFloat
-        let height: CGFloat
-        let topInset: CGFloat
-        let bottomInset: CGFloat
-
-        var stageHeight: CGFloat { height - topInset - bottomInset }
-
-        static let phone = Screen(width: 393, height: 852, topInset: 59, bottomInset: 34)
-        static let smallWindow = Screen(width: 700, height: 500, topInset: 32, bottomInset: 0)
-    }
-
     private static let scale: CGFloat = 2
+    /// A phone's reading width.
+    private static let width: CGFloat = 393
 
-    /// The reader stage as ReaderView arranges it, with plain bars. Renders
-    /// from its own defaults suite at the default Dynamic Type size, so no
-    /// stored setting or device text size reaches the pixels.
+    /// The word view as the reader shows it. Renders from its own defaults
+    /// suite at the default Dynamic Type size, so no stored setting or device
+    /// text size reaches the pixels.
     private struct Stage: View {
-        let screen: Screen
-        let engine: RSVPEngine
+        let word: String
         let fontSize: CGFloat
-        let variant: ContextVariant
+        let context: ContextWords.Neighbors?
+        var isRightToLeft = false
         let defaults: UserDefaults
 
         var body: some View {
-            ReaderStageLayout(topInset: screen.topInset, bottomInset: screen.bottomInset) {
-                Color.gray
-                    .frame(height: ContextWordsTests.topBar)
-                    .readerStageRole(.topBar)
-
-                WordView(word: engine.currentWord, fontSize: fontSize)
-
-                switch variant {
-                case .absent:
-                    EmptyView()
-                case .disabled:
-                    ContextWordsView(engine: engine, fontSize: fontSize, isEnabled: false)
-                        .readerStageRole(.fixationSurround)
-                case .invisible:
-                    ContextWordsView(engine: engine, fontSize: fontSize, isEnabled: true)
-                        .opacity(0)
-                        .readerStageRole(.fixationSurround)
-                case .visible:
-                    ContextWordsView(engine: engine, fontSize: fontSize, isEnabled: true)
-                        .readerStageRole(.fixationSurround)
-                }
-
-                Color.gray
-                    .frame(height: ContextWordsTests.bottomBarWithChapters)
-                    .readerStageRole(.bottomBar)
-            }
-            .padding(.top, screen.topInset)
-            .padding(.bottom, screen.bottomInset)
-            .frame(width: screen.width, height: screen.height)
-            .background(Color.black)
-            .defaultAppStorage(defaults)
-            .dynamicTypeSize(.large)
+            WordView(word: word, fontSize: fontSize, context: context, contextIsRightToLeft: isRightToLeft)
+                .frame(width: ContextWordsTests.width)
+                .background(Color.black)
+                .defaultAppStorage(defaults)
+                .dynamicTypeSize(.large)
         }
     }
 
-    /// RGBA rows of a rendered stage, top row first.
-    private struct Bitmap: Equatable {
+    /// RGBA pixels of a render, top row first.
+    private struct Bitmap {
         let width: Int
         let height: Int
         let bytes: [UInt8]
 
-        func row(_ y: Int) -> ArraySlice<UInt8> {
-            bytes[(y * width * 4)..<((y + 1) * width * 4)]
+        func channels(_ x: Int, _ y: Int) -> (red: Int, green: Int, blue: Int) {
+            let offset = (y * width + x) * 4
+            return (Int(bytes[offset]), Int(bytes[offset + 1]), Int(bytes[offset + 2]))
+        }
+
+        /// The brightest channel: 0 on the black background.
+        func ink(_ x: Int, _ y: Int) -> Int {
+            let pixel = channels(x, y)
+            return max(pixel.red, pixel.green, pixel.blue)
         }
     }
+
+    /// Text is brighter than this; the faint guide line is not.
+    private static let inkThreshold = 48
+    /// A pixel changed between two renders when a channel moved by more than
+    /// this. Rendering can vary by a few levels from run to run.
+    private static let changeThreshold = 32
 
     private static func isolatedDefaults() throws -> UserDefaults {
         let suiteName = "ContextWordsTests.render"
@@ -249,146 +113,136 @@ struct ContextWordsTests {
         return Bitmap(width: width, height: height, bytes: bytes)
     }
 
-    /// Where the stage puts the word's center, measured from the top of the
-    /// screen, and the context sizing for the room around it.
-    private static func layout(_ screen: Screen, fontSize: CGFloat) -> (centerY: CGFloat, metrics: ContextWords.Metrics?) {
-        let center = ReaderStageLayout.fixationCenterY(
-            boundsHeight: screen.stageHeight, topInset: screen.topInset, bottomInset: screen.bottomInset,
-            contentHeight: wordSlotHeight(fontSize: fontSize),
-            topBarHeight: topBar, bottomBarHeight: bottomBarWithChapters
-        )
-        let room = ReaderStageLayout.clearHalfHeight(
-            centerY: center, boundsHeight: screen.stageHeight,
-            topBarHeight: topBar, bottomBarHeight: bottomBarWithChapters
-        )
-        return (screen.topInset + center, ContextWords.metrics(wordFontSize: fontSize, clearHalfHeight: room))
+    /// The columns the text of a render covers.
+    private static func inkColumns(_ bitmap: Bitmap) -> ClosedRange<Int>? {
+        let columns = (0..<bitmap.width).filter { x in
+            (0..<bitmap.height).contains { y in bitmap.ink(x, y) > inkThreshold }
+        }
+        guard let first = columns.first, let last = columns.last else { return nil }
+        return first...last
     }
 
-    /// The pixel rows a slot covers: the slot above the word for `-1`,
-    /// below it for `1`.
-    private static func slotRows(centerY: CGFloat, metrics: ContextWords.Metrics, side: CGFloat) -> ClosedRange<Int> {
-        let middle = centerY + side * metrics.offset
-        let top = Int(((middle - metrics.slotHeight / 2) * scale).rounded(.down))
-        let bottom = Int(((middle + metrics.slotHeight / 2) * scale).rounded(.up)) - 1
-        return top...bottom
+    /// The pixels that changed between two renders of the same size.
+    private static func changedPixels(_ a: Bitmap, _ b: Bitmap) -> [(x: Int, y: Int)] {
+        var changed: [(x: Int, y: Int)] = []
+        for y in 0..<a.height {
+            for x in 0..<a.width {
+                let before = a.channels(x, y), after = b.channels(x, y)
+                if abs(before.red - after.red) > changeThreshold
+                    || abs(before.green - after.green) > changeThreshold
+                    || abs(before.blue - after.blue) > changeThreshold {
+                    changed.append((x, y))
+                }
+            }
+        }
+        return changed
     }
 
-    /// Rows that differ between two renders of the same screen.
-    private static func changedRows(_ a: Bitmap, _ b: Bitmap) -> [Int] {
-        (0..<a.height).filter { a.row($0) != b.row($0) }
+    /// Renders `stage` after a few warm-up renders: early renders in a
+    /// process can differ from later ones.
+    @MainActor
+    private static func settledRender(_ stage: Stage) throws -> Bitmap {
+        for _ in 0..<2 { _ = try render(stage) }
+        return try render(stage)
     }
 
-    private static let cases: [(words: [String], index: Int)] = [
-        (["reading", "the", "information"], 1),
-        (["of", "internationalization", "efforts,"], 1),
+    private static let samples: [(word: String, context: ContextWords.Neighbors, isRightToLeft: Bool, fits: Bool)] = [
+        ("the", .init(previous: "reading", next: "information"), false, true),
+        ("internationalization", .init(previous: "of", next: "efforts,"), false, false),
+        ("كتاب", .init(previous: "هذا", next: "جميل"), true, true),
     ]
 
+    /// Whatever the neighbours, every pixel of the word, its anchor letter
+    /// included, stays where it is: context only draws in other columns.
     @MainActor
-    @Test func wordPixelsMatchWithContextAbsentDisabledOrInvisible() throws {
+    @Test func wordPixelsDoNotChangeWhenContextShows() throws {
         let defaults = try Self.isolatedDefaults()
-        for screen in [Screen.phone, .smallWindow] {
+        for font in ReaderFont.allCases {
+            defaults.set(font.rawValue, forKey: ReaderFont.storageKey)
             for fontSize: CGFloat in [24, 40, 72] {
-                for sample in Self.cases {
-                    let engine = RSVPEngine(words: sample.words, currentIndex: sample.index)
-                    func stage(_ variant: ContextVariant) -> Stage {
-                        Stage(screen: screen, engine: engine, fontSize: fontSize, variant: variant, defaults: defaults)
+                for sample in Self.samples {
+                    let label = "\(font.rawValue), \(fontSize)pt, \(sample.word)"
+                    let alone = try Self.settledRender(Stage(
+                        word: sample.word, fontSize: fontSize, context: nil,
+                        isRightToLeft: sample.isRightToLeft, defaults: defaults
+                    ))
+                    let beside = try Self.settledRender(Stage(
+                        word: sample.word, fontSize: fontSize, context: sample.context,
+                        isRightToLeft: sample.isRightToLeft, defaults: defaults
+                    ))
+                    let word = try #require(Self.inkColumns(alone), "\(label)")
+                    let changed = Self.changedPixels(alone, beside)
+                    #expect(changed.allSatisfy { !word.contains($0.x) }, "\(label): context drew over the word")
+                    if sample.fits && fontSize <= 40 {
+                        #expect(!changed.isEmpty, "\(label): no context drawn")
                     }
-                    // Early renders in a process can differ from later ones.
-                    for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-                    let absent = try Self.render(stage(.absent))
-                    #expect(try Self.render(stage(.disabled)) == absent, "\(screen.width)pt, \(fontSize)pt, \(sample.words[sample.index])")
-                    #expect(try Self.render(stage(.invisible)) == absent, "\(screen.width)pt, \(fontSize)pt, \(sample.words[sample.index])")
                 }
             }
         }
     }
 
     @MainActor
-    @Test func visibleContextOnlyChangesPixelsInsideItsSlots() throws {
+    @Test func previousWordSitsOnTheLeftAndNextOnTheRight() throws {
         let defaults = try Self.isolatedDefaults()
-        for screen in [Screen.phone, .smallWindow] {
-            for fontSize: CGFloat in [24, 40, 72] {
-                for sample in Self.cases {
-                    let engine = RSVPEngine(words: sample.words, currentIndex: sample.index)
-                    func stage(_ variant: ContextVariant) -> Stage {
-                        Stage(screen: screen, engine: engine, fontSize: fontSize, variant: variant, defaults: defaults)
+        func render(_ context: ContextWords.Neighbors?) throws -> Bitmap {
+            try Self.settledRender(Stage(word: "the", fontSize: 40, context: context, defaults: defaults))
+        }
+        let alone = try render(nil)
+        let word = try #require(Self.inkColumns(alone))
+        let previous = Self.changedPixels(alone, try render(.init(previous: "read", next: nil)))
+        let next = Self.changedPixels(alone, try render(.init(previous: nil, next: "book")))
+        #expect(!previous.isEmpty)
+        #expect(previous.allSatisfy { $0.x < word.lowerBound })
+        #expect(!next.isEmpty)
+        #expect(next.allSatisfy { $0.x > word.upperBound })
+    }
+
+    @MainActor
+    @Test func rightToLeftDocumentsPutThePreviousWordOnTheRight() throws {
+        let defaults = try Self.isolatedDefaults()
+        func render(_ context: ContextWords.Neighbors?) throws -> Bitmap {
+            try Self.settledRender(Stage(word: "كتاب", fontSize: 40, context: context, isRightToLeft: true, defaults: defaults))
+        }
+        let alone = try render(nil)
+        let word = try #require(Self.inkColumns(alone))
+        let previous = Self.changedPixels(alone, try render(.init(previous: "هذا", next: nil)))
+        let next = Self.changedPixels(alone, try render(.init(previous: nil, next: "جميل")))
+        #expect(!previous.isEmpty)
+        #expect(previous.allSatisfy { $0.x > word.upperBound })
+        #expect(!next.isEmpty)
+        #expect(next.allSatisfy { $0.x < word.lowerBound })
+    }
+
+    /// In every tone the neighbours are fainter than the word, and none of
+    /// their pixels takes the anchor letter's red.
+    @MainActor
+    @Test func contextIsDimmerThanTheWordAndHasNoAnchorLetter() throws {
+        let defaults = try Self.isolatedDefaults()
+        for tone in ReaderTextTone.allCases {
+            defaults.set(tone.rawValue, forKey: ReaderTextTone.storageKey)
+            let alone = try Self.settledRender(Stage(word: "reading", fontSize: 40, context: nil, defaults: defaults))
+            let beside = try Self.settledRender(Stage(
+                word: "reading", fontSize: 40, context: .init(previous: "was", next: "slowly"), defaults: defaults
+            ))
+            let word = try #require(Self.inkColumns(alone), "\(tone.rawValue)")
+            var brightestWord = 0
+            var brightestContext = 0
+            var reddish = 0
+            for y in 0..<beside.height {
+                for x in 0..<beside.width {
+                    let ink = beside.ink(x, y)
+                    if word.contains(x) {
+                        brightestWord = max(brightestWord, ink)
+                    } else {
+                        brightestContext = max(brightestContext, ink)
+                        let pixel = beside.channels(x, y)
+                        if pixel.red - max(pixel.green, pixel.blue) > 60 { reddish += 1 }
                     }
-                    for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-                    let absent = try Self.render(stage(.absent))
-                    let visible = try Self.render(stage(.visible))
-                    let changed = Self.changedRows(absent, visible)
-                    let label = "\(screen.width)pt, \(fontSize)pt, \(sample.words[sample.index])"
-                    let (centerY, metrics) = Self.layout(screen, fontSize: fontSize)
-                    guard let metrics else {
-                        #expect(changed.isEmpty, "\(label): context drew without room")
-                        continue
-                    }
-                    let above = Self.slotRows(centerY: centerY, metrics: metrics, side: -1)
-                    let below = Self.slotRows(centerY: centerY, metrics: metrics, side: 1)
-                    #expect(changed.contains { above.contains($0) }, "\(label): no previous word")
-                    #expect(changed.contains { below.contains($0) }, "\(label): no next word")
-                    #expect(changed.allSatisfy { above.contains($0) || below.contains($0) }, "\(label): drew outside its slots")
                 }
             }
+            #expect(brightestContext > Self.inkThreshold, "\(tone.rawValue): no context drawn")
+            #expect(brightestContext < brightestWord, "\(tone.rawValue)")
+            #expect(reddish == 0, "\(tone.rawValue)")
         }
-    }
-
-    @MainActor
-    @Test func firstWordShowsOnlyTheNextWord() throws {
-        let defaults = try Self.isolatedDefaults()
-        let engine = RSVPEngine(words: ["Call", "me", "Ishmael."], currentIndex: 0)
-        func stage(_ variant: ContextVariant) -> Stage {
-            Stage(screen: .phone, engine: engine, fontSize: 40, variant: variant, defaults: defaults)
-        }
-        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-        let absent = try Self.render(stage(.absent))
-        let visible = try Self.render(stage(.visible))
-        let changed = Self.changedRows(absent, visible)
-        let (centerY, metrics) = Self.layout(.phone, fontSize: 40)
-        let slot = try #require(metrics)
-        let below = Self.slotRows(centerY: centerY, metrics: slot, side: 1)
-        #expect(!changed.isEmpty)
-        #expect(changed.allSatisfy { below.contains($0) })
-    }
-
-    @MainActor
-    @Test func contextHidesDuringAChapterAnnouncement() throws {
-        let defaults = try Self.isolatedDefaults()
-        let engine = RSVPEngine(
-            words: ["reading", "the", "information"], currentIndex: 1,
-            chapters: [Chapter(title: "Chapter Two", wordIndex: 1)]
-        )
-        engine.play()
-        defer { engine.pause() }
-        #expect(engine.chapterAnnouncement != nil)
-        func stage(_ variant: ContextVariant) -> Stage {
-            Stage(screen: .phone, engine: engine, fontSize: 40, variant: variant, defaults: defaults)
-        }
-        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-        let absent = try Self.render(stage(.absent))
-        let visible = try Self.render(stage(.visible))
-        #expect(visible == absent)
-    }
-
-    /// At 1 WPM the real timer never fires during the test; `advance()`
-    /// stands in for the sentence's last deadline.
-    @MainActor
-    @Test func contextHidesDuringASentenceBreak() throws {
-        let defaults = try Self.isolatedDefaults()
-        let engine = RSVPEngine(
-            words: ["It", "ended.", "Then", "more"], currentIndex: 1,
-            wordsPerMinute: 1, sentenceBreakEnabled: true
-        )
-        engine.play()
-        defer { engine.pause() }
-        engine.advance()
-        #expect(engine.isInSentenceBreak)
-        func stage(_ variant: ContextVariant) -> Stage {
-            Stage(screen: .phone, engine: engine, fontSize: 40, variant: variant, defaults: defaults)
-        }
-        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
-        let absent = try Self.render(stage(.absent))
-        let visible = try Self.render(stage(.visible))
-        #expect(visible == absent)
     }
 }
