@@ -295,13 +295,30 @@ enum Tokenizer {
         }
     }
 
+    /// Words that continue a suspended compound after a trailing-hyphen
+    /// fragment (`pre- and post-war`, `two- or three-day`, `mid- to
+    /// late-1990s`, `Ein- und Ausgang`). `and/or` arrives as a single
+    /// whitespace-delimited token.
+    nonisolated private static let suspendedHyphenJoiners: Set<String> = [
+        "and", "and/or", "nor", "or", "to", "oder", "und"
+    ]
+
     /// Determines whether a pending hyphenated fragment should merge with the next token.
     /// Merging happens when the pending word ends with `-` and the next token starts lowercase
     /// (indicating a line-break hyphenation rather than a sentence-initial word).
+    ///
+    /// A next token that is exactly a suspended-hyphen joiner never merges, so
+    /// the fragment is emitted as its own word with its hyphen kept (`pre-`,
+    /// `and`, `post-war`). The decision rests on the next token alone: streamed
+    /// input can arrive one token per `appendTokenizedText` call, so nothing
+    /// past it is available. A joiner carrying punctuation (`to,`) still
+    /// merges, which keeps `pota-` + `to,` whole; a word broken directly before
+    /// a bare final `to`, `or`, or `and` (`pota-` + `to`) stays split.
     nonisolated private static func shouldMerge(pending: String, with nextToken: String) -> Bool {
         guard pending.hasSuffix("-"),
               let nextFirst = nextToken.first,
-              nextFirst.isLowercase else {
+              nextFirst.isLowercase,
+              !suspendedHyphenJoiners.contains(nextToken) else {
             return false
         }
         return true
