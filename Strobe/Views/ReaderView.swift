@@ -35,6 +35,8 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.sentenceBreakLength) private var sentenceBreakLength: Double = ReaderSettings.Defaults.sentenceBreakLength
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
+    @AppStorage(ReaderSettings.Keys.contextWordsEnabled) private var contextWordsEnabled: Bool = ReaderSettings.Defaults.contextWordsEnabled
+    @AppStorage(ReaderSettings.Keys.enclosingMarksEnabled) private var enclosingMarksEnabled: Bool = ReaderSettings.Defaults.enclosingMarksEnabled
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -50,6 +52,7 @@ struct ReaderView: View {
     @State private var persistenceError: String?
     @State private var isLoaded = false
     @State private var isBackfillingComplexity = false
+    @State private var enclosingMarks: EnclosingMarks?
     @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
@@ -117,6 +120,18 @@ struct ReaderView: View {
         }
     }
 
+    /// Pairs the document's quotation and bracket marks for the enclosing
+    /// marks display, once the words are loaded and the setting is on. Runs
+    /// off-main: it scans every word of the document.
+    private func pairEnclosingMarksIfNeeded() async {
+        guard enclosingMarksEnabled, isLoaded, enclosingMarks == nil else { return }
+        let words = engine.words
+        let chapters = document.chapters
+        enclosingMarks = await Task.detached(priority: .userInitiated) {
+            EnclosingMarks(words: words, chapters: chapters)
+        }.value
+    }
+
     /// Computes and stores complexity scores for documents imported before
     /// complexity timing existed — without this, the setting is a silent
     /// no-op for them. Runs off-main; playback works normally meanwhile.
@@ -166,13 +181,6 @@ struct ReaderView: View {
                         CurrentWordView(engine: engine, fontSize: CGFloat(fontSize))
                         .id("wordview") // stabilize identity
                         .transition(.opacity)
-                        // Overlay (not a sibling) so the word never shifts when
-                        // the readout appears.
-                        .overlay {
-                            HoldSpeedReadoutView(engine: engine)
-                                .offset(y: CGFloat(fontSize) * 1.4)
-                                .accessibilityHidden(true)
-                        }
                         // The word display sits above the gesture layer; without
                         // this, holding directly on the word would swallow the
                         // hold-to-read gesture.
@@ -186,6 +194,34 @@ struct ReaderView: View {
                         .accessibilityAction(named: "Decrease speed") {
                             nudgeSpeed(by: -Int(ReaderSettings.wpmStep))
                         }
+
+                        ContextWordsView(
+                            engine: engine,
+                            fontSize: CGFloat(fontSize),
+                            isEnabled: contextWordsEnabled
+                        )
+                        .transition(.opacity)
+                        .readerStageRole(.fixationSurround)
+
+                        EnclosingMarksView(
+                            engine: engine,
+                            marks: enclosingMarks,
+                            fontSize: CGFloat(fontSize),
+                            isEnabled: enclosingMarksEnabled,
+                            contextWordsEnabled: contextWordsEnabled
+                        )
+                        .transition(.opacity)
+                        .readerStageRole(.fixationSurround)
+
+                        HoldSpeedReadoutView(
+                            engine: engine,
+                            fontSize: CGFloat(fontSize),
+                            contextWordsEnabled: contextWordsEnabled
+                        )
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .readerStageRole(.fixationSurround)
                     }
 
                     bottomBar
@@ -216,6 +252,9 @@ struct ReaderView: View {
         #endif
         .task {
             await loadDocumentIfNeeded()
+        }
+        .task(id: enclosingMarksEnabled && isLoaded) {
+            await pairEnclosingMarksIfNeeded()
         }
         .onAppear {
             readerFocused = true
@@ -799,31 +838,50 @@ private struct CurrentWordView: View {
 /// has an active WPM override. Isolates the per-change speed read.
 /// Every speed step restarts a 2s idle window; once idle, the readout
 /// fades out over 1s. Release (nil override) fades it quickly.
+///
+/// A `fixationSurround` stage subview, so the word never shifts when it
+/// appears. It centers a set distance below the word or, while context
+/// words show, hangs from just under the next word's slot, so a larger
+/// Dynamic Type size grows it away from that word.
 private struct HoldSpeedReadoutView: View {
     let engine: RSVPEngine
+    /// The reader's text size setting.
+    let fontSize: CGFloat
+    let contextWordsEnabled: Bool
     @State private var isVisible = false
     // Latched so the fade-out keeps showing the last held value instead of
     // flicking to the base WPM when the override clears.
     @State private var shownWPM = 0
 
     var body: some View {
-        Text("\(shownWPM) wpm")
-            .font(StrobeTheme.bodyFont(size: 14))
-            .monospacedDigit()
-            .foregroundStyle(StrobeTheme.textSecondary)
-            .opacity(isVisible ? 1 : 0)
-            .task(id: engine.wpmOverride) {
-                guard let override = engine.wpmOverride else {
-                    // Release: fade out quickly, keep the last shown number.
-                    withAnimation(.easeInOut(duration: 0.2)) { isVisible = false }
-                    return
+        GeometryReader { geo in
+            let context = contextWordsEnabled
+                ? ContextWords.metrics(wordFontSize: fontSize, clearHalfHeight: geo.size.height / 2)
+                : nil
+
+            Text("\(shownWPM) wpm")
+                .font(StrobeTheme.bodyFont(size: 14))
+                .monospacedDigit()
+                .foregroundStyle(StrobeTheme.textSecondary)
+                .opacity(isVisible ? 1 : 0)
+                .alignmentGuide(VerticalAlignment.center) { d in
+                    context == nil ? d.height / 2 : 0
                 }
-                shownWPM = override
-                withAnimation(.easeInOut(duration: 0.2)) { isVisible = true }
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 1)) { isVisible = false }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .offset(y: context.map { $0.reach + ContextWords.speedReadoutGap } ?? fontSize * 1.4)
+        }
+        .task(id: engine.wpmOverride) {
+            guard let override = engine.wpmOverride else {
+                // Release: fade out quickly, keep the last shown number.
+                withAnimation(.easeInOut(duration: 0.2)) { isVisible = false }
+                return
             }
+            shownWPM = override
+            withAnimation(.easeInOut(duration: 0.2)) { isVisible = true }
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 1)) { isVisible = false }
+        }
     }
 }
 

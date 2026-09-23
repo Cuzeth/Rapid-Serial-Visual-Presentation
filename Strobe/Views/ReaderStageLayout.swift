@@ -17,6 +17,11 @@ struct ReaderStageLayout: Layout {
         case bottomBar
         /// Centered on the fixation line. The default for untagged subviews.
         case fixation
+        /// Centered with the fixation subview and proposed the tallest
+        /// height around that center that stays clear of both bars. For
+        /// content around the word that fits itself to that room instead of
+        /// moving the word.
+        case fixationSurround
         /// Centered in the space the bars leave. For content that only ever
         /// appears alongside visible bars, where the bars are what it has to
         /// look balanced against.
@@ -51,7 +56,7 @@ struct ReaderStageLayout: Layout {
             case .bottomBar:
                 bottomBarHeight = max(bottomBarHeight, subview.sizeThatFits(fitting).height)
                 subview.place(at: CGPoint(x: bounds.midX, y: bounds.maxY), anchor: .bottom, proposal: fitting)
-            case .fixation, .betweenBars:
+            case .fixation, .fixationSurround, .betweenBars:
                 break
             }
         }
@@ -60,6 +65,7 @@ struct ReaderStageLayout: Layout {
         // its place while it cross-fades with the completion card.
         for subview in subviews {
             let centerY: CGFloat
+            var proposal = fitting
             switch subview[ReaderStageRoleKey.self] {
             case .topBar, .bottomBar:
                 continue
@@ -72,6 +78,25 @@ struct ReaderStageLayout: Layout {
                     topBarHeight: topBarHeight,
                     bottomBarHeight: bottomBarHeight
                 )
+            case .fixationSurround:
+                let fixation = subviews.first { $0[ReaderStageRoleKey.self] == .fixation }
+                centerY = Self.fixationCenterY(
+                    boundsHeight: bounds.height,
+                    topInset: topInset,
+                    bottomInset: bottomInset,
+                    contentHeight: fixation?.sizeThatFits(fitting).height ?? 0,
+                    topBarHeight: topBarHeight,
+                    bottomBarHeight: bottomBarHeight
+                )
+                proposal = ProposedViewSize(
+                    width: bounds.width,
+                    height: 2 * Self.clearHalfHeight(
+                        centerY: centerY,
+                        boundsHeight: bounds.height,
+                        topBarHeight: topBarHeight,
+                        bottomBarHeight: bottomBarHeight
+                    )
+                )
             case .betweenBars:
                 centerY = Self.centerBetweenBars(
                     boundsHeight: bounds.height,
@@ -79,7 +104,7 @@ struct ReaderStageLayout: Layout {
                     bottomBarHeight: bottomBarHeight
                 )
             }
-            subview.place(at: CGPoint(x: bounds.midX, y: bounds.minY + centerY), anchor: .center, proposal: fitting)
+            subview.place(at: CGPoint(x: bounds.midX, y: bounds.minY + centerY), anchor: .center, proposal: proposal)
         }
     }
 
@@ -110,6 +135,17 @@ struct ReaderStageLayout: Layout {
             )
         }
         return min(max(line, highest), lowest)
+    }
+
+    /// How far content centered at `centerY` can reach both up and down
+    /// before it meets a bar. Zero when the center is already inside one.
+    nonisolated static func clearHalfHeight(
+        centerY: CGFloat,
+        boundsHeight: CGFloat,
+        topBarHeight: CGFloat,
+        bottomBarHeight: CGFloat
+    ) -> CGFloat {
+        max(0, min(centerY - topBarHeight, boundsHeight - bottomBarHeight - centerY))
     }
 
     /// The midpoint of the space the bars leave, measured from the top of
