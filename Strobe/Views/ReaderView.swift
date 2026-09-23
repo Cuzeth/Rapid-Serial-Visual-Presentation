@@ -31,6 +31,8 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.dashPauseMultiplier) private var dashPauseMultiplier: Double = ReaderSettings.Defaults.dashPauseMultiplier
     @AppStorage(ReaderSettings.Keys.ellipsisPauseMultiplier) private var ellipsisPauseMultiplier: Double = ReaderSettings.Defaults.ellipsisPauseMultiplier
     @AppStorage(ReaderSettings.Keys.bracketPauseMultiplier) private var bracketPauseMultiplier: Double = ReaderSettings.Defaults.bracketPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.sentenceBreakEnabled) private var sentenceBreakEnabled: Bool = ReaderSettings.Defaults.sentenceBreakEnabled
+    @AppStorage(ReaderSettings.Keys.sentenceBreakLength) private var sentenceBreakLength: Double = ReaderSettings.Defaults.sentenceBreakLength
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
     @Bindable var document: Document
@@ -87,6 +89,8 @@ struct ReaderView: View {
             smartTimingMinimumWordLength: timing.smartTimingMinimumWordLength,
             sentencePauseMultiplier: timing.sentencePauseMultiplier,
             punctuationPauses: timing.punctuationPauses,
+            sentenceBreakEnabled: timing.sentenceBreakEnabled,
+            sentenceBreakLength: timing.sentenceBreakLength,
             complexityTimingEnabled: timing.complexityTimingEnabled,
             complexityIntensity: timing.complexityIntensity
         ))
@@ -283,6 +287,12 @@ struct ReaderView: View {
         }
         .onChange(of: punctuationPauses) { _, newValue in
             engine.punctuationPauses = newValue
+        }
+        .onChange(of: sentenceBreakEnabled) { _, newValue in
+            engine.sentenceBreakEnabled = newValue
+        }
+        .onChange(of: sentenceBreakLength) { _, newValue in
+            engine.sentenceBreakLength = newValue
         }
         .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
             Button("OK") { persistenceError = nil }
@@ -767,8 +777,11 @@ private struct CurrentWordView: View {
     var body: some View {
         WordView(word: engine.currentWord, fontSize: fontSize)
             .equatable()
-            .opacity(engine.chapterAnnouncement == nil ? 1 : 0)
+            .opacity(engine.chapterAnnouncement == nil && !engine.isInSentenceBreak ? 1 : 0)
             .animation(nil, value: engine.chapterAnnouncement != nil)
+            .animation(nil, value: engine.isInSentenceBreak)
+            // A sentence break leaves the word in the accessibility tree so
+            // VoiceOver focus doesn't move at every sentence.
             .accessibilityHidden(engine.chapterAnnouncement != nil)
             .overlay {
                 if let chapter = engine.chapterAnnouncement {

@@ -5,8 +5,10 @@ import Foundation
 /// Manages a timer that advances through the word array at the configured
 /// words-per-minute rate. Supports smart timing (longer display for long words)
 /// and punctuation pauses (extra delay after punctuation, set per type). A
-/// compound such as `wedge-shaped` always displays for longer than a single
-/// word; see ``CompoundWord``.
+/// compound such as `wedge-shaped` and an acronym such as `FBI` always display
+/// for longer than a single word; see ``CompoundWord`` and ``Acronym``. With
+/// sentence breaks on, a blank screen follows each sentence's last word; see
+/// ``SentenceBreak``.
 ///
 /// Conforms to `@Observable` so SwiftUI views automatically update when
 /// `currentIndex`, `isPlaying`, or settings change.
@@ -27,6 +29,12 @@ final class RSVPEngine {
     nonisolated static let chapterFadeDuration: TimeInterval = 0.25
     private var chaptersByIndex: [Int: Chapter] = [:]
     private var lastAnnouncedIndex: Int?
+
+    /// Whether playback is in the blank between two sentences: the last word
+    /// of one has had its time and the first of the next isn't up yet.
+    /// `currentIndex` still points at the last word. The word, and anything
+    /// shown with it, hides while this is true; pausing or seeking ends it.
+    private(set) var isInSentenceBreak = false
 
     /// The target reading speed. Changing this during playback reschedules the timer.
     var wordsPerMinute: Int {
@@ -78,6 +86,20 @@ final class RSVPEngine {
     /// Multipliers for clause marks, dashes, ellipses, and closing brackets
     /// and quotes when punctuation pauses are on.
     var punctuationPauses: PunctuationPauses {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// When enabled, a blank screen follows a word that ends a sentence (see
+    /// ``SentenceBreak``). The blank adds to the word's own time, punctuation
+    /// pause included.
+    var sentenceBreakEnabled: Bool {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// The blank's length in base intervals: one word's time at the playback
+    /// speed, so it follows WPM and the hold-to-read override but none of the
+    /// word's own timing.
+    var sentenceBreakLength: Double {
         didSet { onPlaybackSettingChanged() }
     }
 
@@ -134,6 +156,8 @@ final class RSVPEngine {
         smartTimingMinimumWordLength: Int = 1,
         sentencePauseMultiplier: Double = 1.5,
         punctuationPauses: PunctuationPauses = PunctuationPauses(),
+        sentenceBreakEnabled: Bool = false,
+        sentenceBreakLength: Double = 1.0,
         complexityTimingEnabled: Bool = false,
         complexityIntensity: Double = 0.5,
         complexityScores: [Float]? = nil,
@@ -148,6 +172,8 @@ final class RSVPEngine {
         self.smartTimingMinimumWordLength = smartTimingMinimumWordLength
         self.sentencePauseMultiplier = sentencePauseMultiplier
         self.punctuationPauses = punctuationPauses
+        self.sentenceBreakEnabled = sentenceBreakEnabled
+        self.sentenceBreakLength = sentenceBreakLength
         self.complexityTimingEnabled = complexityTimingEnabled
         self.complexityIntensity = complexityIntensity
         self.complexityScores = complexityScores
@@ -195,6 +221,7 @@ final class RSVPEngine {
         stopTimer()
         chapterAnnouncement = nil
         isChapterTitleVisible = false
+        isInSentenceBreak = false
         wpmOverride = nil
     }
 
@@ -220,14 +247,17 @@ final class RSVPEngine {
 
     private func onPlaybackSettingChanged() {
         guard isPlaying, chapterAnnouncement == nil else { return }
+        // During a blank the deadline belongs to the blank, not to the word
+        // still at `currentIndex`.
+        let interval = isInSentenceBreak ? sentenceBreakInterval() : nextInterval()
         guard let source = timerSource, let scheduled = scheduledDeadline else {
-            scheduleNextWord()
+            scheduleTimer(after: interval)
             return
         }
         // Only ever pull the current word's deadline earlier. Pushing it out
         // would let a continuously dragged settings slider (each didSet lands
         // here) stall playback on one word indefinitely.
-        let candidate = DispatchTime.now() + nextInterval()
+        let candidate = DispatchTime.now() + interval
         if candidate < scheduled {
             scheduledDeadline = candidate
             source.schedule(deadline: candidate)
@@ -284,11 +314,34 @@ final class RSVPEngine {
         }
         if currentIndex < words.count - 1 {
             let previousDeadline = scheduledDeadline
+            if isInSentenceBreak {
+                isInSentenceBreak = false
+            } else if breaksAfterCurrentWord() {
+                isInSentenceBreak = true
+                scheduleTimer(after: sentenceBreakInterval(), anchor: previousDeadline)
+                return
+            }
             currentIndex += 1
             if !announceChapterIfNeeded() { scheduleNextWord(anchor: previousDeadline) }
         } else {
             pause()
         }
+    }
+
+    /// Whether a blank follows the current word: it ends a sentence and the
+    /// next word doesn't open a chapter, whose announcement is a break of its
+    /// own.
+    private func breaksAfterCurrentWord() -> Bool {
+        guard sentenceBreakEnabled, sentenceBreakLength > 0,
+              chaptersByIndex[currentIndex + 1] == nil else { return false }
+        return SentenceBreak.endsSentence(at: currentIndex, in: words)
+    }
+
+    /// The blank's time after a sentence. Internal so it can be verified
+    /// without wall-clock sleeps in tests.
+    func sentenceBreakInterval() -> TimeInterval {
+        guard sentenceBreakEnabled else { return 0 }
+        return baseInterval * max(0, sentenceBreakLength)
     }
 
     private func announceChapterIfNeeded() -> Bool {
@@ -325,6 +378,8 @@ final class RSVPEngine {
         // contributes only its per-word share. Pauses and complexity then
         // scale the whole word.
         wordTime += CompoundWord.additionalIntervals(for: currentWord)
+        // An acronym's further letter names add their share the same way.
+        wordTime += Acronym.additionalIntervals(at: currentIndex, in: words)
         interval *= wordTime
 
         if sentencePauseEnabled {
