@@ -32,7 +32,7 @@ PDF/EPUB/Text → DocumentImportPipeline → Extractor → TextCleaner → Token
 
 **Tokenizer** (`Engine/Tokenizer.swift`): Whitespace-based splitting with special handling for:
 - Soft hyphen removal, non-breaking hyphen normalization
-- Line-break hyphen merging (with compound-word detection)
+- Line-break hyphen merging (with compound-word detection); a fragment followed by a bare joiner (`and`, `or`, `nor`, `to`, `and/or`, `und`, `oder`) is a suspended hyphen and stays unmerged (`pre- and post-war` → `pre-`, `and`, `post-war`)
 - Dash splitting: words joined by an em dash, horizontal bar, or `--` become separate words with the dash kept on the first (`elements—stone` → `elements—`, `stone`); single hyphens and en-dash ranges stay whole
 - Number units: a year and its era (`2000 BCE`, `44 B.C.`, `AD 79`) or a 12-hour time and its meridiem (`10:30 PM`, `5 p.m.`) become one word joined by a plain space, so a stored word can contain a space. The rules are strict: undotted lowercase designators (`ad`, `am`, `bc`) never join, and neither do mixed case, numbers with a prefix like `$` or `#`, or percentages. Units never join across an EPUB block: `appendTokenizedText(_:into:carry:startsBlock:)`
 - CJK text: detected by Unicode range, segmented via `NLTokenizer`, punctuation attached to preceding word
