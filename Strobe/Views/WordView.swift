@@ -172,6 +172,10 @@ struct WordView: View, Equatable {
     /// Must match the `Text`'s horizontal padding below.
     private static let horizontalTextMargin: CGFloat = 6
 
+    /// Space between the word and each neighbour, as a fraction of the
+    /// word's size, so the gap looks the same in every font.
+    private static let contextGapRatio: CGFloat = 0.75
+
     /// Hard floor for the fitted font size. Below this, the clamped offset
     /// falls back to plain centering and `minimumScaleFactor` takes over.
     private static let minimumDisplayFontSize: CGFloat = 12
@@ -192,7 +196,7 @@ struct WordView: View, Equatable {
                         .fill(textTone.anchorColor.opacity(0.12))
                         .frame(width: 1.5, height: metrics.fontSize * Self.guideLineHeightRatio)
 
-                    let gap = textWidth(" ", fontSize: metrics.fontSize)
+                    let gap = metrics.fontSize * Self.contextGapRatio
 
                     Text(attributedWord(fontSize: metrics.fontSize, parts: parts))
                         // Overlays, so the neighbours never change the word's
