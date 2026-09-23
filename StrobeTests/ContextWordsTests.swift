@@ -369,4 +369,26 @@ struct ContextWordsTests {
         let visible = try Self.render(stage(.visible))
         #expect(visible == absent)
     }
+
+    /// At 1 WPM the real timer never fires during the test; `advance()`
+    /// stands in for the sentence's last deadline.
+    @MainActor
+    @Test func contextHidesDuringASentenceBreak() throws {
+        let defaults = try Self.isolatedDefaults()
+        let engine = RSVPEngine(
+            words: ["It", "ended.", "Then", "more"], currentIndex: 1,
+            wordsPerMinute: 1, sentenceBreakEnabled: true
+        )
+        engine.play()
+        defer { engine.pause() }
+        engine.advance()
+        #expect(engine.isInSentenceBreak)
+        func stage(_ variant: ContextVariant) -> Stage {
+            Stage(screen: .phone, engine: engine, fontSize: 40, variant: variant, defaults: defaults)
+        }
+        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
+        let absent = try Self.render(stage(.absent))
+        let visible = try Self.render(stage(.visible))
+        #expect(visible == absent)
+    }
 }

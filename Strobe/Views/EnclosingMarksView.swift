@@ -116,9 +116,10 @@ private struct EnclosingMarksSlot: View {
     let tone: ReaderTextTone
 
     /// A chapter announcement takes the word's place and runs taller than
-    /// it; the marks leave and return with the word.
+    /// it, and a sentence break empties the screen; the marks leave and
+    /// return with the word.
     private var isShowingWord: Bool {
-        engine.chapterAnnouncement == nil
+        engine.chapterAnnouncement == nil && !engine.isInSentenceBreak
     }
 
     var body: some View {

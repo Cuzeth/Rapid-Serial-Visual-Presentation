@@ -594,4 +594,25 @@ struct EnclosingMarksTests {
         for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
         #expect(try Self.render(stage(.visible)) == Self.render(stage(.absent)))
     }
+
+    /// At 1 WPM the real timer never fires during the test; `advance()`
+    /// stands in for the sentence's last deadline.
+    @MainActor
+    @Test func marksHideDuringASentenceBreak() throws {
+        let defaults = try Self.isolatedDefaults()
+        let words = ["(It", "ended.", "Then", "more)", "after"]
+        let engine = RSVPEngine(words: words, currentIndex: 1, wordsPerMinute: 1, sentenceBreakEnabled: true)
+        let marks = EnclosingMarks(words: words, chapters: [])
+        #expect(marks.stack(at: 1).marks == "(")
+        engine.play()
+        defer { engine.pause() }
+        engine.advance()
+        #expect(engine.isInSentenceBreak)
+        func stage(_ variant: Variant) -> Stage {
+            Stage(screen: .phone, engine: engine, marks: marks, fontSize: 40,
+                  variant: variant, contextWords: false, defaults: defaults)
+        }
+        for _ in 0..<3 { _ = try Self.render(stage(.absent)) }
+        #expect(try Self.render(stage(.visible)) == Self.render(stage(.absent)))
+    }
 }

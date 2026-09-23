@@ -140,8 +140,9 @@ private struct ContextWordPair: View {
                 .offset(y: metrics.offset)
         }
         // A chapter announcement takes the word's place and runs taller than
-        // it; the context leaves and returns with the word.
-        .opacity(engine.chapterAnnouncement == nil ? 1 : 0)
+        // it, and a sentence break empties the screen; the context leaves and
+        // returns with the word.
+        .opacity(engine.chapterAnnouncement == nil && !engine.isInSentenceBreak ? 1 : 0)
         // The engine can move in an animated transaction, such as a scrub
         // that pauses playback and so runs the stage's play/pause fade.
         // Nothing here may animate between words.
