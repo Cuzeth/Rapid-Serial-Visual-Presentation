@@ -2,9 +2,23 @@
   <img src="Assets/banner.svg" alt="Strobe — Rapid Serial Visual Presentation" width="100%" />
 </p>
 
+<h1 align="center">Read more. Move less.</h1>
+
 <p align="center">
-  <a href="https://apps.apple.com/us/app/strobe-rapid-serial-reader/id6759187873">
-    <img src="https://img.shields.io/badge/App_Store-Download-blue?style=for-the-badge&logo=apple&logoColor=white" alt="App Store" />
+  <b>Strobe</b> is a free, open-source speed reader for iPhone, iPad, and Mac.
+  It shows your books, papers, and articles one word at a time, each in the same spot,
+  so your eyes can stay still and your attention stays on the words.
+</p>
+
+<p align="center">
+  <a href="https://apps.apple.com/us/app/strobe-speed-reader/id6759187873">
+    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="54" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://strobefast.app">
+    <img src="https://img.shields.io/badge/Website-strobefast.app-FF3B30?style=for-the-badge" alt="Website" />
   </a>
   <a href="https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/actions/workflows/tests.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/Cuzeth/Rapid-Serial-Visual-Presentation/tests.yml?style=for-the-badge&label=Tests" alt="Tests" />
@@ -16,61 +30,88 @@
 </p>
 
 <p align="center">
-  A rapid-serial-visual-presentation reader for PDF and EPUB files.<br/>
-  One word at a time. Less eye movement. Tighter focus.
+  <img src="AppStore/Screenshots/iPhone%206.9-inch/01-one-word.png" width="24%" alt="Reading Moby-Dick one word at a time, with the word's red focus letter in the center of the screen" />
+  <img src="AppStore/Screenshots/iPhone%206.9-inch/03-hold-to-read.png" width="24%" alt="Holding to read, with a control for changing speed while the words play" />
+  <img src="AppStore/Screenshots/iPhone%206.9-inch/05-while-reading.png" width="24%" alt="The previous and next words shown faintly beside the current word, with an open quote above it" />
+  <img src="AppStore/Screenshots/iPhone%206.9-inch/08-full-text.png" width="24%" alt="The full text of Moby-Dick with the current word highlighted below a search field" />
 </p>
 
+## One word at a time.
+
+Reading a page keeps your eyes busy: hopping along every line, hunting for the start of the next one, finding your place again after every glance away. Strobe brings the words to you instead. Each one appears in the same spot, lined up on its red **Optimal Recognition Point**, so your eyes stay still and your attention stays on the text. It's called **Rapid Serial Visual Presentation (RSVP)**, and it turns a wall of text into a steady stream.
+
+Set any pace from **100 to 1,000 words per minute**. Start where you can follow comfortably and speed up as it clicks.
+
+## Built for focused reading
+
+### Hold to read. Let go to pause.
+
+Press and hold anywhere on the screen to read, and lift your finger to stop. Slide up or down mid-sentence to change speed on the fly, and swipe sideways while paused to step word by word. Prefer hands-free? Turn off Hold to Read and tap to play instead.
+
+### Pauses where a reader would.
+
+Long words, acronyms, and hyphenated compounds get a little extra time. Sentence ends, commas, dashes, ellipses, and closing quotes each get their own pause, and you choose how long. Complexity timing lingers on rare words and names and breezes through the common ones, and an optional blank beat after each sentence gives you room to breathe.
+
+### Never lose the thread.
+
+Keep the previous and next words beside the one you're reading, and see an open quote or parenthesis hover above until it closes. Each new chapter shows its title as you reach it, so you always know where you are.
+
+### The whole page, one tap away.
+
+Open the full text with your place highlighted. Search for any word or phrase, jump between matches, and tap any word to pick up reading from there.
+
+### Your words, your way.
+
+Seven typefaces, from Fraunces to JetBrains Mono, at any size. Four text colors (Bright, Soft, Sepia, and Night) tone down the word and its red letter, and a true black background is made for reading in the dark. Every document remembers its own speed.
+
+### Made for the keyboard.
+
+On a Mac, or an iPad with a keyboard: <kbd>Space</kbd> reads and pauses, <kbd>←</kbd> <kbd>→</kbd> step through words, <kbd>Esc</kbd> goes back, <kbd>⌘N</kbd> starts a new text, and <kbd>⌘O</kbd> imports a file.
+
+## Every book, beautifully bound.
+
+<p align="center">
+  <img src="AppStore/Screenshots/Mac/02-library.png" width="100%" alt="The Strobe library on the Mac: a Continue Reading banner above a grid of generated book covers" />
+</p>
+
+Bring in EPUB, PDF, plain-text, and Markdown files from Files or with drag and drop, or paste in an article and see its word count and reading time before you start. Every book gets its own cover, the one you're reading waits at the top, and Strobe picks up at your exact word.
+
+- **Chapters at a glance.** EPUB tables of contents and PDF bookmarks become chapters, each with its reading time at your speed.
+- **Clean text.** Page numbers, running headers, and footers are stripped on import.
+- **Not just English.** Chinese, Japanese, and Korean text is split into words automatically, and Arabic keeps its connected letterforms.
+
+DRM-protected EPUBs and password-protected PDFs can't be imported.
+
+## Your reading is nobody else's business.
+
+No account, no ads, no analytics, no cloud. Strobe reads your files on your device and never sends them anywhere, and its App Store privacy label says so: **Data Not Collected**.
+
+## Free and open source
+
+Strobe costs nothing: no subscription, no in-app purchases, no ads. Every line of it lives in this repo under the Apache 2.0 license. If it earns a place in your reading routine, you can [support development on Buy Me a Coffee](https://buymeacoffee.com/cuzeth) or give the repo a star.
+
 ---
 
-### One-Touch Flow
-Hold to read, release to pause. Swipe to scrub through position.
+## Under the hood
 
-### Precision Controls
-Adjust reading speed from 100 to 1000 WPM, text size, and font — all without losing your place.
+Strobe is SwiftUI and SwiftData with no third-party dependencies.
 
-### Smart Timing
-Pacing adapts to word length, sentence boundaries, and cognitive complexity so reading feels natural.
+- **Import:** EPUBs are unzipped and read from their package manifest, with chapters from nested tables of contents and a DRM check up front. PDFs bring their bookmarks along.
+- **Tokenizer:** rejoins words hyphenated across line breaks, splits words joined by em dashes, keeps `pre- and post-war` apart and `10:30 PM` together, and segments CJK text with `NLTokenizer`.
+- **Timing:** word length, punctuation, acronyms, compounds, and per-word complexity scores (computed once at import with the NaturalLanguage framework) all shape how long each word stays up.
+- **Tests:** 500+ Swift Testing cases, run on an iOS simulator and on macOS in CI.
 
-### ORP Highlighting
-Each word is anchored at its Optimal Recognition Point so your eyes lock on instantly.
+## Build it yourself
 
-### PDF + EPUB Support
-Import files from the system picker, drag and drop, or paste raw text for quick reads.
+1. Open `Strobe.xcodeproj` in Xcode 27.
+2. Select the **Strobe** scheme and an iPhone, iPad, or Mac destination (iOS 17 or macOS 14 and later).
+3. To run on your own device or Mac, choose your team under **Signing & Capabilities**.
 
-### Chapter Navigation
-Jump between chapters, parts, and sections with a full chapter list and progress tracking. Playback briefly fades in each title at a structural break, then resumes automatically. Releasing a hold or pausing cancels the announcement.
-
-EPUB imports use nested table-of-contents links, in-file anchors, and headings. PDF imports include nested bookmarks at page-level positions. Reimport an existing book to pick up newly detected sections; saved books use their existing chapter markers for announcements.
-
-### 7 Font Choices
-Curated typefaces tuned for single-word display and sustained reading comfort.
-
-### Keyboard Shortcuts
-Full keyboard control on Mac and iPad. Space, arrows, escape — no mouse required.
-
-### Session Continuity
-Strobe remembers your position, speed, and settings automatically across sessions.
-
----
-
-### Privacy
-
-Local by design. Your content and reading progress stay on-device. No accounts, no analytics, no cloud sync.
-
----
-
-## Building
-
-Open `Strobe.xcodeproj` in Xcode 15+ and build for iOS 17+ or macOS 14+.
-
-## Documentation
-
-- [GitHub Wiki](https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation/wiki)
-- Markdown docs: `wiki-md/`
+There are no packages to resolve and no API keys to add.
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep changes focused, include tests when possible, and run the test suite before submitting.
+Issues and pull requests are welcome. Keep changes focused, include tests when you can, and run the test suite before opening a PR.
 
 ## License
 
