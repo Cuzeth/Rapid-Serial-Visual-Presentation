@@ -51,10 +51,12 @@ struct ContextWordsTests {
         let fontSize: CGFloat
         let context: ContextWords.Neighbors?
         var isRightToLeft = false
+        var isDimmed = false
         let defaults: UserDefaults
 
         var body: some View {
-            WordView(word: word, fontSize: fontSize, context: context, contextIsRightToLeft: isRightToLeft)
+            WordView(word: word, fontSize: fontSize, context: context,
+                     contextIsRightToLeft: isRightToLeft, contextIsDimmed: isDimmed)
                 .frame(width: ContextWordsTests.width)
                 .background(Color.black)
                 .defaultAppStorage(defaults)
@@ -243,6 +245,37 @@ struct ContextWordsTests {
             #expect(brightestContext > Self.inkThreshold, "\(tone.rawValue): no context drawn")
             #expect(brightestContext < brightestWord, "\(tone.rawValue)")
             #expect(reddish == 0, "\(tone.rawValue)")
+        }
+    }
+
+    /// Dimmed, as during playback, the neighbours in every tone are still
+    /// drawn but stay under the text threshold, well below their paused
+    /// brightness, and the word's pixels don't change.
+    @MainActor
+    @Test func dimmedContextIsBarelyVisibleAndLeavesTheWordAlone() throws {
+        let defaults = try Self.isolatedDefaults()
+        let context = ContextWords.Neighbors(previous: "was", next: "slowly")
+        for tone in ReaderTextTone.allCases {
+            defaults.set(tone.rawValue, forKey: ReaderTextTone.storageKey)
+            let alone = try Self.settledRender(Stage(word: "reading", fontSize: 40, context: nil, defaults: defaults))
+            let paused = try Self.settledRender(Stage(word: "reading", fontSize: 40, context: context, defaults: defaults))
+            let dimmed = try Self.settledRender(Stage(
+                word: "reading", fontSize: 40, context: context, isDimmed: true, defaults: defaults
+            ))
+            let word = try #require(Self.inkColumns(alone), "\(tone.rawValue)")
+            var brightestPaused = 0
+            var brightestDimmed = 0
+            for y in 0..<dimmed.height {
+                for x in 0..<dimmed.width where !word.contains(x) {
+                    brightestPaused = max(brightestPaused, paused.ink(x, y))
+                    brightestDimmed = max(brightestDimmed, dimmed.ink(x, y))
+                }
+            }
+            #expect(brightestDimmed > 16, "\(tone.rawValue): no context drawn")
+            #expect(brightestDimmed < Self.inkThreshold, "\(tone.rawValue): \(brightestDimmed)")
+            #expect(brightestDimmed * 2 < brightestPaused, "\(tone.rawValue): \(brightestDimmed) vs \(brightestPaused)")
+            let changed = Self.changedPixels(paused, dimmed)
+            #expect(changed.allSatisfy { !word.contains($0.x) }, "\(tone.rawValue): dimming changed the word")
         }
     }
 }

@@ -19,18 +19,22 @@ import AppKit
 struct WordView: View, Equatable {
     let word: String
     let fontSize: CGFloat
-    /// The words before and after this one, shown dimmed beside it in reading
+    /// The words before and after this one, shown faded beside it in reading
     /// order. Nil shows the word alone.
     var context: ContextWords.Neighbors? = nil
     /// Whether the document reads right to left, which puts the previous word
     /// on the right.
     var contextIsRightToLeft = false
+    /// Whether the neighbours fade nearly into the background, as during
+    /// playback, rather than staying readable.
+    var contextIsDimmed = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     static func == (lhs: WordView, rhs: WordView) -> Bool {
         lhs.word == rhs.word && lhs.fontSize == rhs.fontSize
             && lhs.context == rhs.context && lhs.contextIsRightToLeft == rhs.contextIsRightToLeft
+            && lhs.contextIsDimmed == rhs.contextIsDimmed
             && lhs.readerFontSelection == rhs.readerFontSelection
             && lhs.readerTextToneSelection == rhs.readerTextToneSelection
     }
@@ -226,13 +230,14 @@ struct WordView: View, Equatable {
     }
 
     /// A neighbouring word at the word's size, in the reader's regular face
-    /// and the tone's faded color; empty when there is none. Never proposed a
-    /// width, so a long neighbour runs past the screen edge rather than
-    /// shrinking.
+    /// and the tone's faded color, or its dim one while `contextIsDimmed`;
+    /// empty when there is none. Never proposed a width, so a long neighbour
+    /// runs past the screen edge rather than shrinking.
     private func contextWord(_ text: String?, fontSize: CGFloat) -> some View {
         Text(text ?? "")
             .font(readerFont.regularFont(size: fontSize, relativeTo: nil))
-            .foregroundStyle(textTone.fadedTextColor)
+            .foregroundStyle(textTone.textColor)
+            .opacity(contextIsDimmed ? textTone.dimTextOpacity : textTone.fadedTextOpacity)
             .fixedSize()
     }
 

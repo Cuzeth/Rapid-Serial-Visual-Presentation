@@ -61,6 +61,18 @@ nonisolated enum ReaderTextTone: String, CaseIterable, Identifiable {
         }
     }
 
+    /// How far `textColor` fades for text meant to be seen but not read, like
+    /// context words during playback. Tuned per tone to land near 1.3:1
+    /// contrast against the reader background.
+    var dimTextOpacity: Double {
+        switch self {
+        case .bright: 0.13
+        case .soft: 0.18
+        case .sepia: 0.17
+        case .night: 0.24
+        }
+    }
+
     /// The color of the word being read.
     var textColor: Color { Self.color(textRGB) }
 

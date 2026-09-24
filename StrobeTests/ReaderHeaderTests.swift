@@ -175,4 +175,13 @@ struct ReaderHeaderTests {
             #expect(faded < word * 0.6, "\(tone.rawValue): \(faded) vs \(word)")
         }
     }
+
+    /// Dim text stays just visible against the background and reads equally
+    /// faint whichever tone is active.
+    @Test func dimTextLandsNearOnePointThreeToOneInEveryTone() {
+        for tone in ReaderTextTone.allCases {
+            let dim = Self.contrastOnBlack(tone.textRGB, opacity: tone.dimTextOpacity)
+            #expect(dim >= 1.2 && dim <= 1.4, "\(tone.rawValue): \(dim)")
+        }
+    }
 }

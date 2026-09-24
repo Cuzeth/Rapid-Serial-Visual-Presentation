@@ -300,7 +300,7 @@ struct SettingsView: View {
                                         Text("Previous and Next Words")
                                             .font(StrobeTheme.bodyFont(size: 16, bold: true))
                                             .foregroundStyle(StrobeTheme.textPrimary)
-                                        Text("Shows them dimmed on either side of the current word")
+                                        Text("Shows them beside the current word, readable only while paused")
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }

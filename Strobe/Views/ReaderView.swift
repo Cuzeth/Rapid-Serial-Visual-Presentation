@@ -816,7 +816,8 @@ private struct CurrentWordView: View {
             word: engine.currentWord,
             fontSize: fontSize,
             context: showsContext ? ContextWords.neighbors(of: engine.currentIndex, in: engine.words) : nil,
-            contextIsRightToLeft: contextIsRightToLeft
+            contextIsRightToLeft: contextIsRightToLeft,
+            contextIsDimmed: showsContext && engine.isPlaying
         )
             .equatable()
             .opacity(engine.chapterAnnouncement == nil && !engine.isInSentenceBreak ? 1 : 0)
