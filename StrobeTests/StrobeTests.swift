@@ -1605,56 +1605,6 @@ struct StrobeTests {
         return zip
     }
 
-    // MARK: - PassageView chunk math
-
-    @Test func chunkCountIsZeroForEmptyDocument() {
-        #expect(PassageView.chunkCount(wordCount: 0) == 0)
-    }
-
-    @Test func chunkCountIsOneForPartialChunk() {
-        #expect(PassageView.chunkCount(wordCount: 1, chunkSize: 200) == 1)
-        #expect(PassageView.chunkCount(wordCount: 199, chunkSize: 200) == 1)
-    }
-
-    @Test func chunkCountRoundsUpForFullAndExtraWords() {
-        #expect(PassageView.chunkCount(wordCount: 200, chunkSize: 200) == 1)
-        #expect(PassageView.chunkCount(wordCount: 201, chunkSize: 200) == 2)
-        #expect(PassageView.chunkCount(wordCount: 1000, chunkSize: 200) == 5)
-        #expect(PassageView.chunkCount(wordCount: 1001, chunkSize: 200) == 6)
-    }
-
-    @Test func chunkIndexAtBoundaries() {
-        // First and last word of each chunk land in that chunk.
-        #expect(PassageView.chunkIndex(for: 0, wordCount: 1000, chunkSize: 200) == 0)
-        #expect(PassageView.chunkIndex(for: 199, wordCount: 1000, chunkSize: 200) == 0)
-        #expect(PassageView.chunkIndex(for: 200, wordCount: 1000, chunkSize: 200) == 1)
-        #expect(PassageView.chunkIndex(for: 999, wordCount: 1000, chunkSize: 200) == 4)
-    }
-
-    @Test func chunkIndexClampsOutOfRangeInputs() {
-        // Past-the-end word indices clamp to the last chunk, not crash.
-        #expect(PassageView.chunkIndex(for: 5000, wordCount: 1000, chunkSize: 200) == 4)
-        // Empty document always reports chunk 0.
-        #expect(PassageView.chunkIndex(for: 0, wordCount: 0, chunkSize: 200) == 0)
-        #expect(PassageView.chunkIndex(for: 42, wordCount: 0, chunkSize: 200) == 0)
-    }
-
-    @Test func chunkRangeCoversChunkSlice() {
-        let range = PassageView.chunkRange(chunkIndex: 1, wordCount: 1000, chunkSize: 200)
-        #expect(range == 200..<400)
-    }
-
-    @Test func chunkRangeTruncatesFinalChunkToWordCount() {
-        // Last chunk on a non-multiple total length stops at wordCount.
-        let range = PassageView.chunkRange(chunkIndex: 4, wordCount: 950, chunkSize: 200)
-        #expect(range == 800..<950)
-    }
-
-    @Test func chunkRangeIsEmptyForOutOfBoundsIndex() {
-        let range = PassageView.chunkRange(chunkIndex: 10, wordCount: 500, chunkSize: 200)
-        #expect(range.isEmpty)
-    }
-
     // MARK: - PassageView search
 
     @Test func findMatchesReturnsEmptyForEmptyQuery() {

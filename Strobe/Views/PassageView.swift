@@ -20,16 +20,29 @@ struct PassageView: View {
     /// must not flip mid-session.
     private let isRTLContent: Bool
 
+    /// The word slices rendered as separate `WordChunkView`s. Chunks live in a
+    /// `LazyVStack` so very long documents only render visible regions.
+    private let chunks: PassageChunks
+
     init(document: Document, engine: RSVPEngine) {
         self.document = document
         self.engine = engine
         self.isRTLContent = Self.isRTLDominant(engine.words)
+        self.chunks = PassageChunks(
+            words: engine.words,
+            blockStarts: Self.headingBoundaries(of: document.chapters, engine: engine)
+        )
     }
 
-    /// Number of words bundled into a single `WordChunkView`. Chunks live in a
-    /// `LazyVStack` so very long documents only render visible regions.
-    /// Internal access lets `@testable` cover the chunk math helpers below.
-    static let chunkSize = 200
+    /// The first word of every chapter heading that repeats its chapter's
+    /// title, and the first word after it. A chapter without one isn't a
+    /// boundary: a PDF bookmark can start it mid-sentence.
+    private static func headingBoundaries(of chapters: [Chapter], engine: RSVPEngine) -> [Int] {
+        chapters.flatMap { chapter -> [Int] in
+            let bodyStart = engine.readingStart(ofChapterAt: chapter.wordIndex)
+            return bodyStart > chapter.wordIndex ? [chapter.wordIndex, bodyStart] : []
+        }
+    }
 
     @State private var searchQuery: String = ""
     /// Start word index of each match, ascending. Phrase queries span several
@@ -81,18 +94,6 @@ struct PassageView: View {
 
     private var words: [String] {
         engine.words
-    }
-
-    private var chunkCount: Int {
-        Self.chunkCount(wordCount: words.count)
-    }
-
-    private func chunkRange(_ chunkIndex: Int) -> Range<Int> {
-        Self.chunkRange(chunkIndex: chunkIndex, wordCount: words.count)
-    }
-
-    private func chunkIndex(for wordIndex: Int) -> Int {
-        Self.chunkIndex(for: wordIndex, wordCount: words.count)
     }
 
     /// Stable scroll id for an individual word. Distinct namespace from the
@@ -306,10 +307,10 @@ struct PassageView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(0..<chunkCount, id: \.self) { idx in
+                        ForEach(0..<chunks.count, id: \.self) { idx in
                             WordChunkView(
                                 words: words,
-                                range: chunkRange(idx),
+                                range: chunks.range(at: idx),
                                 currentIndex: engine.currentIndex,
                                 matchSet: matchSet,
                                 currentMatchRange: currentMatchRange,
@@ -341,7 +342,7 @@ struct PassageView: View {
                 }
                 .onChange(of: renderedChunks) { _, newChunks in
                     guard let pending = pendingWordScroll,
-                          newChunks.contains(chunkIndex(for: pending.target)) else { return }
+                          newChunks.contains(chunks.index(containing: pending.target)) else { return }
                     pendingWordScroll = nil
                     scrollToWord(pending.target, proxy: proxy, animated: pending.animated)
                 }
@@ -385,7 +386,7 @@ struct PassageView: View {
             guard !matchIndices.isEmpty, pos < matchIndices.count else { return }
             targetWord = matchIndices[pos]
         }
-        let chunk = chunkIndex(for: targetWord)
+        let chunk = chunks.index(containing: targetWord)
 
         if renderedChunks.contains(chunk) {
             // Chunk is in the hierarchy — the word-level id resolves now.
@@ -397,7 +398,8 @@ struct PassageView: View {
             // so the word-level fine-tune (consumed by the renderedChunks
             // onChange below) is a small smooth adjustment rather than a jump.
             pendingWordScroll = PendingWordScroll(target: targetWord, animated: animated)
-            let posInChunk = CGFloat(targetWord % Self.chunkSize) / CGFloat(max(1, Self.chunkSize))
+            let range = chunks.range(at: chunk)
+            let posInChunk = CGFloat(targetWord - range.lowerBound) / CGFloat(max(1, range.count))
             let approxAnchor = UnitPoint(x: 0.5, y: posInChunk)
             if animated {
                 withAnimation(.easeOut(duration: 0.25)) {
@@ -509,31 +511,6 @@ struct PassageView: View {
     }
 
     // MARK: - Pure helpers (testable)
-
-    /// Total number of word chunks needed to hold `wordCount` words at the
-    /// given chunk size. Returns 0 for empty input.
-    static func chunkCount(wordCount: Int, chunkSize: Int = PassageView.chunkSize) -> Int {
-        guard wordCount > 0, chunkSize > 0 else { return 0 }
-        return (wordCount + chunkSize - 1) / chunkSize
-    }
-
-    /// Half-open range of word indices contained in `chunkIndex`, clamped to
-    /// `wordCount`. Empty range if the chunk index is out of bounds.
-    static func chunkRange(chunkIndex: Int, wordCount: Int, chunkSize: Int = PassageView.chunkSize) -> Range<Int> {
-        guard chunkIndex >= 0, chunkSize > 0 else { return 0..<0 }
-        let start = chunkIndex * chunkSize
-        guard start < wordCount else { return wordCount..<wordCount }
-        let end = min(start + chunkSize, wordCount)
-        return start..<end
-    }
-
-    /// Chunk index that contains `wordIndex`, clamped to `[0, chunkCount-1]`.
-    /// Returns 0 when there are no chunks.
-    static func chunkIndex(for wordIndex: Int, wordCount: Int, chunkSize: Int = PassageView.chunkSize) -> Int {
-        let count = chunkCount(wordCount: wordCount, chunkSize: chunkSize)
-        guard count > 0, chunkSize > 0 else { return 0 }
-        return max(0, min(wordIndex / chunkSize, count - 1))
-    }
 
     /// Case-insensitive search over `words`. A single-word query matches as a
     /// substring inside any word; a query containing whitespace matches as a
