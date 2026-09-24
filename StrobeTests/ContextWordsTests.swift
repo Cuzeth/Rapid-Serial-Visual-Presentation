@@ -267,8 +267,11 @@ struct ContextWordsTests {
             var brightestDimmed = 0
             for y in 0..<dimmed.height {
                 for x in 0..<dimmed.width where !word.contains(x) {
-                    brightestPaused = max(brightestPaused, paused.ink(x, y))
-                    brightestDimmed = max(brightestDimmed, dimmed.ink(x, y))
+                    // The word's anti-aliased edge reaches into the columns
+                    // beside it at up to `inkThreshold`.
+                    let wordEdge = alone.ink(x, y)
+                    brightestPaused = max(brightestPaused, paused.ink(x, y) - wordEdge)
+                    brightestDimmed = max(brightestDimmed, dimmed.ink(x, y) - wordEdge)
                 }
             }
             #expect(brightestDimmed > 16, "\(tone.rawValue): no context drawn")
