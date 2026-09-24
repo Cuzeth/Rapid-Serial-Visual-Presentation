@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://apps.apple.com/us/app/strobe-speed-reader/id6759187873">
-    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" height="54" />
+    <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" width="160" />
   </a>
 </p>
 
@@ -36,9 +36,9 @@
   <img src="AppStore/Screenshots/iPhone%206.9-inch/08-full-text.png" width="24%" alt="The full text of Moby-Dick with the current word highlighted below a search field" />
 </p>
 
-## One word at a time.
+## How it works
 
-Reading a page keeps your eyes busy: hopping along every line, hunting for the start of the next one, finding your place again after every glance away. Strobe brings the words to you instead. Each one appears in the same spot, lined up on its red **Optimal Recognition Point**, so your eyes stay still and your attention stays on the text. It's called **Rapid Serial Visual Presentation (RSVP)**, and it turns a wall of text into a steady stream.
+Reading a page keeps your eyes busy: hopping along every line, hunting for the start of the next one, finding your place again after every glance away. Strobe brings the words to you instead. Each one appears in the same spot, lined up on its red **Optimal Recognition Point**, so there's no line to follow and no place to lose. It's called **Rapid Serial Visual Presentation (RSVP)**, and it turns a wall of text into a steady stream.
 
 Set any pace from **100 to 1,000 words per minute**. Start where you can follow comfortably and speed up as it clicks.
 
@@ -68,13 +68,13 @@ Seven typefaces, from Fraunces to JetBrains Mono, at any size. Four text colors 
 
 On a Mac, or an iPad with a keyboard: <kbd>Space</kbd> reads and pauses, <kbd>←</kbd> <kbd>→</kbd> step through words, <kbd>Esc</kbd> goes back, <kbd>⌘N</kbd> starts a new text, and <kbd>⌘O</kbd> imports a file.
 
-## Every book, beautifully bound.
+## Bring what you already read
 
 <p align="center">
   <img src="AppStore/Screenshots/Mac/02-library.png" width="100%" alt="The Strobe library on the Mac: a Continue Reading banner above a grid of generated book covers" />
 </p>
 
-Bring in EPUB, PDF, plain-text, and Markdown files from Files or with drag and drop, or paste in an article and see its word count and reading time before you start. Every book gets its own cover, the one you're reading waits at the top, and Strobe picks up at your exact word.
+Import EPUB, PDF, plain-text, and Markdown files from Files or with drag and drop, or paste in an article and see its word count and reading time before you start. Every book gets its own cover, the one you're reading waits at the top, and Strobe picks up at your exact word.
 
 - **Chapters at a glance.** EPUB tables of contents and PDF bookmarks become chapters, each with its reading time at your speed.
 - **Clean text.** Page numbers, running headers, and footers are stripped on import.
@@ -82,9 +82,9 @@ Bring in EPUB, PDF, plain-text, and Markdown files from Files or with drag and d
 
 DRM-protected EPUBs and password-protected PDFs can't be imported.
 
-## Your reading is nobody else's business.
+## Private by design
 
-No account, no ads, no analytics, no cloud. Strobe reads your files on your device and never sends them anywhere, and its App Store privacy label says so: **Data Not Collected**.
+**Your reading is nobody else's business.** No account, no ads, no analytics, no cloud. Strobe reads your files on your device and never sends them anywhere, and its App Store privacy label says so: **Data Not Collected**.
 
 ## Free and open source
 
@@ -97,14 +97,14 @@ Strobe costs nothing: no subscription, no in-app purchases, no ads. Every line o
 Strobe is SwiftUI and SwiftData with no third-party dependencies.
 
 - **Import:** EPUBs are unzipped and read from their package manifest, with chapters from nested tables of contents and a DRM check up front. PDFs bring their bookmarks along.
-- **Tokenizer:** rejoins words hyphenated across line breaks, splits words joined by em dashes, keeps `pre- and post-war` apart and `10:30 PM` together, and segments CJK text with `NLTokenizer`.
+- **Tokenizer:** rejoins words hyphenated across line breaks, splits words joined by em dashes, keeps `10:30 PM` and `44 B.C.` in one piece, and segments CJK text with `NLTokenizer`.
 - **Timing:** word length, punctuation, acronyms, compounds, and per-word complexity scores (computed once at import with the NaturalLanguage framework) all shape how long each word stays up.
 - **Tests:** 500+ Swift Testing cases, run on an iOS simulator and on macOS in CI.
 
 ## Build it yourself
 
 1. Open `Strobe.xcodeproj` in Xcode 27.
-2. Select the **Strobe** scheme and an iPhone, iPad, or Mac destination (iOS 17 or macOS 14 and later).
+2. Pick the **Strobe** scheme and an iPhone, iPad, or Mac to run on.
 3. To run on your own device or Mac, choose your team under **Signing & Capabilities**.
 
 There are no packages to resolve and no API keys to add.
