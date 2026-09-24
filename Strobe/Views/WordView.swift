@@ -19,11 +19,22 @@ import AppKit
 struct WordView: View, Equatable {
     let word: String
     let fontSize: CGFloat
+    /// The words before and after this one, shown faded beside it in reading
+    /// order. Nil shows the word alone.
+    var context: ContextWords.Neighbors? = nil
+    /// Whether the document reads right to left, which puts the previous word
+    /// on the right.
+    var contextIsRightToLeft = false
+    /// Whether the neighbours fade nearly into the background, as during
+    /// playback, rather than staying readable.
+    var contextIsDimmed = false
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
 
     static func == (lhs: WordView, rhs: WordView) -> Bool {
         lhs.word == rhs.word && lhs.fontSize == rhs.fontSize
+            && lhs.context == rhs.context && lhs.contextIsRightToLeft == rhs.contextIsRightToLeft
+            && lhs.contextIsDimmed == rhs.contextIsDimmed
             && lhs.readerFontSelection == rhs.readerFontSelection
             && lhs.readerTextToneSelection == rhs.readerTextToneSelection
     }
@@ -72,12 +83,14 @@ struct WordView: View, Equatable {
     }
 
     /// The character index of the ORP anchor letter (the red letter).
-    /// Calculated from letter-only positions, skipping punctuation.
+    /// Calculated from the positions of letters and digits, skipping
+    /// punctuation and the space inside a number unit (`2000 BCE`), so a
+    /// number or unit is anchored like a word of the same length.
     /// For short CJK words (≤3 characters), centers the anchor instead.
-    nonisolated private static func redIndex(of word: String) -> Int {
-        // Collect indices of letter characters only (skip punctuation like apostrophes)
+    nonisolated static func redIndex(of word: String) -> Int {
+        // Collect indices of letters and digits only (skip punctuation like apostrophes)
         let letterIndices = word.enumerated().compactMap { offset, char in
-            char.isLetter ? offset : nil
+            char.isLetter || isDigit(char) ? offset : nil
         }
 
         guard !letterIndices.isEmpty else {
@@ -94,6 +107,12 @@ struct WordView: View, Equatable {
         }
 
         return letterIndices[Self.orpLetterPosition(letterCount: letterCount)]
+    }
+
+    /// Returns `true` for a decimal digit in any script. Superscripts and
+    /// subscripts (the `²` of `m²`, the `₂` of `H₂O`) are not digits here.
+    nonisolated private static func isDigit(_ character: Character) -> Bool {
+        character.unicodeScalars.first?.properties.generalCategory == .decimalNumber
     }
 
     /// Letter position (index into the word's letters) of the ORP anchor.
@@ -157,9 +176,17 @@ struct WordView: View, Equatable {
     /// Must match the `Text`'s horizontal padding below.
     private static let horizontalTextMargin: CGFloat = 6
 
+    /// Space between the word and each neighbour, as a fraction of the
+    /// word's size, so the gap looks the same in every font.
+    private static let contextGapRatio: CGFloat = 0.75
+
     /// Hard floor for the fitted font size. Below this, the clamped offset
     /// falls back to plain centering and `minimumScaleFactor` takes over.
     private static let minimumDisplayFontSize: CGFloat = 12
+
+    /// The guide line's height as a multiple of the font size. The open quote
+    /// and parenthesis marks are laid out past its top end.
+    nonisolated static let guideLineHeightRatio: CGFloat = 1.6
 
     var body: some View {
         let parts = makeParts()
@@ -171,9 +198,24 @@ struct WordView: View, Equatable {
                     // Subtle vertical guide line at the anchor position
                     Rectangle()
                         .fill(textTone.anchorColor.opacity(0.12))
-                        .frame(width: 1.5, height: metrics.fontSize * 1.6)
+                        .frame(width: 1.5, height: metrics.fontSize * Self.guideLineHeightRatio)
+
+                    let gap = metrics.fontSize * Self.contextGapRatio
 
                     Text(attributedWord(fontSize: metrics.fontSize, parts: parts))
+                        // Overlays, so the neighbours never change the word's
+                        // own layout. The guides must sit on unconditional
+                        // views: an alignment guide inside an `if` is dropped.
+                        .overlay(alignment: .leadingFirstTextBaseline) {
+                            contextWord(contextIsRightToLeft ? context?.next : context?.previous,
+                                        fontSize: metrics.fontSize)
+                                .alignmentGuide(.leading) { $0.width + gap }
+                        }
+                        .overlay(alignment: .trailingFirstTextBaseline) {
+                            contextWord(contextIsRightToLeft ? context?.previous : context?.next,
+                                        fontSize: metrics.fontSize)
+                                .alignmentGuide(.trailing) { _ in -gap }
+                        }
                         .offset(x: metrics.anchorOffset)
                         .lineLimit(1)
                         .minimumScaleFactor(0.58)
@@ -185,6 +227,18 @@ struct WordView: View, Equatable {
         .frame(height: max(120, fontSize * 2.3))
         .accessibilityElement()
         .accessibilityLabel(word)
+    }
+
+    /// A neighbouring word at the word's size, in the reader's regular face
+    /// and the tone's faded color, or its dim one while `contextIsDimmed`;
+    /// empty when there is none. Never proposed a width, so a long neighbour
+    /// runs past the screen edge rather than shrinking.
+    private func contextWord(_ text: String?, fontSize: CGFloat) -> some View {
+        Text(text ?? "")
+            .font(readerFont.regularFont(size: fontSize, relativeTo: nil))
+            .foregroundStyle(textTone.textColor)
+            .opacity(contextIsDimmed ? textTone.dimTextOpacity : textTone.fadedTextOpacity)
+            .fixedSize()
     }
 
     private struct LayoutMetrics {

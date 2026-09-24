@@ -19,8 +19,19 @@ enum ReaderSettings {
         nonisolated static let sentencePauseMultiplier = "sentencePauseMultiplier"
         nonisolated static let complexityTimingEnabled = "complexityTimingEnabled"
         nonisolated static let complexityIntensity = "complexityIntensity"
+        nonisolated static let clausePauseMultiplier = "clausePauseMultiplier"
+        nonisolated static let dashPauseMultiplier = "dashPauseMultiplier"
+        nonisolated static let ellipsisPauseMultiplier = "ellipsisPauseMultiplier"
+        nonisolated static let bracketPauseMultiplier = "bracketPauseMultiplier"
         nonisolated static let holdToReadEnabled = "holdToReadEnabled"
         nonisolated static let holdSpeedAdjustEnabled = "holdSpeedAdjustEnabled"
+        nonisolated static let trueBlackBackgroundEnabled = "trueBlackBackgroundEnabled"
+        nonisolated static let readingHeaderTitleEnabled = "readingHeaderTitleEnabled"
+        nonisolated static let readingHeaderChapterEnabled = "readingHeaderChapterEnabled"
+        nonisolated static let sentenceBreakEnabled = "sentenceBreakEnabled"
+        nonisolated static let sentenceBreakLength = "sentenceBreakLength"
+        nonisolated static let contextWordsEnabled = "contextWordsEnabled"
+        nonisolated static let enclosingMarksEnabled = "enclosingMarksEnabled"
 
         // App-level flags (not reader settings, but registered here so key
         // strings never drift between files).
@@ -38,8 +49,19 @@ enum ReaderSettings {
         nonisolated static let sentencePauseMultiplier = 1.5
         nonisolated static let complexityTimingEnabled = false
         nonisolated static let complexityIntensity = 0.5
+        nonisolated static let clausePauseMultiplier = 1.3
+        nonisolated static let dashPauseMultiplier = 1.4
+        nonisolated static let ellipsisPauseMultiplier = 1.5
+        nonisolated static let bracketPauseMultiplier = 1.2
         nonisolated static let holdToReadEnabled = true
         nonisolated static let holdSpeedAdjustEnabled = true
+        nonisolated static let trueBlackBackgroundEnabled = true
+        nonisolated static let readingHeaderTitleEnabled = false
+        nonisolated static let readingHeaderChapterEnabled = false
+        nonisolated static let sentenceBreakEnabled = false
+        nonisolated static let sentenceBreakLength = 1.0
+        nonisolated static let contextWordsEnabled = false
+        nonisolated static let enclosingMarksEnabled = false
     }
 
     /// Shared words-per-minute domain: the reader slider, the settings slider,
@@ -57,6 +79,9 @@ enum ReaderSettings {
         let sentencePauseMultiplier: Double
         let complexityTimingEnabled: Bool
         let complexityIntensity: Double
+        let punctuationPauses: PunctuationPauses
+        let sentenceBreakEnabled: Bool
+        let sentenceBreakLength: Double
     }
 
     /// Reads the current timing settings for constructing an ``RSVPEngine``.
@@ -75,7 +100,21 @@ enum ReaderSettings {
             complexityTimingEnabled: defaults.object(forKey: Keys.complexityTimingEnabled) as? Bool
                 ?? Defaults.complexityTimingEnabled,
             complexityIntensity: defaults.object(forKey: Keys.complexityIntensity) as? Double
-                ?? Defaults.complexityIntensity
+                ?? Defaults.complexityIntensity,
+            punctuationPauses: PunctuationPauses(
+                clause: defaults.object(forKey: Keys.clausePauseMultiplier) as? Double
+                    ?? Defaults.clausePauseMultiplier,
+                dash: defaults.object(forKey: Keys.dashPauseMultiplier) as? Double
+                    ?? Defaults.dashPauseMultiplier,
+                ellipsis: defaults.object(forKey: Keys.ellipsisPauseMultiplier) as? Double
+                    ?? Defaults.ellipsisPauseMultiplier,
+                bracket: defaults.object(forKey: Keys.bracketPauseMultiplier) as? Double
+                    ?? Defaults.bracketPauseMultiplier
+            ),
+            sentenceBreakEnabled: defaults.object(forKey: Keys.sentenceBreakEnabled) as? Bool
+                ?? Defaults.sentenceBreakEnabled,
+            sentenceBreakLength: defaults.object(forKey: Keys.sentenceBreakLength) as? Double
+                ?? Defaults.sentenceBreakLength
         )
     }
 }

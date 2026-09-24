@@ -4,7 +4,11 @@ import Foundation
 ///
 /// Manages a timer that advances through the word array at the configured
 /// words-per-minute rate. Supports smart timing (longer display for long words)
-/// and sentence pauses (extra delay at sentence-ending punctuation).
+/// and punctuation pauses (extra delay after punctuation, set per type). A
+/// compound such as `wedge-shaped` and an acronym such as `FBI` always display
+/// for longer than a single word; see ``CompoundWord`` and ``Acronym``. With
+/// sentence breaks on, a blank screen follows each sentence's last word; see
+/// ``SentenceBreak``.
 ///
 /// Conforms to `@Observable` so SwiftUI views automatically update when
 /// `currentIndex`, `isPlaying`, or settings change.
@@ -19,12 +23,24 @@ final class RSVPEngine {
     private(set) var isPlaying: Bool = false
 
     /// Playback stays active during an announcement, so hold release, Space,
-    /// and scene changes cancel it through the normal pause path.
+    /// and scene changes cancel it through the normal pause path. The title
+    /// stands in for the words at the chapter's start that repeat it: once it
+    /// has shown, or when playback pauses during it, reading goes on after
+    /// them (see ``ChapterHeading``).
     private(set) var chapterAnnouncement: Chapter?
     private(set) var isChapterTitleVisible = false
     nonisolated static let chapterFadeDuration: TimeInterval = 0.25
     private var chaptersByIndex: [Int: Chapter] = [:]
+    /// Where reading goes on after a chapter's announcement, for the chapters
+    /// whose first words repeat their title.
+    private var readingStarts: [Int: Int] = [:]
     private var lastAnnouncedIndex: Int?
+
+    /// Whether playback is in the blank between two sentences: the last word
+    /// of one has had its time and the first of the next isn't up yet.
+    /// `currentIndex` still points at the last word. The word, and anything
+    /// shown with it, hides while this is true; pausing or seeking ends it.
+    private(set) var isInSentenceBreak = false
 
     /// The target reading speed. Changing this during playback reschedules the timer.
     var wordsPerMinute: Int {
@@ -48,7 +64,9 @@ final class RSVPEngine {
         didSet { onPlaybackSettingChanged() }
     }
 
-    /// When enabled, words ending with `.`, `!`, or `?` receive extra display time.
+    /// When enabled, words carrying punctuation receive extra display time:
+    /// `sentencePauseMultiplier` at a sentence end, `punctuationPauses` at
+    /// every other type. Named after its persisted settings key.
     var sentencePauseEnabled: Bool {
         didSet { onPlaybackSettingChanged() }
     }
@@ -66,8 +84,28 @@ final class RSVPEngine {
         didSet { onPlaybackSettingChanged() }
     }
 
-    /// Multiplier applied to the interval at sentence-ending punctuation when sentence pauses are on.
+    /// Multiplier applied to the interval at sentence-ending punctuation when punctuation pauses are on.
     var sentencePauseMultiplier: Double {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// Multipliers for clause marks, dashes, ellipses, and closing brackets
+    /// and quotes when punctuation pauses are on.
+    var punctuationPauses: PunctuationPauses {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// When enabled, a blank screen follows a word that ends a sentence (see
+    /// ``SentenceBreak``). The blank adds to the word's own time, punctuation
+    /// pause included.
+    var sentenceBreakEnabled: Bool {
+        didSet { onPlaybackSettingChanged() }
+    }
+
+    /// The blank's length in base intervals: one word's time at the playback
+    /// speed, so it follows WPM and the hold-to-read override but none of the
+    /// word's own timing.
+    var sentenceBreakLength: Double {
         didSet { onPlaybackSettingChanged() }
     }
 
@@ -123,6 +161,9 @@ final class RSVPEngine {
         smartTimingPercentPerLetter: Double = 4.0,
         smartTimingMinimumWordLength: Int = 1,
         sentencePauseMultiplier: Double = 1.5,
+        punctuationPauses: PunctuationPauses = PunctuationPauses(),
+        sentenceBreakEnabled: Bool = false,
+        sentenceBreakLength: Double = 1.0,
         complexityTimingEnabled: Bool = false,
         complexityIntensity: Double = 0.5,
         complexityScores: [Float]? = nil,
@@ -136,6 +177,9 @@ final class RSVPEngine {
         self.smartTimingPercentPerLetter = smartTimingPercentPerLetter
         self.smartTimingMinimumWordLength = smartTimingMinimumWordLength
         self.sentencePauseMultiplier = sentencePauseMultiplier
+        self.punctuationPauses = punctuationPauses
+        self.sentenceBreakEnabled = sentenceBreakEnabled
+        self.sentenceBreakLength = sentenceBreakLength
         self.complexityTimingEnabled = complexityTimingEnabled
         self.complexityIntensity = complexityIntensity
         self.complexityScores = complexityScores
@@ -160,6 +204,13 @@ final class RSVPEngine {
                 .map { ($0.wordIndex, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        readingStarts = ChapterHeading.readingStarts(for: chaptersByIndex, in: words)
+    }
+
+    /// Where reading goes on after the announcement of the chapter starting
+    /// at `index`: past the words there that repeat its title, if any.
+    func readingStart(ofChapterAt index: Int) -> Int {
+        readingStarts[index] ?? index
     }
 
     /// Replaces the complexity scores (e.g. after a background backfill for a
@@ -178,11 +229,17 @@ final class RSVPEngine {
 
     /// Stops playback, invalidates the timer, and discards any hold-to-read
     /// speed override so the next play resumes at the configured speed.
+    /// Pausing during a chapter announcement moves the position past the
+    /// words its title stands in for.
     func pause() {
         isPlaying = false
         stopTimer()
+        if let chapter = chapterAnnouncement {
+            currentIndex = readingStart(ofChapterAt: chapter.wordIndex)
+        }
         chapterAnnouncement = nil
         isChapterTitleVisible = false
+        isInSentenceBreak = false
         wpmOverride = nil
     }
 
@@ -208,14 +265,17 @@ final class RSVPEngine {
 
     private func onPlaybackSettingChanged() {
         guard isPlaying, chapterAnnouncement == nil else { return }
+        // During a blank the deadline belongs to the blank, not to the word
+        // still at `currentIndex`.
+        let interval = isInSentenceBreak ? sentenceBreakInterval() : nextInterval()
         guard let source = timerSource, let scheduled = scheduledDeadline else {
-            scheduleNextWord()
+            scheduleTimer(after: interval)
             return
         }
         // Only ever pull the current word's deadline earlier. Pushing it out
         // would let a continuously dragged settings slider (each didSet lands
         // here) stall playback on one word indefinitely.
-        let candidate = DispatchTime.now() + nextInterval()
+        let candidate = DispatchTime.now() + interval
         if candidate < scheduled {
             scheduledDeadline = candidate
             source.schedule(deadline: candidate)
@@ -259,24 +319,49 @@ final class RSVPEngine {
     /// exercised deterministically without wall-clock sleeps in tests.
     func advance() {
         guard isPlaying else { return }
-        if chapterAnnouncement != nil {
+        if let chapter = chapterAnnouncement {
             if isChapterTitleVisible {
                 isChapterTitleVisible = false
                 scheduleTimer(after: Self.chapterFadeDuration)
             } else {
                 chapterAnnouncement = nil
-                // The first word gets its full interval after the fade.
-                scheduleNextWord()
+                // Another chapter can start where this one's heading ends.
+                // Otherwise the first word gets its full interval after the fade.
+                currentIndex = readingStart(ofChapterAt: chapter.wordIndex)
+                if !announceChapterIfNeeded() { scheduleNextWord() }
             }
             return
         }
         if currentIndex < words.count - 1 {
             let previousDeadline = scheduledDeadline
+            if isInSentenceBreak {
+                isInSentenceBreak = false
+            } else if breaksAfterCurrentWord() {
+                isInSentenceBreak = true
+                scheduleTimer(after: sentenceBreakInterval(), anchor: previousDeadline)
+                return
+            }
             currentIndex += 1
             if !announceChapterIfNeeded() { scheduleNextWord(anchor: previousDeadline) }
         } else {
             pause()
         }
+    }
+
+    /// Whether a blank follows the current word: it ends a sentence and the
+    /// next word doesn't open a chapter, whose announcement is a break of its
+    /// own.
+    private func breaksAfterCurrentWord() -> Bool {
+        guard sentenceBreakEnabled, sentenceBreakLength > 0,
+              chaptersByIndex[currentIndex + 1] == nil else { return false }
+        return SentenceBreak.endsSentence(at: currentIndex, in: words)
+    }
+
+    /// The blank's time after a sentence. Internal so it can be verified
+    /// without wall-clock sleeps in tests.
+    func sentenceBreakInterval() -> TimeInterval {
+        guard sentenceBreakEnabled else { return 0 }
+        return baseInterval * max(0, sentenceBreakLength)
     }
 
     private func announceChapterIfNeeded() -> Bool {
@@ -290,19 +375,38 @@ final class RSVPEngine {
         return true
     }
 
-    private func nextInterval() -> TimeInterval {
+    /// The display time for the current word. Internal so the way the timing
+    /// features compose can be verified without wall-clock sleeps in tests.
+    func nextInterval() -> TimeInterval {
         var interval = baseInterval
+        var wordTime = 1.0
 
+        // Punctuation pauses own all punctuation timing while they are on, so
+        // smart timing drops its own trailing-punctuation bonus rather than
+        // pausing twice for the same mark.
         if smartTimingEnabled {
-            interval *= Self.smartTimingMultiplier(
+            wordTime = Self.smartTimingMultiplier(
                 for: currentWord,
                 percentPerLetter: smartTimingPercentPerLetter,
-                minimumWordLength: smartTimingMinimumWordLength
+                minimumWordLength: smartTimingMinimumWordLength,
+                punctuationBonus: !sentencePauseEnabled
             )
         }
 
-        if sentencePauseEnabled && Self.endsWithSentencePunctuation(currentWord) {
-            interval *= sentencePauseMultiplier
+        // A compound's further parts add to the word's time instead of scaling
+        // it: smart timing has already counted every letter, so each part
+        // contributes only its per-word share. Pauses and complexity then
+        // scale the whole word.
+        wordTime += CompoundWord.additionalIntervals(for: currentWord)
+        // An acronym's further letter names add their share the same way.
+        wordTime += Acronym.additionalIntervals(at: currentIndex, in: words)
+        interval *= wordTime
+
+        if sentencePauseEnabled {
+            interval *= punctuationPauses.multiplier(
+                for: PunctuationMarks.marks(in: currentWord),
+                sentenceEnd: sentencePauseMultiplier
+            )
         }
 
         if complexityTimingEnabled, let scores = complexityScores,
@@ -331,21 +435,26 @@ final class RSVPEngine {
     /// exactly the base rate. E.g. at 4%, an 8-letter word yields 1.32×.
     /// Trailing punctuation (commas, etc.) adds a fixed 0.2 bonus when
     /// `percentPerLetter > 0` regardless of length — it marks a clause
-    /// boundary, not a long word.
+    /// boundary, not a long word. Pass `punctuationBonus: false` when
+    /// punctuation pauses already time that boundary.
     nonisolated static func smartTimingMultiplier(
         for word: String,
         percentPerLetter: Double = 4.0,
-        minimumWordLength: Int = 1
+        minimumWordLength: Int = 1,
+        punctuationBonus: Bool = true
     ) -> Double {
         let trimmed = word.trimmingCharacters(in: .punctuationCharacters)
-        let letterCount = trimmed.count
+        // The space inside a number unit (`2000 BCE`) is not a letter.
+        let letterCount = trimmed.reduce(into: 0) { count, character in
+            if character != " " { count += 1 }
+        }
 
         var multiplier = 1.0
         if letterCount >= minimumWordLength {
             multiplier += Double(letterCount) * (percentPerLetter / 100.0)
         }
 
-        if percentPerLetter > 0, hasTrailingPunctuation(word) {
+        if punctuationBonus, percentPerLetter > 0, hasTrailingPunctuation(word) {
             multiplier += 0.2
         }
 
@@ -375,29 +484,11 @@ final class RSVPEngine {
         return CharacterSet.punctuationCharacters.contains(last)
     }
 
-    nonisolated private static let sentenceEnders: Set<Character> = [
-        ".", "!", "?",       // Latin
-        "\u{3002}",          // 。 CJK full stop
-        "\u{FF01}",          // ！ fullwidth exclamation
-        "\u{FF1F}",          // ？ fullwidth question mark
-        "\u{061F}",          // ؟ Arabic question mark
-        "\u{06D4}",          // ۔ Arabic/Urdu full stop
-    ]
-
-    /// Characters that may wrap sentence-ending punctuation (closing quotes, parens, brackets).
-    nonisolated private static let closingDelimiters: Set<Character> = [
-        "\"", "'", "\u{201D}", "\u{2019}", // " ' " '
-        ")", "]", "\u{00BB}",              // ) ] »
-    ]
-
     /// Returns `true` if the word ends with sentence-terminating punctuation,
     /// looking past any trailing closing delimiters (quotes, parentheses, brackets).
+    /// Three or more periods are an ellipsis, not a sentence end.
     nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
-        for char in word.reversed() {
-            if sentenceEnders.contains(char) { return true }
-            if !closingDelimiters.contains(char) { return false }
-        }
-        return false
+        PunctuationMarks.marks(in: word).contains(.sentenceEnd)
     }
 
     deinit {

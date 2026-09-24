@@ -11,8 +11,19 @@ struct SettingsView: View {
     @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
+    @AppStorage(ReaderSettings.Keys.clausePauseMultiplier) private var clausePauseMultiplier: Double = ReaderSettings.Defaults.clausePauseMultiplier
+    @AppStorage(ReaderSettings.Keys.dashPauseMultiplier) private var dashPauseMultiplier: Double = ReaderSettings.Defaults.dashPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.ellipsisPauseMultiplier) private var ellipsisPauseMultiplier: Double = ReaderSettings.Defaults.ellipsisPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.bracketPauseMultiplier) private var bracketPauseMultiplier: Double = ReaderSettings.Defaults.bracketPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.sentenceBreakEnabled) private var sentenceBreakEnabled: Bool = ReaderSettings.Defaults.sentenceBreakEnabled
+    @AppStorage(ReaderSettings.Keys.sentenceBreakLength) private var sentenceBreakLength: Double = ReaderSettings.Defaults.sentenceBreakLength
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
+    @AppStorage(ReaderSettings.Keys.trueBlackBackgroundEnabled) private var trueBlackBackgroundEnabled: Bool = ReaderSettings.Defaults.trueBlackBackgroundEnabled
+    @AppStorage(ReaderSettings.Keys.readingHeaderTitleEnabled) private var readingHeaderTitleEnabled: Bool = ReaderSettings.Defaults.readingHeaderTitleEnabled
+    @AppStorage(ReaderSettings.Keys.readingHeaderChapterEnabled) private var readingHeaderChapterEnabled: Bool = ReaderSettings.Defaults.readingHeaderChapterEnabled
+    @AppStorage(ReaderSettings.Keys.contextWordsEnabled) private var contextWordsEnabled: Bool = ReaderSettings.Defaults.contextWordsEnabled
+    @AppStorage(ReaderSettings.Keys.enclosingMarksEnabled) private var enclosingMarksEnabled: Bool = ReaderSettings.Defaults.enclosingMarksEnabled
     @AppStorage(ReaderFont.storageKey) private var readerFontSelection = ReaderFont.defaultValue.rawValue
     @AppStorage(ReaderTextTone.storageKey) private var readerTextToneSelection = ReaderTextTone.defaultValue.rawValue
     @AppStorage(TextCleaningLevel.storageKey) private var textCleaningLevel = TextCleaningLevel.defaultValue.rawValue
@@ -23,6 +34,7 @@ struct SettingsView: View {
     @State private var wpmSliderValue: Double = 300
     @State private var fontSizeSliderValue: Double = 40
     @State private var showTutorial = false
+    @State private var selectedPauseType: PauseType = .sentenceEnd
 
     /// On iPad (regular width), constrain the settings content to a readable column width.
     private var contentMaxWidth: CGFloat {
@@ -46,6 +58,56 @@ struct SettingsView: View {
             get: { Double(smartTimingMinimumWordLength) },
             set: { smartTimingMinimumWordLength = Int($0.rounded()) }
         )
+    }
+
+    /// The punctuation types with their own pause multiplier. The pause slider
+    /// edits whichever type is selected.
+    private enum PauseType: CaseIterable, Identifiable {
+        case sentenceEnd, clause, dash, ellipsis, bracket
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .sentenceEnd: "Sentence end"
+            case .clause: "Commas, colons, semicolons"
+            case .dash: "Dashes"
+            case .ellipsis: "Ellipses"
+            case .bracket: "Closing brackets and quotes"
+            }
+        }
+
+        /// The marks shown on the type's selector button.
+        var sample: String {
+            switch self {
+            case .sentenceEnd: ". ! ?"
+            case .clause: ", ; :"
+            case .dash: "\u{2014}"
+            case .ellipsis: "\u{2026}"
+            case .bracket: ") \u{201D}"
+            }
+        }
+    }
+
+    private func pauseMultiplier(for type: PauseType) -> Binding<Double> {
+        switch type {
+        case .sentenceEnd: $sentencePauseMultiplierValue
+        case .clause: $clausePauseMultiplier
+        case .dash: $dashPauseMultiplier
+        case .ellipsis: $ellipsisPauseMultiplier
+        case .bracket: $bracketPauseMultiplier
+        }
+    }
+
+    /// A multiplier of 1.0 adds no pause, so it reads as "Off" rather than "1.0x".
+    private func pauseMultiplierLabel(_ multiplier: Double) -> String {
+        multiplier < 1.05 ? "Off" : String(format: "%.1fx", multiplier)
+    }
+
+    /// The blank's length counted in words at the reader's speed: "1 word",
+    /// "1.5 words".
+    private var sentenceBreakLengthLabel: String {
+        sentenceBreakLength == 1 ? "1 word" : String(format: "%g words", sentenceBreakLength)
     }
 
     /// At the minimum (1) smart timing applies to every word — the label makes
@@ -185,6 +247,85 @@ struct SettingsView: View {
                             }
                         }
 
+                        // Display
+                        settingCard(title: "Reading Display") {
+                            VStack(spacing: 16) {
+                                Toggle(isOn: $trueBlackBackgroundEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("True Black Background")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Pure black behind the words, for reading in the dark")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $readingHeaderTitleEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Title While Reading")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Shows the document's title faintly at the top")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $readingHeaderChapterEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Chapter While Reading")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Shows the current chapter faintly at the top")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $contextWordsEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Previous and Next Words")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Shows them beside the current word, readable only while paused")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $enclosingMarksEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Open Quotes and Parentheses")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("Keeps the opening mark faintly above the word until it closes")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+                            }
+                            .toggleStyle(.switch)
+                        }
+
                         // Behavior
                         settingCard(title: "Reading Behavior") {
                             VStack(spacing: 16) {
@@ -248,10 +389,10 @@ struct SettingsView: View {
 
                                 Toggle(isOn: $sentencePauseEnabled) {
                                     VStack(alignment: .leading) {
-                                        Text("Sentence Pauses")
+                                        Text("Punctuation Pauses")
                                             .font(StrobeTheme.bodyFont(size: 16, bold: true))
                                             .foregroundStyle(StrobeTheme.textPrimary)
-                                        Text("Brief pause at sentence-ending punctuation")
+                                        Text("Brief pause after punctuation marks")
                                             .font(StrobeTheme.bodyFont(size: 12))
                                             .foregroundStyle(StrobeTheme.textSecondary)
                                     }
@@ -260,25 +401,51 @@ struct SettingsView: View {
                                 .tint(StrobeTheme.accent)
 
                                 if sentencePauseEnabled {
+                                    punctuationPauseControls
+                                        .padding(.leading, 4)
+                                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                                }
+
+                                Divider().background(StrobeTheme.surface)
+
+                                Toggle(isOn: $sentenceBreakEnabled) {
+                                    VStack(alignment: .leading) {
+                                        Text("Blank After Sentences")
+                                            .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                                            .foregroundStyle(StrobeTheme.textPrimary)
+                                        Text("An empty screen for a moment after each sentence")
+                                            .font(StrobeTheme.bodyFont(size: 12))
+                                            .foregroundStyle(StrobeTheme.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .tint(StrobeTheme.accent)
+
+                                if sentenceBreakEnabled {
                                     VStack(spacing: 8) {
                                         HStack {
-                                            Text("Pause multiplier")
+                                            Text("Blank for")
                                                 .font(StrobeTheme.bodyFont(size: 14))
                                                 .foregroundStyle(StrobeTheme.textSecondary)
                                             Spacer()
-                                            Text(String(format: "%.1fx", sentencePauseMultiplierValue))
+                                            Text(sentenceBreakLengthLabel)
                                                 .font(StrobeTheme.bodyFont(size: 14, bold: true))
                                                 .foregroundStyle(StrobeTheme.textPrimary)
                                         }
-                                        Slider(value: $sentencePauseMultiplierValue, in: 1...4, step: 0.1)
+                                        Slider(value: $sentenceBreakLength, in: 0.5...4, step: 0.5)
                                             .tint(StrobeTheme.accent)
                                             .frame(minHeight: 44)
-                                            .accessibilityLabel("Sentence pause multiplier")
-                                            .accessibilityValue(String(format: "%.1fx", sentencePauseMultiplierValue))
+                                            .accessibilityLabel("Blank length")
+                                            .accessibilityValue(sentenceBreakLengthLabel)
+                                        Text("Measured in words at your reading speed.")
+                                            .font(StrobeTheme.bodyFont(size: 11))
+                                            .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                                            .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .padding(.leading, 4)
                                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                                 }
+
                                 Divider().background(StrobeTheme.surface)
 
                                 Toggle(isOn: $complexityTimingEnabled) {
@@ -373,6 +540,7 @@ struct SettingsView: View {
                             .toggleStyle(.switch)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: smartTimingEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sentencePauseEnabled)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sentenceBreakEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: complexityTimingEnabled)
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: holdToReadEnabled)
                         }
@@ -431,6 +599,10 @@ struct SettingsView: View {
                     .padding(.bottom, 28)
                     .frame(maxWidth: contentMaxWidth)
                     .frame(maxWidth: .infinity)
+                    // Content even a fraction of a point wider than the scroll
+                    // view (a floating sheet's width is fractional) lets it pan
+                    // sideways.
+                    .containerRelativeFrame(.horizontal)
                 }
             }
         }
@@ -442,6 +614,74 @@ struct SettingsView: View {
     }
 
     // MARK: - Components
+
+    /// A selector button per punctuation type above the one slider that edits
+    /// the selected type's multiplier.
+    private var punctuationPauseControls: some View {
+        let multiplier = pauseMultiplier(for: selectedPauseType)
+        return VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                ForEach(PauseType.allCases) { type in
+                    pauseTypeButton(type: type)
+                }
+            }
+
+            HStack {
+                Text(selectedPauseType.title)
+                    .font(StrobeTheme.bodyFont(size: 14))
+                    .foregroundStyle(StrobeTheme.textSecondary)
+                Spacer()
+                Text(pauseMultiplierLabel(multiplier.wrappedValue))
+                    .font(StrobeTheme.bodyFont(size: 14, bold: true))
+                    .foregroundStyle(StrobeTheme.textPrimary)
+            }
+            .padding(.top, 8)
+            Slider(value: multiplier, in: 1...4, step: 0.1)
+                .tint(StrobeTheme.accent)
+                .frame(minHeight: 44)
+                .accessibilityLabel("\(selectedPauseType.title) pause multiplier")
+                .accessibilityValue(pauseMultiplierLabel(multiplier.wrappedValue))
+            Text("Words with several marks get the longest pause.")
+                .font(StrobeTheme.bodyFont(size: 11))
+                .foregroundStyle(StrobeTheme.textSecondary.opacity(0.7))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func pauseTypeButton(type: PauseType) -> some View {
+        let isSelected = selectedPauseType == type
+        let label = pauseMultiplierLabel(pauseMultiplier(for: type).wrappedValue)
+        return Button {
+            selectedPauseType = type
+        } label: {
+            VStack(spacing: 2) {
+                Text(type.sample)
+                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
+                    .foregroundStyle(StrobeTheme.textPrimary)
+                Text(label)
+                    .font(StrobeTheme.bodyFont(size: 11))
+                    .foregroundStyle(StrobeTheme.textSecondary)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 10)
+            .background(StrobeTheme.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSelected ? StrobeTheme.accent : StrobeTheme.textSecondary.opacity(0.2),
+                        lineWidth: isSelected ? 2 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(type.title)
+        .accessibilityValue(label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
 
     /// A stepped settings slider with haptic-on-release, integer snapping via
     /// `onSnap`, and min/max range labels derived from `range`.
@@ -564,7 +804,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 12)
-                .background(StrobeTheme.background)
+                .background { ReaderBackdrop() }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)

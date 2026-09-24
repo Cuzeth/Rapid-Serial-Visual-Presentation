@@ -35,13 +35,13 @@ struct PassageView: View {
     /// Start word index of each match, ascending. Phrase queries span several
     /// words; navigation, counting, and scrolling all key off the start.
     @State private var matchIndices: [Int] = []
-    /// Number of consecutive words each match covers — 1 unless the query is
-    /// a multi-word phrase.
-    @State private var matchSpan: Int = 1
+    /// Word range each match covers, parallel to `matchIndices` — one word
+    /// unless the query is a phrase reaching past a word's end.
+    @State private var matchRanges: [Range<Int>] = []
     /// Every word index inside a match, for O(1) per-word highlight lookups
     /// so chunk renders don't rebuild a Set. Only ever assigned through
-    /// ``setMatches(_:span:precomputedSet:)`` so it can't drift from
-    /// `matchIndices`.
+    /// ``setMatches(_:precomputedSet:)`` so it can't drift from
+    /// `matchIndices` and `matchRanges`.
     @State private var matchSet: Set<Int> = []
     @State private var currentMatchPosition: Int = 0
     @State private var renderedChunks: Set<Int> = []
@@ -101,22 +101,18 @@ struct PassageView: View {
         "word-\(wordIndex)"
     }
 
-    private var currentMatchWord: Int? {
-        guard !matchIndices.isEmpty, currentMatchPosition < matchIndices.count else { return nil }
-        return matchIndices[currentMatchPosition]
-    }
-
     /// Word range of the active match — one word for plain queries, the full
     /// span for phrases. Clamped defensively; matches always fit by
     /// construction.
     private var currentMatchRange: Range<Int>? {
-        guard let start = currentMatchWord else { return nil }
-        return start..<min(start + matchSpan, words.count)
+        guard currentMatchPosition < matchRanges.count else { return nil }
+        let range = matchRanges[currentMatchPosition]
+        return range.lowerBound..<min(range.upperBound, words.count)
     }
 
     var body: some View {
         ZStack {
-            StrobeTheme.Gradients.mainBackground.ignoresSafeArea()
+            ReaderBackdrop().ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -434,13 +430,13 @@ struct PassageView: View {
     }
 
     /// Single funnel for updating the search results: assigns `matchIndices`,
-    /// `matchSpan`, and the covering `matchSet` together. `precomputedSet`
+    /// `matchRanges`, and the covering `matchSet` together. `precomputedSet`
     /// lets the search task reuse the Set it already built off the main
     /// thread.
-    private func setMatches(_ indices: [Int], span: Int = 1, precomputedSet: Set<Int>? = nil) {
-        matchIndices = indices
-        matchSpan = span
-        matchSet = precomputedSet ?? Self.coveredIndices(matchStarts: indices, span: span)
+    private func setMatches(_ ranges: [Range<Int>], precomputedSet: Set<Int>? = nil) {
+        matchIndices = ranges.map(\.lowerBound)
+        matchRanges = ranges
+        matchSet = precomputedSet ?? Self.coveredIndices(of: ranges)
     }
 
     private func runSearch(immediate: Bool = false) {
@@ -466,13 +462,12 @@ struct PassageView: View {
             let lowered = await lowercasedWordsCache()
             guard !Task.isCancelled else { return }
 
-            let (results, resultSet, span) = await Task.detached(priority: .userInitiated) {
-                let matches = Self.findMatches(query: query, inLowercasedWords: lowered)
-                let span = Self.matchSpan(for: query)
-                return (matches, Self.coveredIndices(matchStarts: matches, span: span), span)
+            let (results, resultSet) = await Task.detached(priority: .userInitiated) {
+                let ranges = Self.findMatchRanges(query: query, inLowercasedWords: lowered)
+                return (ranges, Self.coveredIndices(of: ranges))
             }.value
             guard !Task.isCancelled, query == searchQuery else { return }
-            setMatches(results, span: span, precomputedSet: resultSet)
+            setMatches(results, precomputedSet: resultSet)
             lastCompletedQuery = query
             if results.isEmpty {
                 currentMatchPosition = 0
@@ -480,7 +475,7 @@ struct PassageView: View {
             }
             // Land on the match closest to the user's current reading position
             // so they don't get yanked far away from where they were.
-            currentMatchPosition = Self.nearestMatchPosition(to: engine.currentIndex, in: results)
+            currentMatchPosition = Self.nearestMatchPosition(to: engine.currentIndex, in: matchIndices)
             scrollIntent = .matchPosition(currentMatchPosition)
         }
     }
@@ -542,61 +537,100 @@ struct PassageView: View {
 
     /// Case-insensitive search over `words`. A single-word query matches as a
     /// substring inside any word; a query containing whitespace matches as a
-    /// phrase across consecutive words, exactly as the phrase reads in the
-    /// space-joined passage text. Empty/whitespace-only queries yield no
-    /// matches. Returned indices are the first word of each match, sorted
-    /// ascending by construction; each match covers ``matchSpan(for:)``
-    /// consecutive words.
+    /// phrase, exactly as the phrase reads in the space-joined passage text.
+    /// Empty/whitespace-only queries yield no matches. Returned indices are
+    /// the first word of each match, ascending and distinct.
     nonisolated static func findMatches(query: String, in words: [String]) -> [Int] {
         findMatches(query: query, inLowercasedWords: words.map { $0.lowercased() })
     }
 
-    /// Variant of ``findMatches(query:in:)`` over pre-lowercased words, so the
-    /// per-keystroke search path can reuse a cached lowercased copy instead of
-    /// re-lowercasing the whole document each time.
+    /// Variant of ``findMatches(query:in:)`` over pre-lowercased words.
     nonisolated static func findMatches(query: String, inLowercasedWords words: [String]) -> [Int] {
+        findMatchRanges(query: query, inLowercasedWords: words).map(\.lowerBound)
+    }
+
+    /// The word range of every match of `query`, over pre-lowercased words so
+    /// the per-keystroke search path can reuse a cached lowercased copy
+    /// instead of re-lowercasing the whole document each time. Ranges are
+    /// ascending with distinct starts.
+    ///
+    /// A word can hold a space — the tokenizer joins number units such as
+    /// `2000 BCE` — so a phrase match covers as many words as it reaches
+    /// into, which can be fewer than the query has tokens.
+    nonisolated static func findMatchRanges(query: String, inLowercasedWords words: [String]) -> [Range<Int>] {
         let tokens = queryTokens(query)
         guard let first = tokens.first else { return [] }
-        var results: [Int] = []
+        var results: [Range<Int>] = []
         results.reserveCapacity(min(words.count, 256))
 
         if tokens.count == 1 {
             for (i, word) in words.enumerated() where word.contains(first) {
-                results.append(i)
+                results.append(i..<(i + 1))
             }
             return results
         }
 
         // Phrase query: the passage renders words separated by single spaces,
-        // so the query matches wherever it occurs as a substring of that
-        // joined text — the first token must end a word, middle tokens must
-        // equal whole words, and the last token must begin the word after.
-        let lastOffset = tokens.count - 1
-        guard words.count >= tokens.count else { return [] }
-        starts: for start in 0...(words.count - tokens.count) {
-            guard words[start].hasSuffix(first),
-                  words[start + lastOffset].hasPrefix(tokens[lastOffset]) else { continue }
-            for k in 1..<lastOffset where words[start + k] != tokens[k] {
-                continue starts
+        // so the query matches wherever it occurs in that joined text.
+        // Matching runs over pieces, the space-separated parts of each word:
+        // the first token must end a piece, middle tokens must equal whole
+        // pieces, and the last token must begin the piece after.
+        let lastToken = tokens.count - 1
+
+        /// Adds a match, merged into the previous one when both start in the
+        /// same word, so starts stay distinct.
+        func addMatch(_ range: Range<Int>) {
+            if let previous = results.last, previous.lowerBound == range.lowerBound {
+                results[results.count - 1] = previous.lowerBound..<max(previous.upperBound, range.upperBound)
+            } else {
+                results.append(range)
             }
-            results.append(start)
+        }
+
+        /// The word where the match ends, given that the first token ends the
+        /// piece of word `start` that stops at `firstEnd`; `nil` when the
+        /// pieces after it don't match the rest of the query.
+        func matchEnd(from start: Int, firstEnd: String.Index) -> Int? {
+            var word = start
+            var pieceEnd = firstEnd
+            for k in 1...lastToken {
+                let pieceStart: String.Index
+                if pieceEnd < words[word].endIndex {
+                    pieceStart = words[word].utf8.index(after: pieceEnd)
+                } else if word + 1 < words.count {
+                    word += 1
+                    pieceStart = words[word].startIndex
+                } else {
+                    return nil
+                }
+                pieceEnd = words[word].utf8[pieceStart...].firstIndex(of: UInt8(ascii: " ")) ?? words[word].endIndex
+                let piece = words[word][pieceStart..<pieceEnd]
+                guard k == lastToken ? piece.hasPrefix(tokens[k]) : piece == tokens[k] else { return nil }
+            }
+            return word
+        }
+
+        for (i, word) in words.enumerated() {
+            var pieceStart = word.startIndex
+            while let space = word.utf8[pieceStart...].firstIndex(of: UInt8(ascii: " ")) {
+                if word[..<space].hasSuffix(first), let end = matchEnd(from: i, firstEnd: space) {
+                    addMatch(i..<(end + 1))
+                }
+                pieceStart = word.utf8.index(after: space)
+            }
+            if word.hasSuffix(first), let end = matchEnd(from: i, firstEnd: word.endIndex) {
+                addMatch(i..<(end + 1))
+            }
         }
         return results
     }
 
-    /// Number of consecutive words each match of `query` covers: 1 for
-    /// single-word queries, the token count for phrase queries.
-    nonisolated static func matchSpan(for query: String) -> Int {
-        max(1, queryTokens(query).count)
-    }
-
-    /// Every word index inside a match, given the match start indices and the
-    /// per-match span — the set driving per-word highlight lookups.
-    nonisolated static func coveredIndices(matchStarts: [Int], span: Int) -> Set<Int> {
-        guard span > 1 else { return Set(matchStarts) }
-        var covered = Set<Int>(minimumCapacity: matchStarts.count * span)
-        for start in matchStarts {
-            for i in start..<(start + span) { covered.insert(i) }
+    /// Every word index inside a match — the set driving per-word highlight
+    /// lookups.
+    nonisolated static func coveredIndices(of ranges: [Range<Int>]) -> Set<Int> {
+        var covered = Set<Int>(minimumCapacity: ranges.count)
+        for range in ranges {
+            covered.formUnion(range)
         }
         return covered
     }

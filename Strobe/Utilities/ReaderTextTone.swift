@@ -48,11 +48,39 @@ nonisolated enum ReaderTextTone: String, CaseIterable, Identifiable {
         }
     }
 
+    /// How far `textColor` fades for quiet orientation text on the reading
+    /// surface. Tuned per tone to land near 3:1 contrast against the reader
+    /// background in each — one shared opacity would leave `night` illegible
+    /// or `bright` too loud.
+    var fadedTextOpacity: Double {
+        switch self {
+        case .bright: 0.35
+        case .soft: 0.5
+        case .sepia: 0.45
+        case .night: 0.65
+        }
+    }
+
+    /// How far `textColor` fades for text meant to be seen but not read, like
+    /// context words during playback. Tuned per tone to land near 1.3:1
+    /// contrast against the reader background.
+    var dimTextOpacity: Double {
+        switch self {
+        case .bright: 0.13
+        case .soft: 0.18
+        case .sepia: 0.17
+        case .night: 0.24
+        }
+    }
+
     /// The color of the word being read.
     var textColor: Color { Self.color(textRGB) }
 
     /// The color of the ORP anchor letter and its guide line.
     var anchorColor: Color { Self.color(anchorRGB) }
+
+    /// A low-contrast `textColor` for text that must never compete with the word.
+    var fadedTextColor: Color { textColor.opacity(fadedTextOpacity) }
 
     private static func color(_ rgb: UInt32) -> Color {
         Color(

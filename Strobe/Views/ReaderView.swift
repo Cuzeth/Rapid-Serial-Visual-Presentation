@@ -27,8 +27,16 @@ struct ReaderView: View {
     @AppStorage(ReaderSettings.Keys.sentencePauseMultiplier) private var sentencePauseMultiplierValue: Double = ReaderSettings.Defaults.sentencePauseMultiplier
     @AppStorage(ReaderSettings.Keys.complexityTimingEnabled) private var complexityTimingEnabled: Bool = ReaderSettings.Defaults.complexityTimingEnabled
     @AppStorage(ReaderSettings.Keys.complexityIntensity) private var complexityIntensity: Double = ReaderSettings.Defaults.complexityIntensity
+    @AppStorage(ReaderSettings.Keys.clausePauseMultiplier) private var clausePauseMultiplier: Double = ReaderSettings.Defaults.clausePauseMultiplier
+    @AppStorage(ReaderSettings.Keys.dashPauseMultiplier) private var dashPauseMultiplier: Double = ReaderSettings.Defaults.dashPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.ellipsisPauseMultiplier) private var ellipsisPauseMultiplier: Double = ReaderSettings.Defaults.ellipsisPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.bracketPauseMultiplier) private var bracketPauseMultiplier: Double = ReaderSettings.Defaults.bracketPauseMultiplier
+    @AppStorage(ReaderSettings.Keys.sentenceBreakEnabled) private var sentenceBreakEnabled: Bool = ReaderSettings.Defaults.sentenceBreakEnabled
+    @AppStorage(ReaderSettings.Keys.sentenceBreakLength) private var sentenceBreakLength: Double = ReaderSettings.Defaults.sentenceBreakLength
     @AppStorage(ReaderSettings.Keys.holdToReadEnabled) private var holdToReadEnabled: Bool = ReaderSettings.Defaults.holdToReadEnabled
     @AppStorage(ReaderSettings.Keys.holdSpeedAdjustEnabled) private var holdSpeedAdjustEnabled: Bool = ReaderSettings.Defaults.holdSpeedAdjustEnabled
+    @AppStorage(ReaderSettings.Keys.contextWordsEnabled) private var contextWordsEnabled: Bool = ReaderSettings.Defaults.contextWordsEnabled
+    @AppStorage(ReaderSettings.Keys.enclosingMarksEnabled) private var enclosingMarksEnabled: Bool = ReaderSettings.Defaults.enclosingMarksEnabled
     @Bindable var document: Document
     @State private var engine: RSVPEngine
     @State private var isTouching = false
@@ -44,9 +52,22 @@ struct ReaderView: View {
     @State private var persistenceError: String?
     @State private var isLoaded = false
     @State private var isBackfillingComplexity = false
+    @State private var enclosingMarks: EnclosingMarks?
+    @State private var isRightToLeftDocument = false
     @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
+
+    /// The four per-type pause settings as the single value the engine takes,
+    /// so one `onChange` forwards a change to any of them.
+    private var punctuationPauses: PunctuationPauses {
+        PunctuationPauses(
+            clause: clausePauseMultiplier,
+            dash: dashPauseMultiplier,
+            ellipsis: ellipsisPauseMultiplier,
+            bracket: bracketPauseMultiplier
+        )
+    }
 
     /// On iPad (regular width) we constrain controls to a comfortable column so
     /// sliders and buttons don't stretch the full width of a 12.9" display.
@@ -71,6 +92,9 @@ struct ReaderView: View {
             smartTimingPercentPerLetter: timing.smartTimingPercentPerLetter,
             smartTimingMinimumWordLength: timing.smartTimingMinimumWordLength,
             sentencePauseMultiplier: timing.sentencePauseMultiplier,
+            punctuationPauses: timing.punctuationPauses,
+            sentenceBreakEnabled: timing.sentenceBreakEnabled,
+            sentenceBreakLength: timing.sentenceBreakLength,
             complexityTimingEnabled: timing.complexityTimingEnabled,
             complexityIntensity: timing.complexityIntensity
         ))
@@ -86,6 +110,7 @@ struct ReaderView: View {
         let scores = await document.loadComplexityScoresAsync()
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
         engine.load(words: words, currentIndex: effectiveIndex, complexityScores: scores, chapters: document.chapters)
+        isRightToLeftDocument = PassageView.isRTLDominant(words)
         isLoaded = true
         // A document resumed at its last word (with more than one word) opens
         // onto the completion card; single-word documents show their word.
@@ -95,6 +120,18 @@ struct ReaderView: View {
         if scores == nil && complexityTimingEnabled {
             backfillComplexityScores()
         }
+    }
+
+    /// Pairs the document's quotation and bracket marks for the enclosing
+    /// marks display, once the words are loaded and the setting is on. Runs
+    /// off-main: it scans every word of the document.
+    private func pairEnclosingMarksIfNeeded() async {
+        guard enclosingMarksEnabled, isLoaded, enclosingMarks == nil else { return }
+        let words = engine.words
+        let chapters = document.chapters
+        enclosingMarks = await Task.detached(priority: .userInitiated) {
+            EnclosingMarks(words: words, chapters: chapters)
+        }.value
     }
 
     /// Computes and stores complexity scores for documents imported before
@@ -120,7 +157,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             // Immersive Background
-            StrobeTheme.Gradients.mainBackground
+            ReaderBackdrop()
                 .ignoresSafeArea()
             
             // Gesture Layer
@@ -128,46 +165,81 @@ struct ReaderView: View {
                 .ignoresSafeArea()
                 .gesture(unifiedGesture)
 
-            VStack {
-                topBar
-                Spacer()
+            // The reader sits inside the safe area; the proxy's insets tell
+            // the layout how far the screen extends beyond it.
+            GeometryReader { geo in
+                ReaderStageLayout(
+                    topInset: geo.safeAreaInsets.top,
+                    bottomInset: geo.safeAreaInsets.bottom
+                ) {
+                    topBar
+                        .readerStageRole(.topBar)
 
-                if showCompletion {
-                    completionView
-                        .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
-                } else {
-                    CurrentWordView(engine: engine, fontSize: CGFloat(fontSize))
-                    .id("wordview") // stabilize identity
-                    .transition(.opacity)
-                    // Overlay (not a sibling) so the word never shifts when
-                    // the readout appears.
-                    .overlay {
-                        HoldSpeedReadoutView(engine: engine)
-                            .offset(y: CGFloat(fontSize) * 1.4)
-                            .accessibilityHidden(true)
+                    if showCompletion {
+                        completionView
+                            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                            .readerStageRole(.betweenBars)
+                    } else {
+                        CurrentWordView(
+                            engine: engine,
+                            fontSize: CGFloat(fontSize),
+                            showsContext: contextWordsEnabled,
+                            contextIsRightToLeft: isRightToLeftDocument
+                        )
+                        .id("wordview") // stabilize identity
+                        .transition(.opacity)
+                        // Overlay (not a sibling) so the word never shifts when
+                        // the readout appears.
+                        .overlay {
+                            HoldSpeedReadoutView(engine: engine)
+                                .offset(y: CGFloat(fontSize) * 1.4)
+                                .accessibilityHidden(true)
+                        }
+                        // The word display sits above the gesture layer; without
+                        // this, holding directly on the word would swallow the
+                        // hold-to-read gesture.
+                        .allowsHitTesting(false)
+                        .accessibilityAction(named: engine.isPlaying ? "Pause" : "Play") {
+                            togglePlayback()
+                        }
+                        .accessibilityAction(named: "Increase speed") {
+                            nudgeSpeed(by: Int(ReaderSettings.wpmStep))
+                        }
+                        .accessibilityAction(named: "Decrease speed") {
+                            nudgeSpeed(by: -Int(ReaderSettings.wpmStep))
+                        }
+
+                        EnclosingMarksView(
+                            engine: engine,
+                            marks: enclosingMarks,
+                            fontSize: CGFloat(fontSize),
+                            isEnabled: enclosingMarksEnabled
+                        )
+                        .transition(.opacity)
+                        .readerStageRole(.fixationSurround)
                     }
-                    // The word display sits above the gesture layer; without
-                    // this, holding directly on the word would swallow the
-                    // hold-to-read gesture.
-                    .allowsHitTesting(false)
-                    .accessibilityAction(named: engine.isPlaying ? "Pause" : "Play") {
-                        togglePlayback()
-                    }
-                    .accessibilityAction(named: "Increase speed") {
-                        nudgeSpeed(by: Int(ReaderSettings.wpmStep))
-                    }
-                    .accessibilityAction(named: "Decrease speed") {
-                        nudgeSpeed(by: -Int(ReaderSettings.wpmStep))
-                    }
+
+                    bottomBar
+                        .opacity(engine.isPlaying ? 0.0 : 1.0)
+                        .allowsHitTesting(!engine.isPlaying)
+                        .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                        .readerStageRole(.bottomBar)
                 }
-
-                Spacer()
-                bottomBar
-                    .opacity(engine.isPlaying ? 0.0 : 1.0)
-                    .allowsHitTesting(!engine.isPlaying)
-                    .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+                // Overlay (not a stage subview) so the word never shifts
+                // whether the header is on or off.
+                .overlay(alignment: .top) {
+                    ReaderHeaderView(
+                        title: document.title,
+                        chapters: document.chapters,
+                        engine: engine,
+                        fadeDuration: navFadeDuration
+                    )
+                }
             }
-            .animation(.easeInOut(duration: 0.2), value: engine.isPlaying)
+            // The reader never hosts a keyboard; one dismissing from the
+            // passage view's search must not move the fixation line.
+            .ignoresSafeArea(.keyboard)
         }
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
@@ -175,6 +247,9 @@ struct ReaderView: View {
         #endif
         .task {
             await loadDocumentIfNeeded()
+        }
+        .task(id: enclosingMarksEnabled && isLoaded) {
+            await pairEnclosingMarksIfNeeded()
         }
         .onAppear {
             readerFocused = true
@@ -243,6 +318,15 @@ struct ReaderView: View {
         }
         .onChange(of: complexityIntensity) { _, newValue in
             engine.complexityIntensity = newValue
+        }
+        .onChange(of: punctuationPauses) { _, newValue in
+            engine.punctuationPauses = newValue
+        }
+        .onChange(of: sentenceBreakEnabled) { _, newValue in
+            engine.sentenceBreakEnabled = newValue
+        }
+        .onChange(of: sentenceBreakLength) { _, newValue in
+            engine.sentenceBreakLength = newValue
         }
         .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
             Button("OK") { persistenceError = nil }
@@ -718,17 +802,29 @@ struct ReaderView: View {
 // bodies so @Observable tracking invalidates only these small subtrees on
 // every word tick (16×/sec at 1000 WPM) — not the entire reader.
 
-/// The word display. Isolates the per-tick `currentWord` read.
+/// The word display. Isolates the per-tick `currentWord` read, and the
+/// neighbours' while context words are on.
 private struct CurrentWordView: View {
     let engine: RSVPEngine
     let fontSize: CGFloat
+    let showsContext: Bool
+    let contextIsRightToLeft: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        WordView(word: engine.currentWord, fontSize: fontSize)
+        WordView(
+            word: engine.currentWord,
+            fontSize: fontSize,
+            context: showsContext ? ContextWords.neighbors(of: engine.currentIndex, in: engine.words) : nil,
+            contextIsRightToLeft: contextIsRightToLeft,
+            contextIsDimmed: showsContext && engine.isPlaying
+        )
             .equatable()
-            .opacity(engine.chapterAnnouncement == nil ? 1 : 0)
+            .opacity(engine.chapterAnnouncement == nil && !engine.isInSentenceBreak ? 1 : 0)
             .animation(nil, value: engine.chapterAnnouncement != nil)
+            .animation(nil, value: engine.isInSentenceBreak)
+            // A sentence break leaves the word in the accessibility tree so
+            // VoiceOver focus doesn't move at every sentence.
             .accessibilityHidden(engine.chapterAnnouncement != nil)
             .overlay {
                 if let chapter = engine.chapterAnnouncement {

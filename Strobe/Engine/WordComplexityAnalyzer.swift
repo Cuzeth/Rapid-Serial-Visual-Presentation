@@ -76,8 +76,8 @@ enum WordComplexityAnalyzer {
     /// single pass, halving NLTagger initialization cost.
     ///
     /// Tagger tokens are mapped back to entries of `words` by character offset:
-    /// NLTagger splits tokens the app's whitespace tokenizer keeps whole (e.g.
-    /// the em-dash compound "stop—go" becomes two tagger tokens), so counting
+    /// NLTagger splits tokens the app's tokenizer keeps whole (e.g. the
+    /// contraction "doesn't" becomes two tagger tokens), so counting
     /// tokens would shift the alignment of every subsequent word. Each word
     /// keeps the tag of its first contained token.
     internal nonisolated static func tagText(

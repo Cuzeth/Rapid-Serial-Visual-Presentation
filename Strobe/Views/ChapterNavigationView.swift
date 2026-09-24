@@ -13,28 +13,26 @@ struct ChapterNavigationView: View {
     /// Called after any chapter jump — the reader clears its completion overlay.
     var onNavigate: () -> Void = {}
 
-    /// A "previous chapter" tap within this many words of the chapter start
-    /// goes to the prior chapter instead of restarting the current one.
+    /// A "previous chapter" tap within this many words of where the chapter's
+    /// reading starts, after any heading its announcement stands in for, goes
+    /// to the prior chapter instead of restarting the current one.
     private static let nearChapterStartThreshold = 2
 
     /// Index of the chapter containing the current word (largest chapter whose
-    /// `wordIndex` is at or before `engine.currentIndex`). Nil if no chapters.
+    /// `wordIndex` is at or before `engine.currentIndex`), or the first chapter
+    /// while the position is still before its start. Nil if no chapters.
     private var currentChapterIndex: Int? {
         guard !chapters.isEmpty else { return nil }
-        var result = 0
-        for (i, chapter) in chapters.enumerated() {
-            if chapter.wordIndex <= engine.currentIndex {
-                result = i
-            } else {
-                break
-            }
-        }
-        return result
+        return ChapterTimeline.index(in: chapters, containing: engine.currentIndex) ?? 0
     }
 
     private var canGoPreviousChapter: Bool {
         guard let idx = currentChapterIndex else { return false }
-        return engine.currentIndex > chapters[idx].wordIndex + Self.nearChapterStartThreshold || idx > 0
+        return !isNearStart(ofChapterAt: idx) || idx > 0
+    }
+
+    private func isNearStart(ofChapterAt idx: Int) -> Bool {
+        engine.currentIndex <= engine.readingStart(ofChapterAt: chapters[idx].wordIndex) + Self.nearChapterStartThreshold
     }
 
     private var canGoNextChapter: Bool {
@@ -145,7 +143,9 @@ struct ChapterNavigationView: View {
                 }
                 .padding(.vertical, 4)
             }
-            .background(StrobeTheme.background)
+            .background {
+                ReaderBackdrop().ignoresSafeArea()
+            }
             .onAppear {
                 guard let idx = activeIndex, chapters.indices.contains(idx) else { return }
                 // Defer one runloop so LazyVStack rows are registered before we scroll.
@@ -168,8 +168,7 @@ struct ChapterNavigationView: View {
 
     private func jumpToPreviousChapter() {
         guard let idx = currentChapterIndex else { return }
-        let chapterStart = chapters[idx].wordIndex
-        if engine.currentIndex > chapterStart + Self.nearChapterStartThreshold {
+        if !isNearStart(ofChapterAt: idx) {
             jumpToChapter(idx)
         } else if idx > 0 {
             jumpToChapter(idx - 1)
