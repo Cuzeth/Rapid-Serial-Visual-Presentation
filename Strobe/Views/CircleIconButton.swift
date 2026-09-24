@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Icon-in-a-circle button chrome shared by the reader, chapter list,
-/// settings, and text-entry headers — previously hand-rolled at each site.
+/// Icon-in-a-circle button chrome for the reader's top bar.
 struct CircleIconButton: View {
     let systemImage: String
     var iconSize: CGFloat = 18

@@ -1,73 +1,54 @@
 import SwiftUI
 import SwiftData
 
-/// Displays the chapter list for a document with progress indicators.
-///
-/// Shows a "Read Full Document" option and individual chapters with
-/// not-started / in-progress / completed status based on the furthest
-/// position the user has read to.
+/// The book page for a document with chapters: its cover and reading
+/// progress, one button that starts, resumes, or restarts it, and the
+/// chapters with their lengths and not-started / in-progress / completed
+/// status, judged by the furthest position the user has read to.
 struct ChapterListView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let document: Document
 
-    @FocusState private var listFocused: Bool
+    @FocusState private var pageFocused: Bool
 
-    private var contentMaxWidth: CGFloat {
-        horizontalSizeClass == .regular ? 720 : .infinity
+    private var isRegularWidth: Bool {
+        #if os(macOS)
+        true
+        #else
+        horizontalSizeClass == .regular
+        #endif
     }
 
     var body: some View {
-        ZStack {
-            // Background
-            StrobeTheme.Gradients.mainBackground
-                .ignoresSafeArea()
-
+        ScrollView {
             VStack(spacing: 0) {
                 header
-                
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Full Document Option
-                        NavigationLink(value: ReaderRoute(document: document)) {
-                            fullDocumentRow
-                        }
-                        .buttonStyle(StrobeCardButtonStyle())
-
-                        // Divide
-                        Rectangle()
-                            .fill(StrobeTheme.surface)
-                            .frame(height: 1)
-                            .padding(.horizontal)
-
-                        // Chapters
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(document.chapters.enumerated()), id: \.element.id) { index, chapter in
-                                NavigationLink(value: ReaderRoute(
-                                    document: document,
-                                    startingWordIndex: startingWordIndex(forChapterAt: index)
-                                )) {
-                                    chapterRow(chapter: chapter, index: index)
-                                }
-                                .buttonStyle(StrobeCardButtonStyle())
-                            }
-                        }
-                    }
-                    .padding(20)
-                    .frame(maxWidth: contentMaxWidth)
-                    .frame(maxWidth: .infinity)
-                }
+                chapterList
+                    .padding(.top, 32)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 32)
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
+        }
+        .background { StrobeTheme.background.ignoresSafeArea() }
+        .navigationTitle(document.title)
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        // The header already shows the title in full.
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1)
             }
         }
-        #if os(iOS)
-        .toolbar(.hidden, for: .navigationBar)
         #endif
-        // Escape pops this list on macOS, matching the reader and passage
+        // Escape pops this page on macOS, matching the reader and passage
         // view. Focus is taken on appear so the key has a responder.
         .focusable()
         .focusEffectDisabled()
-        .focused($listFocused)
-        .onAppear { listFocused = true }
+        .focused($pageFocused)
+        .onAppear { pageFocused = true }
         .onKeyPress(.escape) {
             dismiss()
             return .handled
@@ -77,132 +58,162 @@ struct ChapterListView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 16) {
-            CircleIconButton(systemImage: "chevron.left", accessibilityLabel: "Back") {
-                dismiss()
-            }
+        let status = document.readingStatus
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(document.title)
-                    .font(StrobeTheme.titleFont(size: 20))
-                    .foregroundStyle(StrobeTheme.textPrimary)
+        return VStack(spacing: 0) {
+            DocumentCover(document: document)
+                .frame(width: isRegularWidth ? 150 : 128)
+                .padding(.top, 8)
+
+            Text(document.title)
+                .font(StrobeTheme.displayFont(size: 26, relativeTo: .title))
+                .multilineTextAlignment(.center)
+                .padding(.top, 20)
+
+            Text(detailLine)
+                .font(StrobeTheme.metadataFont)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+
+            NavigationLink(value: ReaderRoute(
+                document: document,
+                startingWordIndex: status == .finished ? 0 : nil
+            )) {
+                Label(primaryActionTitle(for: status), systemImage: status == .finished ? "arrow.counterclockwise" : "play.fill")
+                    .font(.body.weight(.semibold))
                     .lineLimit(1)
-
-                Text("\(document.chapters.count) chapters")
-                    .font(StrobeTheme.bodyFont(size: 14))
-                    .foregroundStyle(StrobeTheme.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .frame(maxWidth: 420)
+            .padding(.top, 22)
 
-            Spacer()
+            if status.isInProgress {
+                progressSummary(status: status)
+                    .frame(maxWidth: 420)
+                    .padding(.top, 16)
+            }
         }
-        .frame(maxWidth: contentMaxWidth)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(StrobeTheme.background.opacity(0.8))
     }
 
-    // MARK: - Full document row
+    private var detailLine: String {
+        let words = document.wordCount == 1 ? "1 word" : "\(document.wordCount.formatted()) words"
+        let chapters = document.chapters.count == 1 ? "1 chapter" : "\(document.chapters.count) chapters"
+        return "\(words) · \(chapters)"
+    }
 
-    private var fullDocumentRow: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Read Full Document")
-                    .font(StrobeTheme.bodyFont(size: 18, bold: true))
-                    .foregroundStyle(StrobeTheme.textPrimary)
+    private func primaryActionTitle(for status: ReadingStatus) -> String {
+        switch status {
+        case .new:
+            return "Start Reading"
+        case .inProgress:
+            let chapter = ChapterTimeline(document.chapters).chapter(containing: document.currentWordIndex)
+            return chapter.map { "Resume \($0.title)" } ?? "Resume"
+        case .finished:
+            return "Read Again"
+        }
+    }
 
-                HStack(spacing: 6) {
-                    Text("\(document.wordCount) words")
-                    Text("•")
-                    Text("\(Int(document.progress * 100))% complete")
+    private func progressSummary(status: ReadingStatus) -> some View {
+        let minutesLeft = document.remainingMinutes
+        return VStack(spacing: 6) {
+            ReadingProgressBar(progress: document.progress)
+            HStack {
+                Text(status.label)
+                Spacer()
+                Text("\(ReadingTime.label(minutes: minutesLeft)) left at \(document.wordsPerMinute) wpm")
+            }
+            .font(StrobeTheme.metadataFont)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(status.label), \(ReadingTime.spokenLabel(minutes: minutesLeft)) left at \(document.wordsPerMinute) words per minute")
+    }
+
+    // MARK: - Chapters
+
+    private var chapterList: some View {
+        // One snapshot per render: every row derives its bounds from it.
+        let chapters = document.chapters
+        let totalWordCount = document.wordCount
+        let currentIndex = currentChapterIndex(in: chapters)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Chapters")
+                .font(StrobeTheme.metadataFont)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 16)
+                .accessibilityAddTraits(.isHeader)
+
+            LazyVStack(spacing: 0) {
+                ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
+                    let (start, end) = Self.chapterBounds(at: index, chapters: chapters, totalWordCount: totalWordCount)
+                    let minutes = ReadingTime.minutes(words: max(0, end - start), wordsPerMinute: document.wordsPerMinute)
+                    let state = rowState(at: index, currentIndex: currentIndex, chapters: chapters)
+
+                    NavigationLink(value: ReaderRoute(
+                        document: document,
+                        startingWordIndex: Self.startingWordIndex(
+                            forChapterAt: index,
+                            chapters: chapters,
+                            totalWordCount: totalWordCount,
+                            currentWordIndex: document.currentWordIndex
+                        )
+                    )) {
+                        ChapterRow(title: chapter.title, minutes: minutes, state: state)
+                    }
+                    .buttonStyle(ChapterRowButtonStyle())
+                    .accessibilityLabel(chapter.title)
+                    .accessibilityValue(ChapterRow.accessibilityStatus(state: state, minutes: minutes))
+
+                    if index < chapters.count - 1 {
+                        Divider()
+                            .padding(.leading, 16)
+                    }
                 }
-                .font(StrobeTheme.bodyFont(size: 14))
-                .foregroundStyle(StrobeTheme.textSecondary)
             }
-            Spacer()
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(StrobeTheme.accent)
+            .background(StrobeTheme.elevatedSurface)
+            .clipShape(.rect(cornerRadius: 12, style: .continuous))
         }
-        .padding(16)
-        .background(StrobeTheme.Gradients.card)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    // MARK: - Chapter row
-
-    private func chapterRow(chapter: Chapter, index: Int) -> some View {
-        let wordCount = chapterWordCount(at: index)
-        let status = chapterStatus(at: index)
-
-        return HStack {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(chapter.title)
-                    .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                    .foregroundStyle(status == .completed ? StrobeTheme.textSecondary : StrobeTheme.textPrimary)
-                    .lineLimit(2)
-
-                Text("\(wordCount) words")
-                    .font(StrobeTheme.bodyFont(size: 12))
-                    .foregroundStyle(StrobeTheme.textSecondary)
-            }
-
-            Spacer()
-
-            switch status {
-            case .completed:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(StrobeTheme.accent)
-                    .font(.system(size: 20))
-            case .inProgress:
-                Image(systemName: "circle.lefthalf.filled")
-                    .foregroundStyle(StrobeTheme.accent)
-                    .font(.system(size: 20))
-            case .notStarted:
-                Image(systemName: "circle")
-                    .foregroundStyle(StrobeTheme.surface)
-                    .font(.system(size: 20))
-            }
+    /// The chapter holding the resume position, while the document is
+    /// partway through.
+    private func currentChapterIndex(in chapters: [Chapter]) -> Int? {
+        guard document.readingStatus.isInProgress else { return nil }
+        let position = document.currentWordIndex
+        return chapters.indices.first { index in
+            let (start, end) = Self.chapterBounds(at: index, chapters: chapters, totalWordCount: document.wordCount)
+            return position >= start && position < end
         }
-        .padding(16)
-        .background(StrobeTheme.Gradients.card)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .opacity(status == .completed ? 0.6 : 1.0)
     }
 
-    // MARK: - Helpers
+    private func rowState(at index: Int, currentIndex: Int?, chapters: [Chapter]) -> ChapterRow.ReadState {
+        let (start, end) = Self.chapterBounds(at: index, chapters: chapters, totalWordCount: document.wordCount)
+        if index == currentIndex {
+            let fraction = Double(document.currentWordIndex - start) / Double(max(1, end - start))
+            return .current(fraction: fraction)
+        }
+        switch Self.chapterStatus(
+            at: index,
+            chapters: chapters,
+            totalWordCount: document.wordCount,
+            furthestWordIndex: document.displayedFurthestWordIndex
+        ) {
+        case .completed: return .completed
+        case .inProgress: return .partial
+        case .notStarted: return .unread
+        }
+    }
 
     // nonisolated so the synthesized Equatable can be used off the main
     // actor (tests compare statuses inside nonisolated #expect closures).
     nonisolated enum ChapterStatus {
         case notStarted, inProgress, completed
-    }
-
-    private func chapterBounds(at index: Int) -> (start: Int, end: Int) {
-        Self.chapterBounds(at: index, chapters: document.chapters, totalWordCount: document.wordCount)
-    }
-
-    private func startingWordIndex(forChapterAt index: Int) -> Int {
-        Self.startingWordIndex(
-            forChapterAt: index,
-            chapters: document.chapters,
-            totalWordCount: document.wordCount,
-            currentWordIndex: document.currentWordIndex
-        )
-    }
-
-    private func chapterWordCount(at index: Int) -> Int {
-        let (start, end) = chapterBounds(at: index)
-        return max(0, end - start)
-    }
-
-    private func chapterStatus(at index: Int) -> ChapterStatus {
-        Self.chapterStatus(
-            at: index,
-            chapters: document.chapters,
-            totalWordCount: document.wordCount,
-            furthestWordIndex: document.displayedFurthestWordIndex
-        )
     }
 
     // MARK: - Pure helpers (testable)
@@ -253,5 +264,110 @@ struct ChapterListView: View {
             return .inProgress
         }
         return .notStarted
+    }
+}
+
+/// One chapter on the book page: its title, its length at the document's
+/// speed, and where the reader stands in it.
+private struct ChapterRow: View {
+    enum ReadState: Equatable {
+        /// The chapter holding the resume position, `fraction` of the way in.
+        case current(fraction: Double)
+        case completed
+        case partial
+        case unread
+    }
+
+    let title: String
+    let minutes: Int
+    let state: ReadState
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.body)
+                .foregroundStyle(state == .completed ? .secondary : .primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            Spacer(minLength: 8)
+
+            trailing
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(minHeight: 48)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        switch state {
+        case .current(let fraction):
+            HStack(spacing: 6) {
+                Text("Reading")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(StrobeTheme.accent)
+                ChapterProgressRing(fraction: fraction)
+            }
+        case .completed:
+            HStack(spacing: 6) {
+                durationText
+                Image(systemName: "checkmark")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        case .partial:
+            HStack(spacing: 6) {
+                durationText
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        case .unread:
+            durationText
+        }
+    }
+
+    private var durationText: some View {
+        Text(ReadingTime.label(minutes: minutes))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+    }
+
+    static func accessibilityStatus(state: ReadState, minutes: Int) -> String {
+        let duration = ReadingTime.spokenLabel(minutes: minutes)
+        return switch state {
+        case .current: "Reading, \(duration)"
+        case .completed: "Finished, \(duration)"
+        case .partial: "Started, \(duration)"
+        case .unread: duration
+        }
+    }
+}
+
+/// How far the reader is into the current chapter.
+private struct ChapterProgressRing: View {
+    let fraction: Double
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(StrobeTheme.accent.opacity(0.25), lineWidth: 2)
+            Circle()
+                .trim(from: 0, to: min(max(fraction, 0.04), 1))
+                .stroke(StrobeTheme.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 13, height: 13)
+    }
+}
+
+/// Highlights a chapter row while it's pressed.
+private struct ChapterRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.white.opacity(0.08) : Color.clear)
     }
 }

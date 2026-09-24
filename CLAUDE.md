@@ -28,7 +28,7 @@ PDF/EPUB/Text → DocumentImportPipeline → Extractor → TextCleaner → Token
 
 ### Key Layers
 
-**Import Pipeline** (`Import/`): `DocumentImportPipeline` detects file type via UTType, routes to `EPUBTextExtractor`, `PDFTextExtractor`, or a plain-text reader, then cleans and tokenizes. EPUB extraction uses `ZIPExtractor` → OPF parsing → DRM check (`META-INF/encryption.xml` vs. spine) → HTML stripping. Long phases check `Task.checkCancellation()` so the import overlay's Cancel works. Returns `ImportResult` with words, chapters, source type, and title.
+**Import Pipeline** (`Import/`): `DocumentImportPipeline` detects file type via UTType, routes to `EPUBTextExtractor`, `PDFTextExtractor`, or a plain-text reader, then cleans and tokenizes. EPUB extraction uses `ZIPExtractor` → OPF parsing → DRM check (`META-INF/encryption.xml` vs. spine) → HTML stripping. Long phases check `Task.checkCancellation()` so the importing tile's Cancel works. Returns `ImportResult` with words, chapters, source type, and title.
 
 **Tokenizer** (`Engine/Tokenizer.swift`): Whitespace-based splitting with special handling for:
 - Soft hyphen removal, non-breaking hyphen normalization
@@ -52,6 +52,8 @@ Pausing or seeking ends either phase.
 - **Context words:** the previous and next words sit inline on either side of the word, at its size, with no anchor letter: in the tone's faded color while paused, and at its `dimTextOpacity` (near 1.3:1, barely visible) while playing. They are overlays inside `WordView`, so the word never moves. A right-to-left document puts the previous word on the right.
 - **`EnclosingMarksView`:** a `fixationSurround` subview of `ReaderStageLayout` showing the opening marks of any quotation or parenthetical the word is inside, above it. It sizes itself to the room between the bars, shrinking or hiding rather than moving the word. `Engine/EnclosingMarks.swift` computes the spans once per document, off the main thread.
 
+**Library and app chrome** (`Views/`): `ContentView` is the navigation root and the library: a grid of generated covers (`DocumentCover`: the title in Fraunces on a `CoverTone` picked by hashing the document's UUID, so it survives relaunches) under `ContinueReadingCard`, the most recently read unfinished document (hidden while searching and in a one-document library). `ChapterListView` is the book page for documents with chapters: cover, Start Reading / Resume / Read Again, progress, and chapter rows with their length at the document's speed. Settings is a grouped `Form` sheet on iOS (Timing and While Reading are pushed pages) and a tabbed `Settings` scene on macOS, both built from the sections in `Views/Settings/`. First launch shows `WelcomeView` (`hasSeenTutorial`), whose header plays a sentence through `WordView`. Reading status, time left, and file kind come from `Models/Document+Library.swift`.
+
 **Persistence**: SwiftData `Document` model stores words externally as newline-delimited UTF-8 blob (`WordStorage`) and per-word complexity scores as raw Float binary (`ComplexityStorage`). In-memory caches (`cachedWords`, `cachedComplexity`) avoid repeated deserialization.
 
 ### Xcode Project
@@ -60,11 +62,11 @@ Uses `PBXFileSystemSynchronizedRootGroup` — Xcode auto-mirrors the on-disk fol
 ## Folder Structure
 ```
 Strobe/
-├── App/          App entry point, SwiftData container bootstrap
+├── App/          App entry point, SwiftData container bootstrap, File menu commands
 ├── Engine/       RSVPEngine (playback), Tokenizer (word splitting), WordComplexityAnalyzer, per-word classifiers (PunctuationPause, CompoundWord, Acronym, SentenceBreak, ChapterHeading), EnclosingMarks
 ├── Import/       DocumentImportPipeline, extractors, TextCleaner, ZIPExtractor
-├── Models/       SwiftData models (Document, Chapter, WordStorage, ComplexityStorage)
-├── Views/        All SwiftUI views
+├── Models/       SwiftData models (Document, Chapter, WordStorage, ComplexityStorage), library display helpers
+├── Views/        All SwiftUI views; Settings/ holds the settings sections
 ├── Theme/        StrobeTheme (colors, typography, hex parser)
 ├── Utilities/    HapticManager, ReaderFont, ReaderTextTone
 ├── Fonts/        Custom font files (Fraunces, Inter, JetBrainsMono, PT*, SpaceGrotesk)
@@ -75,14 +77,16 @@ Strobe/
 - **State management**: `@Observable` (not ObservableObject/Combine), `@Bindable`, `@AppStorage`
 - **Concurrency**: `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, `SWIFT_APPROACHABLE_CONCURRENCY = YES`
 - **Logging**: `os.Logger` with subsystem/category
-- **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30`
+- **Theme**: Dark mode only, background `0x050505`, accent "Strobe Red" `#FF3B30` (also the asset catalog's AccentColor and the root `.tint`). Red marks reading: progress, the ORP anchor, and at most one primary action per screen. Toolbar and menu controls stay neutral (`.tint(.primary)`).
+- **App chrome**: system navigation bars and toolbars, `.searchable`, `Form`, `ContentUnavailableView`, and sheet toolbars with `.cancellationAction`/`.confirmationAction`. No custom headers, round icon buttons, or floating action buttons outside the reader (`CircleIconButton` belongs to the reader's top bar).
 - **Reader colors**: the RSVP word, ORP anchor, chapter announcement, and passage text take their colors from `ReaderTextTone` (`bright`, `soft`, `sepia`, `night`), never from `StrobeTheme` or system colors. App chrome stays on `StrobeTheme`.
-- **Reader background**: reading surfaces (reader, passage view, the reader's chapter picker, settings tone swatches) paint `ReaderBackdrop()`, which follows `trueBlackBackgroundEnabled`; never a `StrobeTheme` background.
+- **Reader background**: reading surfaces (reader, passage view, the reader's chapter picker, the settings preview and tone swatches, the welcome demo) paint `ReaderBackdrop()`, which follows `trueBlackBackgroundEnabled`; never a `StrobeTheme` background.
 - **Reader layout**: `ReaderStageLayout` pins the bars and centers the word on a fixation line at a fixed fraction of the full screen height, so the word never moves when chrome fades or options toggle. Additions around the word go in overlays or their own stage role (`fixationSurround` for content centered on the word), never in a stack with the word. iPhone runs in portrait only; iPad windows and macOS windows can be any size.
-- **Typography**: Fraunces (`titleFont`) for headings and for large display numerals in Settings cards (WPM, text size — `titleFont(size: 32)` in `textPrimary`); body text and captions use `bodyFont`. Keep sibling numerals styled identically.
+- **Typography**: interface text outside the reader uses system text styles (SF Pro with Dynamic Type), with `StrobeTheme.metadataFont` for small secondary text such as status and word counts. Fraunces SemiBold (`StrobeTheme.displayFont`) is for book titles, generated covers, and the welcome headline. The reader's own chrome keeps `titleFont` and `bodyFont` (Space Grotesk); don't restyle it.
 - **Error types**: `DocumentImportError` enum (`unsupportedFileType`, `epubExtractionFailed`, `epubDRMProtected`, `pdfLoadFailed`, `pdfPasswordProtected`, `noReadableText`)
 - **Settings keys**: `defaultWPM`, `fontSize`, `smartTimingEnabled`, `sentencePauseEnabled`, `smartTimingPercentPerLetter`, `smartTimingMinimumWordLength`, `sentencePauseMultiplier`, `complexityTimingEnabled`, `complexityIntensity`, `clausePauseMultiplier`, `dashPauseMultiplier`, `ellipsisPauseMultiplier`, `bracketPauseMultiplier`, `holdToReadEnabled`, `holdSpeedAdjustEnabled`, `trueBlackBackgroundEnabled`, `readingHeaderTitleEnabled`, `readingHeaderChapterEnabled`, `sentenceBreakEnabled`, `sentenceBreakLength`, `contextWordsEnabled`, `enclosingMarksEnabled` — all registered in `ReaderSettings.Keys`/`Defaults` (plus app flags `hasSeenTutorial`, `didCompactLegacyWordStorage`; timing settings also go in `TimingSnapshot`). `readerFontSelection`, `readerTextTone`, and `textCleaningLevel` are the `storageKey` of `ReaderFont`, `ReaderTextTone`, and `TextCleaningLevel`. Never use raw key strings
-- **Navigation**: value-based (`NavigationLink(value:)` + `navigationDestination` in `ContentView`, `ReaderRoute` for chapter entries) — eager `destination:` links would decode word blobs for every visible row. `ReaderView` loads word blobs asynchronously in `.task`, never in `init`.
+- **Navigation**: value-based (`NavigationLink(value:)` + `navigationDestination` in `ContentView`, `ReaderRoute` for chapter rows, the book page's main button, and Continue Reading) — eager `destination:` links would decode word blobs for every visible row. `ReaderView` loads word blobs asynchronously in `.task`, never in `init`.
 - **Platform conditionals**: `#if os(iOS)` / `#if os(macOS)` for UIKit/AppKit imports, haptics, presentation modifiers, and hint text. Engine, import pipeline, and models are fully cross-platform.
-- **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader) — via `.onKeyPress`, also works on iPad with hardware keyboard
+- **macOS window**: the default title bar with a unified toolbar (title, sort and add menus, search). `LibraryCommands` puts New Text… and Import File… in the File menu through `FocusedValues.libraryActions`. The reader hides the window's back button and title but keeps an empty, transparent toolbar so the traffic lights stay.
+- **macOS keyboard shortcuts**: Space (play/pause), Left/Right arrows (scrub), Escape (dismiss reader or book page) — via `.onKeyPress`, also works on iPad with hardware keyboard. ⌘N (New Text…) and ⌘O (Import File…) are menu commands.
 - **macOS haptics**: `HapticManager` is no-op on macOS (all methods are empty stubs)

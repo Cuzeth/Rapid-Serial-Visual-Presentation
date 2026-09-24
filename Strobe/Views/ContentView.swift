@@ -2,12 +2,15 @@ import SwiftUI
 import SwiftData
 internal import UniformTypeIdentifiers
 
-/// The main library view displaying imported documents in a grid.
+/// The library: generated covers under the document the reader was last
+/// in, with import, sort, and search in the toolbar.
 ///
-/// Handles document import (PDF/EPUB via the system file picker), plain text
-/// entry, legacy word storage migration, and navigation to the reader or chapter list.
+/// Also the navigation root. It registers the reader and chapter list
+/// destinations and owns importing (the file picker, drag and drop, and the
+/// File menu commands), plain-text entry, and legacy word storage migration.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
     @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
@@ -23,7 +26,7 @@ struct ContentView: View {
     @State private var importError: String?
     @State private var persistenceError: String?
     @State private var showSettings = false
-    @State private var showTutorial = false
+    @State private var showWelcome = false
     @State private var showTextInput = false
     @State private var documentPendingDeletion: Document?
     @State private var documentPendingRename: Document?
@@ -31,16 +34,21 @@ struct ContentView: View {
     @State private var searchText = ""
     @State private var isDropTargeted = false
 
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    // Grid layout definition — wider cards on iPad regular width
     private var columns: [GridItem] {
-        let minWidth: CGFloat = horizontalSizeClass == .regular ? 200 : 160
-        return [GridItem(.adaptive(minimum: minWidth), spacing: 16)]
+        #if os(macOS)
+        [GridItem(.adaptive(minimum: 130, maximum: 170), spacing: 20, alignment: .top)]
+        #else
+        let minimum: CGFloat = horizontalSizeClass == .regular ? 150 : 120
+        return [GridItem(.adaptive(minimum: minimum, maximum: 200), spacing: 18, alignment: .top)]
+        #endif
     }
 
     private var sortOrder: LibrarySortOrder {
         LibrarySortOrder(rawValue: librarySortOrderRaw) ?? LibrarySortOrder.defaultValue
+    }
+
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Documents re-sorted by the user's chosen order and filtered by the
@@ -55,381 +63,276 @@ struct ContentView: View {
         case .title:
             result.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = trimmedSearchText
         guard !query.isEmpty else { return result }
         return result.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
+    /// The most recently read document that's started but not finished.
+    /// Hidden while searching, and in a one-document library, where it would
+    /// repeat the only cover.
+    private var continueReadingDocument: Document? {
+        guard trimmedSearchText.isEmpty, documents.count > 1 else { return nil }
+        return documents
+            .filter { $0.lastReadDate != nil && $0.readingStatus.isInProgress }
+            .max { ($0.lastReadDate ?? .distantPast) < ($1.lastReadDate ?? .distantPast) }
+    }
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Background
-                StrobeTheme.Gradients.mainBackground
-                    .ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    customHeader
-
-                    if documents.isEmpty {
-                        Spacer()
-                        emptyState
-                        Spacer()
-                    } else {
-                        searchBar
-                        if displayedDocuments.isEmpty {
-                            Spacer()
-                            noSearchResults
-                            Spacer()
-                        } else {
-                            documentGrid
-                        }
-                    }
-                }
-
-                // Floating Action Button
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        importButton
-                            .padding(.trailing, 24)
-                            .padding(.bottom, 24)
-                    }
-                }
-
-                if isDropTargeted {
-                    RoundedRectangle(cornerRadius: 24)
-                        .stroke(StrobeTheme.accent, lineWidth: 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(StrobeTheme.accent.opacity(0.06))
-                        )
-                        .padding(8)
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
-            #if os(iOS)
-            .toolbar(.hidden, for: .navigationBar)
-            #endif
-            #if os(iOS)
-            // On macOS, settings open in the standard Settings window (Cmd+,)
-            // via SettingsLink instead of a sheet.
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-                    // On iPad (regular width) the medium detent is too small;
-                    // offer large only so settings fills the sheet properly.
-                    .presentationDetents(horizontalSizeClass == .regular ? [.large] : [.medium, .large])
-                    .presentationCornerRadius(24)
-            }
-            #endif
-            .tutorialCover(isPresented: $showTutorial)
-            .sheet(isPresented: $showTextInput) {
-                TextInputView()
-                    #if os(iOS)
-                    .presentationDetents([.large])
-                    .presentationCornerRadius(24)
-                    #elseif os(macOS)
-                    // Without a minimum frame the sheet sizes to the
-                    // TextEditor's tiny ideal size — every other macOS sheet
-                    // in the app sets one.
-                    .frame(minWidth: 600, minHeight: 500)
-                    #endif
-            }
-            .onAppear {
-                compactLegacyWordStorageIfNeeded()
-                if !hasSeenTutorial {
-                    showTutorial = true
-                }
-            }
-            .fileImporter(
-                isPresented: $isImporting,
-                allowedContentTypes: DocumentImportPipeline.supportedContentTypes,
-                allowsMultipleSelection: false
-            ) { result in
-                handleImport(result)
-            }
-            .overlay {
-                if isProcessingImport {
-                    importOverlay
-                }
-            }
-            .alert("Couldn't Import File", isPresented: .init(isPresent: $importError)) {
-                Button("OK") { importError = nil }
-            } message: {
-                Text(importError ?? "")
-            }
-            .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
-                Button("OK") { persistenceError = nil }
-            } message: {
-                Text(persistenceError ?? "")
-            }
-            .alert(
-                "Rename Document",
-                isPresented: .init(isPresent: $documentPendingRename),
-                presenting: documentPendingRename
-            ) { doc in
-                TextField("Title", text: $renameText)
-                Button("Save") {
-                    let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty {
-                        doc.title = trimmed
-                        saveOrReport("Could not rename the document")
-                    }
-                    documentPendingRename = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    documentPendingRename = nil
-                }
-            }
-            .alert(
-                "Delete this document?",
-                isPresented: .init(isPresent: $documentPendingDeletion),
-                presenting: documentPendingDeletion
-            ) { doc in
-                Button("Delete", role: .destructive) {
-                    modelContext.delete(doc)
-                    // Surfaced because a silently failed save rolls the delete
-                    // back — the document would reappear on next launch with
-                    // no explanation.
-                    saveOrReport("Could not delete the document")
-                    documentPendingDeletion = nil
-                }
-                Button("Cancel", role: .cancel) {
-                    documentPendingDeletion = nil
-                }
-            } message: { doc in
-                Text("\"\(doc.title)\" will be permanently removed from your library.")
-            }
-            .navigationDestination(for: Document.self) { document in
-                if document.chapters.isEmpty {
-                    ReaderView(document: document)
-                } else {
-                    ChapterListView(document: document)
-                }
-            }
-            .navigationDestination(for: ReaderRoute.self) { route in
-                ReaderView(document: route.document, startingWordIndex: route.startingWordIndex)
-            }
-            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-                guard let provider = providers.first else { return false }
-                handleDrop(provider)
-                return true
-            }
-        }
-        .preferredColorScheme(.dark) // Force dark mode for the theme
-    }
-
-    // MARK: - Custom Header
-
-    private var customHeader: some View {
-        HStack(spacing: 12) {
-            Text("Strobe")
-                .font(StrobeTheme.titleFont(size: 32))
-                .foregroundStyle(StrobeTheme.textPrimary)
-
-            Spacer()
-
-            if !documents.isEmpty {
-                Menu {
-                    Picker("Sort By", selection: $librarySortOrderRaw) {
-                        ForEach(LibrarySortOrder.allCases) { order in
-                            Text(order.displayName).tag(order.rawValue)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .padding(11)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Sort library")
-                .accessibilityValue(sortOrder.displayName)
-            }
-
-            #if os(macOS)
-            SettingsLink {
-                settingsButtonLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
-            #else
-            Button {
-                showSettings = true
-            } label: {
-                settingsButtonLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Settings")
-            #endif
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .padding(.bottom, 16)
-        .background(
-            StrobeTheme.background
-                .ignoresSafeArea()
-        )
-    }
-
-    private var settingsButtonLabel: some View {
-        Image(systemName: "gearshape.fill")
-            .font(.system(size: 20))
-            .foregroundStyle(StrobeTheme.textSecondary)
-            .padding(10)
-            .background(Color.white.opacity(0.05))
-            .clipShape(Circle())
-    }
-
-    // MARK: - Search
-
-    private var searchBar: some View {
-        StrobeSearchBar(
-            placeholder: "Search library",
-            text: $searchText,
-            font: StrobeTheme.bodyFont(size: 15)
-        ) { field in
-            field
-                .tint(StrobeTheme.accent)
+            libraryContent
+                .navigationTitle("Library")
                 #if os(iOS)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled(true)
+                .navigationBarTitleDisplayMode(.large)
                 #endif
+                .toolbar { libraryToolbar }
+                .modifier(LibrarySearch(isEnabled: !documents.isEmpty, text: $searchText))
+                // Value-based so a destination isn't built until the user
+                // navigates — an eager `destination:` link would construct a
+                // ReaderView (and decode word blobs) for every visible cover.
+                .navigationDestination(for: Document.self) { document in
+                    if document.chapters.isEmpty {
+                        ReaderView(document: document)
+                    } else {
+                        ChapterListView(document: document)
+                    }
+                }
+                .navigationDestination(for: ReaderRoute.self) { route in
+                    ReaderView(document: route.document, startingWordIndex: route.startingWordIndex)
+                }
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 4)
-        .frame(maxWidth: horizontalSizeClass == .regular ? 1024 : .infinity)
-        .frame(maxWidth: .infinity)
-    }
-
-    private var noSearchResults: some View {
-        VStack(spacing: 8) {
-            Text("No Results")
-                .font(StrobeTheme.titleFont(size: 24))
-                .foregroundStyle(StrobeTheme.textPrimary)
-
-            Text("No documents match \"\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))\"")
-                .font(StrobeTheme.bodyFont(size: 16))
-                .foregroundStyle(StrobeTheme.textSecondary)
-                .multilineTextAlignment(.center)
+        .focusedSceneValue(\.libraryActions, LibraryActions(
+            importFile: { isImporting = true },
+            newText: { showTextInput = true },
+            canImportFile: !isProcessingImport
+        ))
+        #if os(iOS)
+        // On macOS, settings open in the standard Settings window (Cmd+,).
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
-        .padding(.horizontal, 24)
-    }
-
-    private var emptyStateSubtitle: Text {
-        #if os(macOS)
-        Text("Click the + button to import\na PDF or EPUB, or enter text directly")
-        #else
-        Text("Tap the + button to import\na PDF or EPUB, or enter text directly")
         #endif
-    }
-
-    // MARK: - Empty state
-
-    private var emptyState: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(StrobeTheme.accent.opacity(0.1))
-                    .frame(width: 120, height: 120)
-                
-                Image(systemName: "doc.text.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(StrobeTheme.accent)
+        .welcomeSheet(isPresented: $showWelcome)
+        .sheet(isPresented: $showTextInput) {
+            TextInputView()
+        }
+        .fileImporter(
+            isPresented: $isImporting,
+            allowedContentTypes: DocumentImportPipeline.supportedContentTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            handleImport(result)
+        }
+        .alert("Couldn't Import File", isPresented: .init(isPresent: $importError)) {
+            Button("OK") { importError = nil }
+        } message: {
+            Text(importError ?? "")
+        }
+        .alert("Save Error", isPresented: .init(isPresent: $persistenceError)) {
+            Button("OK") { persistenceError = nil }
+        } message: {
+            Text(persistenceError ?? "")
+        }
+        .alert(
+            "Rename Document",
+            isPresented: .init(isPresent: $documentPendingRename),
+            presenting: documentPendingRename
+        ) { doc in
+            TextField("Title", text: $renameText)
+            Button("Save") {
+                let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    doc.title = trimmed
+                    saveOrReport("Could not rename the document")
+                }
+                documentPendingRename = nil
             }
-            
-            VStack(spacing: 8) {
-                Text("Library Empty")
-                    .font(StrobeTheme.titleFont(size: 24))
-                    .foregroundStyle(StrobeTheme.textPrimary)
-                
-                emptyStateSubtitle
-                    .font(StrobeTheme.bodyFont(size: 16))
-                    .foregroundStyle(StrobeTheme.textSecondary)
-                    .multilineTextAlignment(.center)
+            Button("Cancel", role: .cancel) {
+                documentPendingRename = nil
+            }
+        }
+        .alert(
+            "Delete this document?",
+            isPresented: .init(isPresent: $documentPendingDeletion),
+            presenting: documentPendingDeletion
+        ) { doc in
+            Button("Delete", role: .destructive) {
+                modelContext.delete(doc)
+                // Surfaced because a silently failed save rolls the delete
+                // back — the document would reappear on next launch with
+                // no explanation.
+                saveOrReport("Could not delete the document")
+                documentPendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {
+                documentPendingDeletion = nil
+            }
+        } message: { doc in
+            Text("\u{201C}\(doc.title)\u{201D} will be permanently removed from your library.")
+        }
+        .onAppear {
+            compactLegacyWordStorageIfNeeded()
+            if !hasSeenTutorial {
+                showWelcome = true
             }
         }
     }
 
-    // MARK: - Document Grid
+    // MARK: - Library content
 
-    private var documentGrid: some View {
+    private var libraryContent: some View {
+        Group {
+            if documents.isEmpty && !isProcessingImport {
+                emptyLibrary
+            } else if displayedDocuments.isEmpty && !isProcessingImport {
+                ContentUnavailableView.search(text: trimmedSearchText)
+            } else {
+                libraryGrid
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { StrobeTheme.background.ignoresSafeArea() }
+        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            guard let provider = providers.first else { return false }
+            handleDrop(provider)
+            return true
+        }
+        .overlay {
+            if isDropTargeted {
+                dropHighlight
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
+    }
+
+    private var libraryGrid: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(displayedDocuments) { document in
-                    ZStack(alignment: .topTrailing) {
-                        // Value-based so the destination isn't built until the
-                        // user navigates — an eager `destination:` link would
-                        // construct a ReaderView (and decode word blobs) for
-                        // every visible card.
-                        NavigationLink(value: document) {
-                            DocumentCard(document: document)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            documentMenuItems(for: document)
-                        }
+            VStack(alignment: .leading, spacing: 28) {
+                if let document = continueReadingDocument {
+                    ContinueReadingCard(document: document)
+                }
 
-                        // A sibling of the NavigationLink, not nested in its
-                        // label — interactive controls inside link labels are
-                        // unreliable outside Lists (the link's tap can win).
-                        Menu {
-                            documentMenuItems(for: document)
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(StrobeTheme.textSecondary)
-                                .frame(width: 30, height: 30)
-                                .background(Color.white.opacity(0.05))
-                                .clipShape(Circle())
-                                // Keep the visible circle small but give the
-                                // tap target the 44pt minimum.
-                                .contentShape(Rectangle().inset(by: -7))
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 28) {
+                    if isProcessingImport {
+                        ImportingTile(fileName: importFileName) {
+                            importTask?.cancel()
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Document options")
-                        .padding(12)
+                    }
+                    ForEach(displayedDocuments) { document in
+                        DocumentTile(
+                            document: document,
+                            onRename: { beginRename(document) },
+                            onDelete: { documentPendingDeletion = document }
+                        )
                     }
                 }
             }
-            .padding(24)
-            // Add extra padding at bottom for FAB
-            .padding(.bottom, 80)
-            .frame(maxWidth: horizontalSizeClass == .regular ? 1024 : .infinity)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
+            .frame(maxWidth: 1200)
             .frame(maxWidth: .infinity)
         }
     }
 
-    private var importButton: some View {
+    private var emptyLibrary: some View {
+        ContentUnavailableView {
+            Label("Your Library Is Empty", systemImage: "books.vertical")
+        } description: {
+            Text(emptyLibraryMessage)
+        } actions: {
+            Button("Import File") {
+                isImporting = true
+            }
+            .buttonStyle(.borderedProminent)
+            Button("New Text") {
+                showTextInput = true
+            }
+        }
+    }
+
+    private var emptyLibraryMessage: String {
+        #if os(macOS)
+        "Import an EPUB, PDF, or text file, or paste text to start reading. You can also drop a file here."
+        #else
+        "Import an EPUB, PDF, or text file, or paste text to start reading."
+        #endif
+    }
+
+    private var dropHighlight: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(StrobeTheme.accent, style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+            .background(StrobeTheme.accent.opacity(0.06), in: .rect(cornerRadius: 20, style: .continuous))
+            .overlay {
+                Label("Drop to Import", systemImage: "arrow.down.doc")
+                    .font(.headline)
+                    .foregroundStyle(StrobeTheme.accent)
+            }
+            .padding(12)
+            .allowsHitTesting(false)
+            .transition(.opacity)
+    }
+
+    // MARK: - Toolbar
+
+    // Toolbar controls stay neutral; the accent is kept for reading.
+    @ToolbarContentBuilder
+    private var libraryToolbar: some ToolbarContent {
+        #if os(iOS)
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                showSettings = true
+            } label: {
+                Label("Settings", systemImage: "gearshape")
+            }
+            .tint(.primary)
+        }
+        #endif
+        ToolbarItemGroup(placement: .primaryAction) {
+            if !documents.isEmpty {
+                sortMenu
+                    .tint(.primary)
+            }
+            addMenu
+                .tint(.primary)
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: $librarySortOrderRaw) {
+                ForEach(LibrarySortOrder.allCases) { order in
+                    Text(order.displayName).tag(order.rawValue)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .menuIndicator(.hidden)
+        .accessibilityValue(sortOrder.displayName)
+    }
+
+    private var addMenu: some View {
         Menu {
             Button {
                 isImporting = true
             } label: {
-                Label("Import File", systemImage: "doc.fill")
+                Label("Import File…", systemImage: "doc.badge.plus")
             }
+            .disabled(isProcessingImport)
             Button {
                 showTextInput = true
             } label: {
-                Label("Enter Text", systemImage: "text.cursor")
+                Label("New Text…", systemImage: "text.cursor")
             }
         } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 64, height: 64)
-                .background(StrobeTheme.accent)
-                .clipShape(Circle())
-                .shadow(color: StrobeTheme.accent.opacity(0.4), radius: 10, x: 0, y: 5)
+            Label("Add", systemImage: "plus")
         }
-        .buttonStyle(.plain)
-        .disabled(isProcessingImport)
-        .accessibilityLabel("Add document")
-        .accessibilityHint("Import a PDF or EPUB, or enter text")
+        .menuIndicator(.hidden)
     }
+
+    // MARK: - Document actions
 
     private func beginRename(_ document: Document) {
         renameText = document.title
@@ -446,23 +349,28 @@ struct ContentView: View {
             persistenceError = "\(what): \(error.localizedDescription)"
         }
     }
+}
 
-    /// Shared menu content for a document, used by both the card's visible
-    /// options menu and the long-press context menu so they can't diverge.
-    @ViewBuilder
-    private func documentMenuItems(for document: Document) -> some View {
-        Button {
-            beginRename(document)
-        } label: {
-            Label("Rename", systemImage: "pencil")
-        }
-        Button(role: .destructive) {
-            documentPendingDeletion = document
-        } label: {
-            Label("Delete", systemImage: "trash")
+/// Adds library search once there's something to search.
+private struct LibrarySearch: ViewModifier {
+    let isEnabled: Bool
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.searchable(text: $text, placement: placement, prompt: "Search")
+        } else {
+            content
         }
     }
 
+    private var placement: SearchFieldPlacement {
+        #if os(iOS)
+        .navigationBarDrawer(displayMode: .always)
+        #else
+        .automatic
+        #endif
+    }
 }
 
 // MARK: - Library sort order
@@ -683,103 +591,5 @@ extension ContentView {
             }
         }
         didCompactLegacyWordStorage = true
-    }
-
-    private var importOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-
-            VStack(spacing: 16) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(.white)
-
-                Text("Importing \(importFileName)...")
-                    .font(StrobeTheme.bodyFont(size: 16))
-                    .foregroundStyle(.white)
-
-                Button {
-                    importTask?.cancel()
-                } label: {
-                    Text("Cancel")
-                        .font(StrobeTheme.bodyFont(size: 15, bold: true))
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Stops the import")
-            }
-            .padding(32)
-            .background(StrobeTheme.surface)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-    }
-}
-
-// MARK: - Document Card Component
-
-/// A grid card displaying a document's title, progress percentage, and word
-/// count. The visible options menu is overlaid by the grid (outside the
-/// NavigationLink label); the card leaves its top-trailing corner clear for it.
-struct DocumentCard: View {
-    let document: Document
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Icon / Cover placeholder
-            ZStack {
-                Circle()
-                    .fill(StrobeTheme.accent.opacity(0.1))
-                    .frame(width: 48, height: 48)
-
-                Image(systemName: "text.book.closed.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(StrobeTheme.accent)
-            }
-            .accessibilityHidden(true)
-
-            Spacer()
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text(document.title)
-                    .font(StrobeTheme.titleFont(size: 18))
-                    .foregroundStyle(StrobeTheme.textPrimary)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.9)
-                    .multilineTextAlignment(.leading)
-
-                HStack {
-                    Text("\(document.progressPercentage)%")
-                        .foregroundStyle(StrobeTheme.accent)
-                    Spacer()
-                    Text("\(document.wordCount) words")
-                        .foregroundStyle(StrobeTheme.textSecondary)
-                }
-                .font(StrobeTheme.bodyFont(size: 12))
-            }
-            // Read the card as one element ("Title, 45%, 12,000 words")
-            // instead of three fragments.
-            .accessibilityElement(children: .combine)
-        }
-        .padding(16)
-        // Minimum (not fixed) height: the card's fonts scale with Dynamic
-        // Type, and a fixed 180pt truncated titles at accessibility sizes.
-        .frame(minHeight: 180)
-        .background(StrobeTheme.Gradients.card)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.05), lineWidth: 1)
-        )
-    }
-}
-
-extension Document {
-    var progressPercentage: Int {
-        Int(progress * 100)
     }
 }

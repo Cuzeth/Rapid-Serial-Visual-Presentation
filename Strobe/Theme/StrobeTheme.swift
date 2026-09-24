@@ -4,6 +4,9 @@ import SwiftUI
 struct StrobeTheme {
     static let background = Color(hex: "050505") // Deep, almost black
     static let surface = Color(hex: "121212") // Slightly lighter for cards/sheets
+    /// Grouped rows and cards on the library's near-black canvas; matches
+    /// the system's dark grouped-row color.
+    static let elevatedSurface = Color(hex: "1C1C1E")
     static let accent = Color(hex: "FF3B30") // Vibrant Red/Orange - "Strobe Red"
     static let textPrimary = Color(hex: "FAFAFA") // Off-white
     static let textSecondary = Color(hex: "A0A0A0") // Grey
@@ -11,12 +14,6 @@ struct StrobeTheme {
     struct Gradients {
         static let mainBackground = LinearGradient(
             colors: [Color(hex: "050505"), Color(hex: "0A0A0A")],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        
-        static let card = LinearGradient(
-            colors: [Color(hex: "1A1A1A"), Color(hex: "121212")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -42,6 +39,28 @@ struct StrobeTheme {
             return .custom(name, size: size, relativeTo: style)
         }
         return .custom(name, size: size)
+    }
+
+    /// Fraunces SemiBold for book titles and headlines outside the reader,
+    /// scaling with Dynamic Type relative to `style`.
+    static func displayFont(size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
+        .custom("Fraunces-SemiBold", size: size, relativeTo: style)
+    }
+
+    /// Fraunces SemiBold at a fixed size, for type drawn as part of an image
+    /// such as a generated cover.
+    static func displayFont(fixedSize size: CGFloat) -> Font {
+        .custom("Fraunces-SemiBold", fixedSize: size)
+    }
+
+    /// Small secondary text such as reading status and word counts. macOS's
+    /// footnote style (10pt) is too small for it.
+    static var metadataFont: Font {
+        #if os(macOS)
+        .callout
+        #else
+        .footnote
+        #endif
     }
 }
 

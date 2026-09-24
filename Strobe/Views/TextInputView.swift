@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// A sheet for typing or pasting plain text to add directly to the library.
+/// A sheet for typing or pasting plain text to add directly to the library:
+/// a title, the text, and a running word count with its reading time.
 struct TextInputView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -72,143 +73,170 @@ struct TextInputView: View {
     }
 
     var body: some View {
-        ZStack {
-            StrobeTheme.Gradients.mainBackground
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                header
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-
-                VStack(spacing: 12) {
-                    // Title field
-                    TextField("Title (optional)", text: $title)
-                        .disabled(isSaving)
-                        .font(StrobeTheme.bodyFont(size: 16))
-                        .foregroundStyle(StrobeTheme.textPrimary)
-                        .tint(StrobeTheme.accent)
-                        .padding(16)
-                        .background(StrobeTheme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.white.opacity(0.05), lineWidth: 1)
-                        )
-
-                    // Text editor
-                    ZStack(alignment: .topLeading) {
-                        if inputText.isEmpty {
-                            Text("Paste or type your text here…")
-                                .font(StrobeTheme.bodyFont(size: 16))
-                                .foregroundStyle(StrobeTheme.textSecondary)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 18)
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                        }
-
-                        TextEditor(text: $inputText)
-                            // Locked during save: the save uses a snapshot of
-                            // the text, so edits made mid-save would be
-                            // silently lost when the sheet dismisses.
-                            .disabled(isSaving)
-                            .scrollContentBackground(.hidden)
-                            .font(StrobeTheme.bodyFont(size: 16))
-                            .foregroundStyle(StrobeTheme.textPrimary)
-                            .tint(StrobeTheme.accent)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .focused($editorFocused)
-                            .accessibilityLabel("Text content")
-                            .accessibilityHint(inputText.isEmpty ? "Paste or type your text here" : "")
-                    }
-                    .frame(maxHeight: .infinity)
-                    .background(StrobeTheme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(editorFocused ? StrobeTheme.accent.opacity(0.4) : Color.white.opacity(0.05), lineWidth: 1)
-                    )
-                    .animation(.easeInOut(duration: 0.15), value: editorFocused)
-
-                    // Word count
-                    HStack {
-                        Spacer()
-                        Text(approximateWordCount == 0 ? "No text" : approximateWordCount == 1 ? "1 word" : "\(approximateWordCount) words")
-                            .font(StrobeTheme.bodyFont(size: 12))
-                            .foregroundStyle(StrobeTheme.textSecondary)
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
+        sheetContainer
+            .onAppear {
+                editorFocused = true
             }
+            .onChange(of: inputText) { _, newText in
+                scheduleWordCount(for: newText)
+            }
+            .interactiveDismissDisabled(hasUnsavedInput || isSaving)
+            .confirmationDialog(
+                "Discard this text?",
+                isPresented: $showDiscardConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Keep Editing", role: .cancel) {}
+            }
+            .alert("Save Error", isPresented: .init(isPresent: $saveError)) {
+                Button("OK") { saveError = nil }
+            } message: {
+                Text(saveError ?? "")
+            }
+    }
+
+    @ViewBuilder
+    private var sheetContainer: some View {
+        #if os(iOS)
+        NavigationStack {
+            editor
+                .navigationTitle("New Text")
+                .navigationBarTitleDisplayMode(.inline)
         }
-        .onAppear {
-            editorFocused = true
+        #else
+        editor
+            .frame(minWidth: 560, minHeight: 460)
+        #endif
+    }
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            TextField("Title", text: $title)
+                .font(StrobeTheme.displayFont(size: 26, relativeTo: .title2))
+                .textFieldStyle(.plain)
+                .disabled(isSaving)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+                #if os(iOS)
+                .submitLabel(.next)
+                #endif
+                .onSubmit {
+                    editorFocused = true
+                }
+
+            Divider()
+                .padding(.horizontal, 20)
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $inputText)
+                    // Locked during save: the save uses a snapshot of the
+                    // text, so edits made mid-save would be silently lost
+                    // when the sheet dismisses.
+                    .disabled(isSaving)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .focused($editorFocused)
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 8)
+                    .accessibilityLabel("Text")
+
+                if inputText.isEmpty {
+                    emptyEditorPrompt
+                        .padding(.horizontal, 20)
+                        .padding(.top, Self.promptTopInset)
+                }
+            }
+            .frame(maxHeight: .infinity)
         }
-        .onChange(of: inputText) { _, newText in
-            scheduleWordCount(for: newText)
+        .background { StrobeTheme.background.ignoresSafeArea() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            footer
         }
-        .interactiveDismissDisabled(hasUnsavedInput || isSaving)
-        .confirmationDialog(
-            "Discard this text?",
-            isPresented: $showDiscardConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Discard", role: .destructive) { dismiss() }
-            Button("Keep Editing", role: .cancel) {}
-        }
-        .alert("Save Error", isPresented: .init(isPresent: $saveError)) {
-            Button("OK") { saveError = nil }
-        } message: {
-            Text(saveError ?? "")
+        .toolbar {
+            toolbarContent
         }
     }
 
-    // MARK: - Header
+    /// Lines the prompt up with the editor's first line of text, which the
+    /// platform text views inset by different amounts.
+    private static var promptTopInset: CGFloat {
+        #if os(macOS)
+        8
+        #else
+        16
+        #endif
+    }
 
-    private var header: some View {
+    private var emptyEditorPrompt: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Type or paste the text you want to read.")
+                .font(.body)
+                .foregroundStyle(.tertiary)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+            PasteButton(payloadType: String.self) { strings in
+                let pasted = strings.joined(separator: "\n\n")
+                guard !pasted.isEmpty else { return }
+                inputText = pasted
+            }
+            .buttonBorderShape(.capsule)
+            .labelStyle(.titleAndIcon)
+            .disabled(isSaving)
+        }
+    }
+
+    private var footer: some View {
         HStack {
-            CircleIconButton(systemImage: "xmark", iconSize: 16, padding: 10, accessibilityLabel: "Close") {
+            Text(wordCountLabel)
+                .font(StrobeTheme.metadataFont)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    private var wordCountLabel: String {
+        switch approximateWordCount {
+        case 0:
+            return "No text yet"
+        case 1:
+            return "1 word"
+        default:
+            let minutes = ReadingTime.minutes(words: approximateWordCount, wordsPerMinute: defaultWPM)
+            return "\(approximateWordCount.formatted()) words · about \(ReadingTime.label(minutes: minutes)) at \(defaultWPM) wpm"
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") {
                 if hasUnsavedInput {
                     showDiscardConfirmation = true
                 } else {
                     dismiss()
                 }
             }
+            .tint(.primary)
             .disabled(isSaving)
-
-            Spacer()
-
-            Text("New Text")
-                .font(StrobeTheme.bodyFont(size: 18, bold: true))
-                .foregroundStyle(StrobeTheme.textPrimary)
-
-            Spacer()
-
-            Button {
-                save()
-            } label: {
-                HStack(spacing: 8) {
-                    if isSaving {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                    }
-                    Text(isSaving ? "Adding…" : "Add")
-                        .font(StrobeTheme.bodyFont(size: 16, bold: true))
-                        .foregroundStyle(canSave ? Color.white : Color.white.opacity(0.5))
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            if isSaving {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Button("Add") {
+                    save()
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background(canSave ? StrobeTheme.accent : StrobeTheme.accent.opacity(0.35))
-                .clipShape(Capsule())
+                .disabled(!canSave)
+                .keyboardShortcut(.return, modifiers: .command)
             }
-            .buttonStyle(.plain)
-            .disabled(!canSave || isSaving)
-            .animation(.easeInOut(duration: 0.15), value: canSave)
         }
     }
 

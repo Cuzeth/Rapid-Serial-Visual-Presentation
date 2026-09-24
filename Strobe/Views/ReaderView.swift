@@ -244,6 +244,14 @@ struct ReaderView: View {
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden(true)
+        #elseif os(macOS)
+        // The window toolbar's back button would sit beside the top bar's.
+        // The toolbar stays, empty and transparent, so the window keeps its
+        // traffic lights.
+        .navigationBarBackButtonHidden(true)
+        .toolbarBackground(.hidden, for: .windowToolbar)
+        .navigationTitle(document.title)
+        .modifier(HidesWindowTitle())
         #endif
         .task {
             await loadDocumentIfNeeded()
@@ -795,6 +803,19 @@ struct ReaderView: View {
         applyWPM(target, withHaptic: true)
     }
 }
+
+#if os(macOS)
+/// Leaves the reader's title bar empty on macOS 15 and later.
+private struct HidesWindowTitle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbar(removing: .title)
+        } else {
+            content
+        }
+    }
+}
+#endif
 
 // MARK: - Per-tick child views
 //

@@ -20,26 +20,26 @@ struct StrobeApp: App {
                 ContentView()
                     .modelContainer(container)
                     .preferredColorScheme(.dark)
+                    .tint(StrobeTheme.accent)
                     #if os(macOS)
-                    .frame(minWidth: 700, minHeight: 500)
+                    .frame(minWidth: 720, minHeight: 540)
                     #endif
             } else {
                 StartupFailureView(diagnostics: bootstrapResult.diagnostics)
             }
         }
         #if os(macOS)
-        .defaultSize(width: 900, height: 700)
-        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1000, height: 740)
         #endif
+        .commands {
+            LibraryCommands()
+        }
 
         #if os(macOS)
-        // Standard macOS Settings window, reachable via Cmd+, from anywhere.
-        // Min width must exceed the Replay Tutorial sheet's 600pt so the
-        // sheet never overhangs its parent window.
         Settings {
             SettingsView()
-                .frame(minWidth: 640, minHeight: 620)
                 .preferredColorScheme(.dark)
+                .tint(StrobeTheme.accent)
         }
         #endif
     }

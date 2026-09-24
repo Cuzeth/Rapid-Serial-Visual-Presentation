@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Shared search-bar chrome: magnifying-glass icon, plain text field, and a
-/// clear button inside a `StrobeTheme.surface` rounded rect.
+/// The passage view's search bar: magnifying-glass icon, plain text field,
+/// and a clear button inside a `StrobeTheme.surface` rounded rect.
 ///
 /// The bare `TextField` is handed to `configureField` so each call site can
 /// attach its own focus, submit handling, and platform input modifiers
