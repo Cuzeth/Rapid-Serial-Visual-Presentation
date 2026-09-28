@@ -6,8 +6,8 @@
 
 <p align="center">
   <b>Strobe</b> is a free, open-source speed reader for iPhone, iPad, and Mac.
-  It shows your books, papers, and articles one word at a time, each in the same spot,
-  so your eyes can stay still and your attention stays on the words.
+  Read books, papers, and articles one word at a time, with adjustable speed,
+  word timing, and a searchable full-text view.
 </p>
 
 <p align="center">
@@ -38,9 +38,9 @@
 
 ## How it works
 
-Reading a page keeps your eyes busy: hopping along every line, hunting for the start of the next one, finding your place again after every glance away. Strobe brings the words to you instead. Each one appears in the same spot, lined up on its red **Optimal Recognition Point**, so there's no line to follow and no place to lose. It's called **Rapid Serial Visual Presentation (RSVP)**, and it turns a wall of text into a steady stream.
+Strobe uses **Rapid Serial Visual Presentation (RSVP)** to display words in sequence. Each word aligns on a highlighted letter, called the **Optimal Recognition Point**, at a fixed position on the screen.
 
-Set any pace from **100 to 1,000 words per minute**. Start where you can follow comfortably and speed up as it clicks.
+Set the pace from **100 to 1,000 words per minute** and adjust it while you read.
 
 ## Built for focused reading
 
@@ -48,21 +48,21 @@ Set any pace from **100 to 1,000 words per minute**. Start where you can follow 
 
 Press and hold anywhere on the screen to read, and lift your finger to stop. Slide up or down mid-sentence to change speed on the fly, and swipe sideways while paused to step word by word. Prefer hands-free? Turn off Hold to Read and tap to play instead.
 
-### Pauses where a reader would.
+### Adjustable word timing
 
-Long words, acronyms, and hyphenated compounds get a little extra time. Sentence ends, commas, dashes, ellipses, and closing quotes each get their own pause, and you choose how long. Complexity timing lingers on rare words and names and breezes through the common ones, and an optional blank beat after each sentence gives you room to breathe.
+Add time for long words and choose pause lengths for sentence ends, commas, dashes, ellipses, and closing quotes. Acronyms and hyphenated compounds receive extra time automatically. Complexity Timing adjusts for common words, rare words, and names. You can also add a blank interval between sentences.
 
-### Never lose the thread.
+### Context and chapter titles
 
-Keep the previous and next words beside the one you're reading, and see an open quote or parenthesis hover above until it closes. Each new chapter shows its title as you reach it, so you always know where you are.
+Keep the previous and next words beside the one you're reading, and see an open quote or parenthesis hover above until it closes. Each new chapter shows its title as you reach it.
 
 ### The whole page, one tap away.
 
 Open the full text with your place highlighted. Search for any word or phrase, jump between matches, and tap any word to pick up reading from there.
 
-### Your words, your way.
+### Fonts and text colors
 
-Seven typefaces, from Fraunces to JetBrains Mono, at any size. Four text colors (Bright, Soft, Sepia, and Night) tone down the word and its red letter, and a true black background is made for reading in the dark. Every document remembers its own speed.
+Choose from seven typefaces, including Fraunces and JetBrains Mono, with adjustable text size. Four text colors (Bright, Soft, Sepia, and Night) tone down the word and its red letter, and a true black background is made for reading in the dark. Every document remembers its own speed.
 
 ### Made for the keyboard.
 
@@ -84,11 +84,11 @@ DRM-protected EPUBs and password-protected PDFs can't be imported.
 
 ## Private by design
 
-**Your reading is nobody else's business.** No account, no ads, no analytics, no cloud. Strobe reads your files on your device and never sends them anywhere, and its App Store privacy label says so: **Data Not Collected**.
+Strobe processes documents and stores your library on your device. It requires no account and includes no ads or analytics.
 
 ## Free and open source
 
-Strobe costs nothing: no subscription, no in-app purchases, no ads. Every line of it lives in this repo under the Apache 2.0 license. If it earns a place in your reading routine, you can [support development on Buy Me a Coffee](https://buymeacoffee.com/cuzeth) or give the repo a star.
+Strobe is free, with no subscription or in-app purchases. The source is available under the Apache 2.0 license. If it earns a place in your reading routine, you can [support development on Buy Me a Coffee](https://buymeacoffee.com/cuzeth) or give the repo a star.
 
 ---
 
