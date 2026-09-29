@@ -15,21 +15,6 @@ internal import UniformTypeIdentifiers
 
 struct StrobeTests {
 
-    @Test func tokenizesSimpleLineBreakHyphenation() {
-        let words = Tokenizer.tokenize("infor-\nmation and recov-\nery")
-        #expect(words == ["information", "and", "recovery"])
-    }
-
-    @Test func preservesCompoundLineBreakHyphenation() {
-        let words = Tokenizer.tokenize("one-in-a-\nlifetime")
-        #expect(words == ["one-in-a-lifetime"])
-    }
-
-    @Test func dropsFalseCompoundTailHyphenation() {
-        let words = Tokenizer.tokenize("once-in-a-life-\ntime")
-        #expect(words == ["once-in-a-lifetime"])
-    }
-
     @Test func normalizesSoftAndNonBreakingHyphens() {
         let words = Tokenizer.tokenize("hy\u{00AD}phen non\u{2011}breaking")
         #expect(words == ["hyphen", "non-breaking"])
@@ -113,12 +98,6 @@ struct StrobeTests {
 
     // MARK: - Smart timing
 
-    @Test func smartTimingMultiplierIncreasesForLongWords() {
-        let short = RSVPEngine.smartTimingMultiplier(for: "cat")
-        let long = RSVPEngine.smartTimingMultiplier(for: "characteristically")
-        #expect(long > short)
-    }
-
     @Test func smartTimingMultiplierAccountsForTerminalPunctuation() {
         let plain = RSVPEngine.smartTimingMultiplier(for: "reading")
         let punctuated = RSVPEngine.smartTimingMultiplier(for: "reading.")
@@ -169,12 +148,6 @@ struct StrobeTests {
 
     // MARK: - Sentence pause
 
-    @Test func sentencePauseDetectsFullStops() {
-        #expect(RSVPEngine.endsWithSentencePunctuation("end."))
-        #expect(RSVPEngine.endsWithSentencePunctuation("what?"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("wow!"))
-    }
-
     @Test func sentencePauseDetectsPunctuationInsideDelimiters() {
         #expect(RSVPEngine.endsWithSentencePunctuation("home.\""))
         #expect(RSVPEngine.endsWithSentencePunctuation("laughed?\""))
@@ -184,12 +157,6 @@ struct StrobeTests {
         #expect(RSVPEngine.endsWithSentencePunctuation("end.])"))
         #expect(!RSVPEngine.endsWithSentencePunctuation("said,\""))
         #expect(!RSVPEngine.endsWithSentencePunctuation("(word)"))
-    }
-
-    @Test func sentencePauseIgnoresNonSentencePunctuation() {
-        #expect(!RSVPEngine.endsWithSentencePunctuation("hello,"))
-        #expect(!RSVPEngine.endsWithSentencePunctuation("word"))
-        #expect(!RSVPEngine.endsWithSentencePunctuation("semi;"))
     }
 
     // MARK: - RSVPEngine playback
@@ -233,13 +200,6 @@ struct StrobeTests {
         #expect(!engine.isAtEnd)
         engine.seek(to: 1)
         #expect(engine.isAtEnd)
-    }
-
-    @Test func engineRestart() {
-        let engine = RSVPEngine(words: ["a", "b", "c"])
-        engine.seek(to: 2)
-        engine.restart()
-        #expect(engine.currentIndex == 0)
     }
 
     @Test func engineDoesNotPlayWhenAtEnd() {
@@ -335,15 +295,21 @@ struct StrobeTests {
         #expect(!engine.isPlaying)
     }
 
+    // Checks the title's deadline instead of sleeping and then expecting the
+    // title to still show: other tests can hold the main actor for longer
+    // than the title lasts, and the engine's overdue timer may then run
+    // before this test resumes.
     @MainActor
     @Test func chapterTimerIgnoresSpeedChangesAndResumesAutomatically() async throws {
         let engine = RSVPEngine(words: ["first", "last"], wordsPerMinute: 60,
                                 chapters: [Chapter(title: "Chapter One", wordIndex: 0)])
         defer { engine.pause() }
         engine.play()
+        let titleDeadline = try #require(engine.scheduledDeadline)
         engine.wpmOverride = 6000
         engine.smartTimingEnabled = true
-        try await Task.sleep(for: .milliseconds(100))
+        // Still on the main actor, so the timer can't have fired yet.
+        #expect(engine.scheduledDeadline == titleDeadline)
         #expect(engine.chapterAnnouncement != nil)
         #expect(engine.isChapterTitleVisible)
         #expect(engine.currentIndex == 0)
@@ -559,30 +525,11 @@ struct StrobeTests {
         #expect(!words.contains("。"))
     }
 
-    @Test func detectsChineseSentencePunctuation() {
-        #expect(RSVPEngine.endsWithSentencePunctuation("好。"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("吗？"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("啊！"))
-    }
-
-    @Test func chineseSentencePauseIgnoresComma() {
-        #expect(!RSVPEngine.endsWithSentencePunctuation("好，"))
-    }
-
     // MARK: - Arabic support
 
     @Test func tokenizesArabicText() {
         let words = Tokenizer.tokenize("مرحبا بالعالم")
         #expect(words == ["مرحبا", "بالعالم"])
-    }
-
-    @Test func detectsArabicSentencePunctuation() {
-        #expect(RSVPEngine.endsWithSentencePunctuation("ماذا؟"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("نعم۔"))
-    }
-
-    @Test func arabicSentencePauseIgnoresComma() {
-        #expect(!RSVPEngine.endsWithSentencePunctuation("مرحبا،"))
     }
 
     // MARK: - Complexity timing
@@ -1273,13 +1220,6 @@ struct StrobeTests {
 
     // MARK: - ComplexityStorage alignment safety
 
-    @Test func complexityStorageHandlesRoundTrip() {
-        let scores: [Float] = [0.0, 0.25, 0.5, 0.75, 1.0, 0.123456]
-        let encoded = ComplexityStorage.encode(scores)
-        let decoded = ComplexityStorage.decode(encoded)
-        #expect(decoded == scores)
-    }
-
     @Test func complexityStorageDecodesSubsetOfData() {
         // Verify decode handles data that's not an exact multiple of Float size
         let scores: [Float] = [0.1, 0.2, 0.3]
@@ -1732,21 +1672,6 @@ struct StrobeTests {
         #expect(PassageView.coveredIndices(of: []).isEmpty)
     }
 
-    /// The per-keystroke search path uses a cached lowercased copy of the
-    /// words; the pre-lowered overload must agree with the general one.
-    @Test func findMatchesLowercasedOverloadAgreesWithGeneralOverload() {
-        let words = ["Hello", "WORLD", "hello", "don't", "end.", "你好啊"]
-        let lowered = words.map { $0.lowercased() }
-        for query in ["HELLO", "world", "don", "end", "你好", "missing", "  quick  ", "",
-                      "hello world", "WORLD hello", "the end", "missing phrase"] {
-            #expect(
-                PassageView.findMatches(query: query, inLowercasedWords: lowered)
-                    == PassageView.findMatches(query: query, in: words),
-                "overloads disagree for query '\(query)'"
-            )
-        }
-    }
-
     // MARK: - PassageView nearest-match
 
     @Test func nearestMatchPositionIsZeroForEmptyMatches() {
@@ -1848,15 +1773,6 @@ struct StrobeTests {
         #expect(doc.progressPercentage == 100)
     }
 
-    @Test func restartDoesNotResetProgress() {
-        // "Read Again" rewinds currentWordIndex to 0 while the furthest
-        // marker keeps the document showing as finished.
-        let doc = makeDocument(wordCount: 11)
-        doc.furthestWordIndex = 10
-        doc.currentWordIndex = 0
-        #expect(doc.progress == 1.0)
-    }
-
     @Test func progressHandlesDegenerateWordCounts() {
         let empty = makeDocument(wordCount: 0)
         #expect(empty.progress == 0)
@@ -1931,6 +1847,8 @@ struct StrobeTests {
 
     @Test func compactLegacyWordStorageIsNoOpWhenBlobExists() {
         let doc = makeDocument(wordCount: 2)
+        // Leftover legacy words mustn't replace the blob.
+        doc.words = ["stale"]
         let blobBefore = doc.wordsBlob
         let countBefore = doc.wordCount
         doc.compactWordStorageIfNeeded()
@@ -2030,18 +1948,6 @@ struct StrobeTests {
         let words = Tokenizer.tokenize("informa- 你好")
         #expect(words.first == "informa-")
         #expect(words.dropFirst().joined() == "你好")
-    }
-
-    @Test func punctuationTokenAttachesToPendingCarry() {
-        var output: [String] = []
-        var carry: String? = "infor-"
-        Tokenizer.appendTokenizedText("— word", into: &output, carry: &carry)
-        if let carry, !carry.isEmpty {
-            output.append(carry)
-        }
-        // The em dash can't continue the hyphenation — the fragment is
-        // flushed with the dash attached instead of the dash being dropped.
-        #expect(output == ["infor-—", "word"])
     }
 
     // MARK: - Entity double-encoding

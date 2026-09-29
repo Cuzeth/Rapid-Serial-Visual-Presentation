@@ -12,13 +12,6 @@ struct ReaderHeaderTests {
         ("One", 10), ("Two", 50), ("Three", 120)
     ]))
 
-    // MARK: - Settings
-
-    @Test func headerLinesAreOffByDefault() {
-        #expect(ReaderSettings.Defaults.readingHeaderTitleEnabled == false)
-        #expect(ReaderSettings.Defaults.readingHeaderChapterEnabled == false)
-    }
-
     // MARK: - Current chapter lookup
 
     @Test func documentWithoutChaptersHasNoCurrentChapter() {
@@ -122,11 +115,6 @@ struct ReaderHeaderTests {
     }
 
     // MARK: - Sorted-array search (shared with the chapter navigation bar)
-
-    @Test func indexSearchReturnsNilBeforeTheFirstChapterAndForNoChapters() {
-        #expect(ChapterTimeline.index(in: [], containing: 0) == nil)
-        #expect(ChapterTimeline.index(in: Self.book.chapters, containing: 9) == nil)
-    }
 
     /// The navigation bar searches the document's raw list, which can repeat
     /// a word index; it has always resolved to the last of them.

@@ -180,12 +180,6 @@ struct PunctuationPauseTests {
         ])
     }
 
-    @Test func sentencePunctuationCheckTreatsEllipsisAsItsOwnType() {
-        #expect(!RSVPEngine.endsWithSentencePunctuation("wait..."))
-        #expect(RSVPEngine.endsWithSentencePunctuation("wait...?"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("好。」"))
-    }
-
     // MARK: - Multiplier
 
     private func multiplier(

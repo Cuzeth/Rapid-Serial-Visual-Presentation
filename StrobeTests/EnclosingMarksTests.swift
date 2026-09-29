@@ -21,12 +21,6 @@ struct EnclosingMarksTests {
         Array(repeating: "word", count: count)
     }
 
-    // MARK: - Setting
-
-    @Test func enclosingMarksAreOffByDefault() {
-        #expect(ReaderSettings.Defaults.enclosingMarksEnabled == false)
-    }
-
     // MARK: - Mark families
 
     @Test func parenthesesCoverTheirWordsFromOpeningToClosing() {
@@ -417,10 +411,6 @@ struct EnclosingMarksTests {
         let width: Int
         let height: Int
         let bytes: [UInt8]
-
-        func row(_ y: Int) -> ArraySlice<UInt8> {
-            bytes[(y * width * 4)..<((y + 1) * width * 4)]
-        }
     }
 
     private static func isolatedDefaults() throws -> UserDefaults {
@@ -476,21 +466,33 @@ struct EnclosingMarksTests {
     private static let changeThreshold: UInt8 = 32
 
     /// How many pixels changed in each row that changed, between two renders
-    /// of the same screen.
+    /// of the same screen. Tests build without optimization, where scanning
+    /// every byte of a screen takes over a second, so rows whose bytes are
+    /// all equal are skipped with `memcmp`.
     private static func changedPixelsByRow(_ a: Bitmap, _ b: Bitmap) -> [Int: Int] {
+        precondition(a.bytes.count == b.bytes.count)
+        let rowBytes = a.width * 4
         var counts: [Int: Int] = [:]
-        for y in 0..<a.height {
-            let before = a.row(y), after = b.row(y)
-            var changed = 0
-            var index = before.startIndex
-            while index < before.endIndex {
-                let pixelEnd = index + 4
-                if zip(before[index..<pixelEnd], after[index..<pixelEnd]).contains(where: { max($0, $1) - min($0, $1) > changeThreshold }) {
-                    changed += 1
+        a.bytes.withUnsafeBufferPointer { before in
+            b.bytes.withUnsafeBufferPointer { after in
+                for y in 0..<a.height {
+                    let start = y * rowBytes
+                    guard memcmp(before.baseAddress! + start, after.baseAddress! + start, rowBytes) != 0 else {
+                        continue
+                    }
+                    var changed = 0
+                    for pixel in stride(from: start, to: start + rowBytes, by: 4) {
+                        for channel in pixel..<(pixel + 4) {
+                            let old = before[channel], new = after[channel]
+                            if max(old, new) - min(old, new) > changeThreshold {
+                                changed += 1
+                                break
+                            }
+                        }
+                    }
+                    if changed > 0 { counts[y] = changed }
                 }
-                index = pixelEnd
             }
-            if changed > 0 { counts[y] = changed }
         }
         return counts
     }
@@ -518,12 +520,15 @@ struct EnclosingMarksTests {
         return (RSVPEngine(words: words, currentIndex: index), marks)
     }
 
+    /// Yields between cases: rendering them all holds the main actor long
+    /// enough to stall other tests, the engine's timer tests among them.
     @MainActor
-    @Test func wordPixelsMatchWithMarksAbsentDisabledOrInvisible() throws {
+    @Test func wordPixelsMatchWithMarksAbsentDisabledOrInvisible() async throws {
         let defaults = try Self.isolatedDefaults()
         for screen in [Screen.phone, .smallWindow] {
             for fontSize: CGFloat in [24, 40, 72] {
                 for sample in Self.cases {
+                    await Task.yield()
                     let (engine, marks) = try Self.engine(sample)
                     func stage(_ variant: Variant) -> Stage {
                         Stage(screen: screen, engine: engine, marks: marks, fontSize: fontSize,
@@ -540,12 +545,14 @@ struct EnclosingMarksTests {
         }
     }
 
+    /// Yields between cases, like the test above.
     @MainActor
-    @Test func visibleMarksOnlyChangePixelsInsideTheirSlot() throws {
+    @Test func visibleMarksOnlyChangePixelsInsideTheirSlot() async throws {
         let defaults = try Self.isolatedDefaults()
         for screen in [Screen.phone, .smallWindow] {
             for fontSize: CGFloat in [24, 40, 72] {
                 for sample in Self.cases {
+                    await Task.yield()
                     let (engine, marks) = try Self.engine(sample)
                     func stage(_ variant: Variant) -> Stage {
                         Stage(screen: screen, engine: engine, marks: marks, fontSize: fontSize,

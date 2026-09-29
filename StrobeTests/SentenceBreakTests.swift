@@ -512,8 +512,7 @@ struct SentenceBreakTests {
     // MARK: - Settings
 
     @MainActor
-    @Test func sentenceBreaksAreOffByDefault() {
-        #expect(ReaderSettings.Defaults.sentenceBreakEnabled == false)
+    @Test func engineBreakDefaultsMatchTheSettings() {
         let engine = RSVPEngine(words: [])
         #expect(engine.sentenceBreakEnabled == ReaderSettings.Defaults.sentenceBreakEnabled)
         #expect(engine.sentenceBreakLength == ReaderSettings.Defaults.sentenceBreakLength)

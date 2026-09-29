@@ -151,8 +151,9 @@ final class RSVPEngine {
     private var timerSource: DispatchSourceTimer?
     /// The deadline the timer is currently scheduled for. Advancing anchors
     /// the next tick to this value (not `.now()`) so per-tick handler latency
-    /// doesn't accumulate into drift at high WPM.
-    private var scheduledDeadline: DispatchTime?
+    /// doesn't accumulate into drift at high WPM. Internal so tests can check
+    /// a deadline without waiting for it.
+    private(set) var scheduledDeadline: DispatchTime?
 
     private var baseInterval: TimeInterval {
         60.0 / Double(max(1, effectiveWordsPerMinute))

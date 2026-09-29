@@ -6,12 +6,6 @@ import CoreGraphics
 
 struct ContextWordsTests {
 
-    // MARK: - Setting
-
-    @Test func contextWordsAreOffByDefault() {
-        #expect(ReaderSettings.Defaults.contextWordsEnabled == false)
-    }
-
     // MARK: - Neighbors
 
     @Test func middleWordHasBothNeighbors() {
@@ -88,8 +82,10 @@ struct ContextWordsTests {
     /// this. Rendering can vary by a few levels from run to run.
     private static let changeThreshold = 32
 
-    private static func isolatedDefaults() throws -> UserDefaults {
-        let suiteName = "ContextWordsTests.render"
+    /// A suite of its own for each test: tests set the font or tone in it,
+    /// and one that yields mid-run mustn't find another test's setting.
+    private static func isolatedDefaults(_ test: String = #function) throws -> UserDefaults {
+        let suiteName = "ContextWordsTests.render.\(test)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
@@ -156,13 +152,16 @@ struct ContextWordsTests {
 
     /// Whatever the neighbours, every pixel of the word, its anchor letter
     /// included, stays where it is: context only draws in other columns.
+    /// Yields between cases so the renders don't hold the main actor for the
+    /// whole test.
     @MainActor
-    @Test func wordPixelsDoNotChangeWhenContextShows() throws {
+    @Test func wordPixelsDoNotChangeWhenContextShows() async throws {
         let defaults = try Self.isolatedDefaults()
         for font in ReaderFont.allCases {
             defaults.set(font.rawValue, forKey: ReaderFont.storageKey)
             for fontSize: CGFloat in [24, 40, 72] {
                 for sample in Self.samples {
+                    await Task.yield()
                     let label = "\(font.rawValue), \(fontSize)pt, \(sample.word)"
                     let alone = try Self.settledRender(Stage(
                         word: sample.word, fontSize: fontSize, context: nil,

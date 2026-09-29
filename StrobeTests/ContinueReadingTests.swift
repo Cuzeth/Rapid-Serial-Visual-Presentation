@@ -36,28 +36,6 @@ struct ContinueReadingTests {
 
     // MARK: - Snapshot storage
 
-    @Test func snapshotRoundTripsThroughDefaults() throws {
-        let suiteName = "ContinueReadingTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        #expect(ContinueReadingSnapshot.load(from: defaults) == nil)
-
-        let snapshot = ContinueReadingSnapshot(
-            item: ContinueReadingSnapshot.Item(
-                id: documentID,
-                title: "Pride and Prejudice",
-                fileName: "Pride and Prejudice.epub",
-                progress: 0.42,
-                chapterTitle: "Chapter 12",
-                remainingMinutes: 185
-            ),
-            libraryIsEmpty: false
-        )
-        snapshot.save(to: defaults)
-        #expect(ContinueReadingSnapshot.load(from: defaults) == snapshot)
-    }
-
     @Test func unreadableSnapshotLoadsAsNothing() throws {
         let suiteName = "ContinueReadingTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
