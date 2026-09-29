@@ -163,14 +163,15 @@ final class LibrarySync: CKSyncEngineDelegate {
         #if os(iOS)
         let backgroundTask = BackgroundTask(name: "iCloud Sync")
         #endif
-        Task {
+        // Detached, like every await into the engine; see `fetchChanges`.
+        Task.detached { [weak self] in
             do {
                 try await engine.sendChanges()
             } catch {
-                logger.info("Send on backgrounding failed: \(error.localizedDescription, privacy: .public)")
+                await self?.log("Send on backgrounding failed", error)
             }
             #if os(iOS)
-            backgroundTask.end()
+            await backgroundTask.end()
             #endif
         }
     }
@@ -251,25 +252,42 @@ final class LibrarySync: CKSyncEngineDelegate {
         activeOperations = 0
         saveLedger()
         guard isEnabled else { return }
-        Task { if engine == nil && isEnabled { startEngine() } }
+        // Detached: this runs from delegate callbacks, whose context a plain
+        // task would inherit; see `fetchChanges`.
+        Task.detached { @MainActor [weak self] in
+            guard let self, engine == nil, isEnabled else { return }
+            startEngine()
+        }
     }
 
+    /// Fetches in a detached task. This is often called from a delegate
+    /// callback (a sign-in, say), and a plain `Task` started there inherits
+    /// the callback's context. CKSyncEngine traps when that context awaits a
+    /// call, like a fetch or send, that calls back into the delegate.
     private func fetchChanges(unlessFetchedWithin interval: TimeInterval) {
         guard let engine, Date.now.timeIntervalSince(lastFetchRequest) >= interval else { return }
         lastFetchRequest = .now
-        Task {
+        Task.detached { [weak self] in
             do {
                 try await engine.fetchChanges()
-                // Only a fetch that returns without error has seen all of
-                // iCloud. (`didFetchChanges` also follows failed fetches,
-                // such as with no account signed in.)
-                if engine === self.engine {
-                    finishFirstFetchIfNeeded()
-                }
+                await self?.fetchDidSucceed(on: engine)
             } catch {
-                logger.info("Fetch failed: \(error.localizedDescription, privacy: .public)")
+                await self?.log("Fetch failed", error)
             }
         }
+    }
+
+    private func fetchDidSucceed(on engine: CKSyncEngine) {
+        // Only a fetch that returns without error has seen all of iCloud.
+        // (`didFetchChanges` also follows failed fetches, such as with no
+        // account signed in.)
+        if engine === self.engine {
+            finishFirstFetchIfNeeded()
+        }
+    }
+
+    private func log(_ message: String, _ error: any Error) {
+        logger.info("\(message, privacy: .public): \(error.localizedDescription, privacy: .public)")
     }
 
     /// Forgets the ledger if it describes a different SwiftData store: a
