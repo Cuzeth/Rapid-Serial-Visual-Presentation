@@ -1,6 +1,7 @@
 // Renders the ad frame by frame in headless Chrome and pipes raw frames to FFmpeg.
 //
-//   bun render.js                       full video → out/video.mp4, muxed with out/audio.wav
+//   bun render.js                       full video → out/video.mp4, then the files in DELIVERABLES
+//   bun render.js --format vertical     the 1080×1920 cut → out/video-vertical.mp4, and so on
 //   bun render.js --stills 1.2,9.6      PNG stills at those times → out/stills/
 //   bun render.js --from 9 --to 12      partial render (seconds)
 //   options: --pages N (parallel tabs), --sub N (motion-blur subframes)
@@ -8,7 +9,7 @@
 import puppeteer from "puppeteer-core";
 import { mkdirSync, existsSync } from "node:fs";
 import { join, dirname, extname } from "node:path";
-import { FPS, DURATION, W, H } from "./timeline.js";
+import { FPS, DURATION, FORMATS } from "./timeline.js";
 
 const HERE = import.meta.dir;
 const ROOT = dirname(HERE);
@@ -24,6 +25,28 @@ const from = Number(arg("from", 0));
 const to = Number(arg("to", DURATION));
 const pages = Number(arg("pages", 6));
 const sub = Number(arg("sub", 10));
+const format = arg("format", "wide");
+if (!FORMATS[format]) throw new Error(`unknown format ${format}; expected ${Object.keys(FORMATS).join(" or ")}`);
+const { w: W, h: H } = FORMATS[format];
+const suffix = format === "wide" ? "" : "-" + format;
+
+// BT.709 throughout, converted and tagged: FFmpeg otherwise converts with the BT.601 matrix
+// and leaves the file untagged, and players that assume BT.709 then show Strobe Red as orange.
+// Re-encodes carry the tags over from the render.
+const TO_BT709 = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv";
+const x264 = (crf) => ["-c:v", "libx264", "-preset", "slow", "-crf", String(crf), "-pix_fmt", "yuv420p"];
+
+// What each cut is delivered as, from the silent render and out/audio.wav. The wide master
+// keeps the render's picture. The web copy and the vertical cut are re-encoded small enough
+// to embed, send, or upload from a phone. Keeping the grain costs bitrate fast, so the
+// vertical cut is capped: about 60 MB, still well above what the apps stream.
+const DELIVERABLES = {
+  wide: [
+    { file: "strobe-ad.mp4", video: ["-c:v", "copy"], audio: "320k" },
+    { file: "strobe-ad-web.mp4", video: x264(22), audio: "256k" },
+  ],
+  vertical: [{ file: "strobe-ad-vertical.mp4", video: [...x264(18), "-maxrate", "12M", "-bufsize", "24M"], audio: "320k" }],
+};
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".ttf": "font/ttf", ".ttc": "font/collection" };
 
@@ -87,7 +110,7 @@ async function openPage() {
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
   page.on("console", (m) => console.log("[page]", m.text()));
   page.on("pageerror", (e) => console.error("[page error]", e.message));
-  await page.goto(`http://localhost:${server.port}/Promo/scene.html`);
+  await page.goto(`http://localhost:${server.port}/Promo/scene.html?format=${format}`);
   await page.waitForFunction("window.ready === true", { timeout: 60000 });
   return page;
 }
@@ -98,7 +121,8 @@ if (stills) {
   const page = await openPage();
   for (const t of stills) {
     const n = Math.round(t * FPS);
-    await page.evaluate((n, sub, name) => window.renderStill(n, sub, name), n, sub, t.toFixed(2).replace(".", "_"));
+    const name = (suffix ? format + "-" : "") + t.toFixed(2).replace(".", "_");
+    await page.evaluate((n, sub, name) => window.renderStill(n, sub, name), n, sub, name);
     console.log(`still ${t}s`);
   }
 } else {
@@ -106,14 +130,13 @@ if (stills) {
   const last = Math.min(Math.round(to * FPS), Math.round(DURATION * FPS));
   nextFrame = first;
   const partial = from > 0 || to < DURATION;
-  const videoPath = join(OUT, partial ? "partial.mp4" : "video.mp4");
+  const videoPath = join(OUT, (partial ? "partial" : "video") + suffix + ".mp4");
   ffmpeg = Bun.spawn(
     [
       "ffmpeg", "-y", "-loglevel", "error",
       "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${W}x${H}`, "-r", String(FPS), "-i", "-",
-      "-vf", "vflip",
-      "-c:v", "libx264", "-preset", "slow", "-crf", "14", "-tune", "film",
-      "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+      "-vf", "vflip," + TO_BT709,
+      ...x264(14), "-tune", "film", "-movflags", "+faststart",
       videoPath,
     ],
     { stdin: "pipe", stdout: "inherit", stderr: "inherit" },
@@ -139,13 +162,15 @@ if (stills) {
 
   const audio = join(OUT, "audio.wav");
   if (!partial && existsSync(audio)) {
-    const final = join(OUT, "strobe-ad.mp4");
-    const mux = Bun.spawn([
-      "ffmpeg", "-y", "-loglevel", "error", "-i", videoPath, "-i", audio,
-      "-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-shortest", "-movflags", "+faststart", final,
-    ]);
-    await mux.exited;
-    console.log("wrote", final);
+    for (const d of DELIVERABLES[format]) {
+      const final = join(OUT, d.file);
+      const mux = Bun.spawn([
+        "ffmpeg", "-y", "-loglevel", "error", "-i", videoPath, "-i", audio,
+        ...d.video, "-c:a", "aac", "-b:a", d.audio, "-shortest", "-movflags", "+faststart", final,
+      ]);
+      await mux.exited;
+      console.log("wrote", final);
+    }
   } else {
     console.log("wrote", videoPath);
   }

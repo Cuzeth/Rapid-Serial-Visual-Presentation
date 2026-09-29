@@ -1,8 +1,11 @@
 // Shared by the frame renderer (browser) and the synthesizer (Bun), so picture and
 // sound land on the same grid.
 
-export const W = 1920;
-export const H = 1080;
+/// Frame sizes. The wide cut is the master; the vertical cut is for TikTok, Reels and Shorts.
+export const FORMATS = {
+  wide: { w: 1920, h: 1080 },
+  vertical: { w: 1080, h: 1920 },
+};
 export const FPS = 30;
 
 export const BPM = 125;

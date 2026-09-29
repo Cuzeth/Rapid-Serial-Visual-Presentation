@@ -1,8 +1,44 @@
 import {
-  W, H, FPS, BEAT, BAR, S16, bar, T, SCHEDULE, TAGLINE, FIXATIONS, MOBY_OPENING,
+  FORMATS, FPS, BEAT, BAR, S16, bar, T, SCHEDULE, TAGLINE, FIXATIONS, MOBY_OPENING,
   wpmAt, slideAt, kicks, mulberry32,
 } from "./timeline.js";
 import { createPost } from "./post.js";
+
+const { w: W, h: H } = FORMATS[new URLSearchParams(location.search).get("format") ?? "wide"];
+const TALL = H > W;
+
+// Where things sit in each frame shape. The vertical cut uses a narrower, taller page and
+// keeps text and controls out of the top and bottom bands and the lower right edge, which
+// TikTok, Reels and Shorts cover with their own buttons and captions.
+const LAYOUT = TALL
+  ? {
+      page: { width: 860, near: [-460, 540, -600], far: [40, 90, -1900], target: [0, 190, 0], motes: [-700, 700, -800, 1500] },
+      headline: { x: 90, y: 1150, scrim: 950 },
+      hud: { y: 262, scale: 1.35 },
+      stream: [0.8, 1.3],
+      streaks: [0.8, 1.2],
+      guide: 1000,
+      giant: 0.62,
+      paused: 610,
+      touch: { x: 330, hold: 1200, from: 1270, to: 1100, scale: 1.25 },
+      speed: { y: 1390, scale: 1.3 },
+      squash: { rings: 1, sparks: 1, burst: 1 },
+      finale: { logo: 780, tagline: 1010, stores: 1110, url: 1178, scale: 1.3 },
+    }
+  : {
+      page: { width: 1320, near: [-460, 540, -600], far: [60, 90, -2050], target: [40, 150, 0], motes: [-1000, 1000, -800, 1000] },
+      headline: { x: 150, y: 812, scrim: 560 },
+      hud: { y: 86, scale: 1 },
+      stream: [1.3, 0.8],
+      streaks: [1.2, 0.8],
+      guide: 560,
+      giant: 1,
+      paused: 150,
+      touch: { x: 1480, hold: 720, from: 880, to: 640, scale: 1 },
+      speed: { y: 986, scale: 1 },
+      squash: { rings: 0.62, sparks: 0.75, burst: 0.8 },
+      finale: { logo: 468, tagline: 668, stores: 748, url: 802, scale: 1 },
+    };
 
 // ---------------------------------------------------------------- math
 
@@ -54,6 +90,8 @@ const hex = (n) => [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 // ---------------------------------------------------------------- canvases
 
 const out = document.getElementById("out");
+out.width = W;
+out.height = H;
 const post = createPost(out, W, H);
 const makeCanvas = (w = W, h = H) => {
   const c = document.createElement("canvas");
@@ -100,8 +138,8 @@ function redIndex(word) {
   return idx[pos];
 }
 
-/// Draws a word with its anchor letter centered on (cx, cy). Returns its extent.
-function drawAnchored(c, word, cx, cy, size, o = {}) {
+/// A word split around its anchor letter, with fonts and widths.
+function anchorParts(word, size, o = {}) {
   const family = o.family ?? "Fraunces";
   const weight = o.weight ?? 400;
   const aw = o.anchorWeight ?? 700;
@@ -112,9 +150,18 @@ function drawAnchored(c, word, cx, cy, size, o = {}) {
   const after = chars.slice(ri + 1).join("");
   const fR = `${weight} ${size}px ${family === "Fraunces" ? "Fraunces" : `"${family}"`}`;
   const fB = `${aw} ${size}px ${family === "Fraunces" ? "Fraunces" : `"${family}"`}`;
-  const wb = measure(fR, before);
-  const wa = measure(fB, anchor);
-  const wr = measure(fR, after);
+  return { before, anchor, after, fR, fB, wb: measure(fR, before), wa: measure(fB, anchor), wr: measure(fR, after) };
+}
+
+/// How far a word reaches to either side of its anchor letter's center.
+function anchorReach(word, size) {
+  const { wb, wa, wr } = anchorParts(word, size);
+  return Math.max(wb + wa / 2, wa / 2 + wr);
+}
+
+/// Draws a word with its anchor letter centered on (cx, cy). Returns its extent.
+function drawAnchored(c, word, cx, cy, size, o = {}) {
+  const { before, anchor, after, fR, fB, wb, wa, wr } = anchorParts(word, size, o);
   const x = cx - wb - wa / 2;
   const y = cy + size * (o.baseline ?? 0.3);
   c.textAlign = "left";
@@ -269,13 +316,13 @@ const PAGE = (() => {
 
 function buildPage() {
   const { put, items, lines } = PAGE;
-  put("MOBY-DICK", -660, -560, SG(500, 17), 0.5, INK, { ls: 5, deco: true });
-  put("3", 650, -560, SG(500, 17), 0.5, INK, { deco: true });
-  put("CHAPTER 1", -660, -468, SG(600, 18), 0.85, RED, { ls: 6, deco: true });
-  put("Loomings.", -660, -392, FR(600, 66), 0.9, INK, { deco: true });
+  const colW = LAYOUT.page.width;
+  const left = -colW / 2;
+  put("MOBY-DICK", left, -560, SG(500, 17), 0.5, INK, { ls: 5, deco: true });
+  put("3", left + colW - 10, -560, SG(500, 17), 0.5, INK, { deco: true });
+  put("CHAPTER 1", left, -468, SG(600, 18), 0.85, RED, { ls: 6, deco: true });
+  put("Loomings.", left, -392, FR(600, 66), 0.9, INK, { deco: true });
 
-  const colW = 1320;
-  const left = -660;
   const LH = 50;
   const space = measure(BODY_FONT, " ");
   let y = -296;
@@ -310,7 +357,7 @@ function buildPage() {
     }
     y += 8;
   }
-  PAGE.bounds = { x0: -770, x1: 770, y0: -640, y1: y + 40 };
+  PAGE.bounds = { x0: left - 110, x1: left + colW + 110, y0: -640, y1: y + 40 };
   for (const it of items) it.fix = [];
 }
 
@@ -383,8 +430,9 @@ function gazeSmooth(t) {
 
 function pageCamera(t) {
   const pull = 0.1 * smooth(range(t, 0, 3.4)) + 0.9 * easeInOutCubic(range(t, 3.0, T.impact - 0.3));
-  const target = lerp3(gazeSmooth(Math.min(t, T.collapse)), [40, 150, 0], Math.pow(pull, 1.2));
-  const off = [lerp(-460, 60, pull), lerp(540, 90, pull), -lerp(600, 2050, pull)];
+  const { near, far, target: whole } = LAYOUT.page;
+  const target = lerp3(gazeSmooth(Math.min(t, T.collapse)), whole, Math.pow(pull, 1.2));
+  const off = lerp3(near, far, pull);
   off[0] += Math.sin(t * 0.9) * 16 + Math.sin(t * 2.3 + 0.4) * 5;
   off[1] += Math.sin(t * 1.1 + 1) * 11 + Math.sin(t * 2.9) * 3;
   const cam = lookAt(add(target, off), target, lerp(-0.13, 0.015, pull), 1400);
@@ -426,8 +474,9 @@ function vortex(x, y, M, t, tl, dur, spin) {
   };
 }
 
+const [MX0, MX1, MY0, MY1] = LAYOUT.page.motes;
 const MOTES = Array.from({ length: 90 }, (_, i) => ({
-  p: [lerp(-1000, 1000, rnd(i, 10)), lerp(-800, 1000, rnd(i, 11)), lerp(-900, 120, rnd(i, 12))],
+  p: [lerp(MX0, MX1, rnd(i, 10)), lerp(MY0, MY1, rnd(i, 11)), lerp(-900, 120, rnd(i, 12))],
   r: 1.5 + rnd(i, 13) * 3.5,
   v: [(rnd(i, 14) - 0.5) * 30, -8 - rnd(i, 15) * 20, (rnd(i, 16) - 0.5) * 20],
   red: rnd(i, 17) < 0.18,
@@ -436,18 +485,24 @@ const MOTES = Array.from({ length: 90 }, (_, i) => ({
 // Headlines: per-character reveal, screen space.
 const HEAD_FONT = FR(600, 88);
 const HEADLINES = [
-  { t0: T.headline1, t1: T.headline2 - 0.5, rows: [[["Your eyes ", INK], ["jump", RED]], [["hundreds of times a page.", INK]]] },
+  {
+    t0: T.headline1,
+    t1: T.headline2 - 0.5,
+    rows: TALL
+      ? [[["Your eyes ", INK], ["jump", RED]], [["hundreds of times", INK]], [["a page.", INK]]]
+      : [[["Your eyes ", INK], ["jump", RED]], [["hundreds of times a page.", INK]]],
+  },
   { t0: T.headline2 + 0.06, t1: null, rows: [[["What if the words", INK]], [["came to ", INK], ["you?", RED]]] },
 ];
 function layoutHeadlines() {
   for (const h of HEADLINES) {
     h.chars = [];
     h.rows.forEach((row, ri) => {
-      const y = 812 + ri * 100;
+      const y = LAYOUT.headline.y + ri * 100;
       let text = "";
       for (const [seg, col] of row) {
         for (const ch of Array.from(seg)) {
-          const x = 150 + measure(HEAD_FONT, text);
+          const x = LAYOUT.headline.x + measure(HEAD_FONT, text);
           text += ch;
           h.chars.push({ ch, x, y, col, w: measure(HEAD_FONT, ch) });
         }
@@ -463,12 +518,13 @@ function drawHeadlines(t) {
     scrim = Math.max(scrim, vis);
   }
   if (scrim > 0) {
-    const g = ctx.createLinearGradient(0, 560, 0, H);
+    const top = LAYOUT.headline.scrim;
+    const g = ctx.createLinearGradient(0, top, 0, H);
     g.addColorStop(0, "rgba(5,5,5,0)");
     g.addColorStop(0.55, `rgba(5,5,5,${0.72 * scrim})`);
     g.addColorStop(1, `rgba(5,5,5,${0.92 * scrim})`);
     ctx.fillStyle = g;
-    ctx.fillRect(0, 560, W, H - 560);
+    ctx.fillRect(0, top, W, H - top);
   }
   ctx.font = HEAD_FONT;
   ctx.textBaseline = "alphabetic";
@@ -517,30 +573,31 @@ function drawOpeningHUD(t) {
   if (a <= 0) return;
   const j = Math.max(0, fixIndexAt(t) + 1);
   const regress = FIX.slice(0, j).filter((f) => f.type === "regress").length;
+  const { y, scale: s } = LAYOUT.hud;
   ctx.globalAlpha = a;
   ctx.textBaseline = "alphabetic";
   ctx.textAlign = "left";
-  ctx.font = SG(600, 15);
-  ctx.letterSpacing = "4px";
+  ctx.font = SG(600, 15 * s);
+  ctx.letterSpacing = 4 * s + "px";
   ctx.fillStyle = rgba(INK, 0.75);
-  ctx.fillText("EYE TRACE", 96, 86);
+  ctx.fillText("EYE TRACE", 72 + 24 * s, y);
   const blink = Math.floor(t * 2.08) % 2 === 0 ? 1 : 0.35;
   ctx.fillStyle = rgba(RED, blink);
   ctx.beginPath();
-  ctx.arc(78, 81, 5, 0, TAU);
+  ctx.arc(72 + 6 * s, y - 5 * s, 5 * s, 0, TAU);
   ctx.fill();
-  ctx.font = JB(400, 15);
-  ctx.letterSpacing = "1px";
+  ctx.font = JB(400, 15 * s);
+  ctx.letterSpacing = 1 * s + "px";
   ctx.fillStyle = rgba(INK, 0.5);
-  ctx.fillText(`FIXATIONS ${String(j).padStart(3, "0")}   REGRESSIONS ${String(regress).padStart(2, "0")}`, 72, 114);
+  ctx.fillText(`FIXATIONS ${String(j).padStart(3, "0")}   REGRESSIONS ${String(regress).padStart(2, "0")}`, 72, y + 28 * s);
   ctx.textAlign = "right";
-  ctx.font = SG(500, 15);
-  ctx.letterSpacing = "4px";
+  ctx.font = SG(500, 15 * s);
+  ctx.letterSpacing = 4 * s + "px";
   ctx.fillStyle = rgba(INK, 0.45);
-  ctx.fillText("MOBY-DICK  ·  CHAPTER 1", W - 72, 86);
-  ctx.font = JB(400, 15);
-  ctx.letterSpacing = "1px";
-  ctx.fillText(`T+${t.toFixed(2)}s`, W - 72, 114);
+  ctx.fillText("MOBY-DICK  ·  CHAPTER 1", W - 72, y);
+  ctx.font = JB(400, 15 * s);
+  ctx.letterSpacing = 1 * s + "px";
+  ctx.fillText(`T+${t.toFixed(2)}s`, W - 72, y + 28 * s);
   ctx.letterSpacing = "0px";
   ctx.globalAlpha = 1;
 }
@@ -721,7 +778,7 @@ function drawOpening(t) {
     g.addColorStop(1, rgba(RED, 0));
     ctx.fillStyle = g;
     ctx.fillRect(W / 2 - r * 4, H / 2 - r * 4, r * 8, r * 8);
-    const sw = 1700 * absorbed;
+    const sw = ((1700 * W) / 1920) * absorbed;
     const lg = ctx.createLinearGradient(W / 2 - sw / 2, 0, W / 2 + sw / 2, 0);
     lg.addColorStop(0, rgba(RED, 0));
     lg.addColorStop(0.5, rgba([255, 200, 190], 0.7 * absorbed));
@@ -1076,6 +1133,7 @@ function drawGuide(t, cam, hs, alphaScale = 1) {
 }
 
 function drawTouch(t) {
+  const { x: fx, hold, from, to, scale: k } = LAYOUT.touch;
   const draw = (x, y, a, s, ripples) => {
     if (a <= 0) return;
     ctx.save();
@@ -1084,23 +1142,23 @@ function drawTouch(t) {
       const u = range(t, r0, r0 + 0.7);
       if (u <= 0 || u >= 1) continue;
       ctx.strokeStyle = `rgba(255,255,255,${0.45 * (1 - u)})`;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * k;
       ctx.beginPath();
-      ctx.arc(x, y, 40 + 90 * easeOutCubic(u), 0, TAU);
+      ctx.arc(x, y, (40 + 90 * easeOutCubic(u)) * k, 0, TAU);
       ctx.stroke();
     }
-    const g = ctx.createRadialGradient(x, y, 0, x, y, 44 * s);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 44 * s * k);
     g.addColorStop(0, "rgba(255,255,255,0.28)");
     g.addColorStop(0.8, "rgba(255,255,255,0.12)");
     g.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(x, y, 44 * s, 0, TAU);
+    ctx.arc(x, y, 44 * s * k, 0, TAU);
     ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,0.7)";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 * k;
     ctx.beginPath();
-    ctx.arc(x, y, 34 * s, 0, TAU);
+    ctx.arc(x, y, 34 * s * k, 0, TAU);
     ctx.stroke();
     ctx.restore();
   };
@@ -1108,28 +1166,28 @@ function drawTouch(t) {
   if (t >= hold0 - 0.05 && t < hold1 + 0.4) {
     const down = easeOutCubic(range(t, hold0 - 0.05, hold0 + 0.12));
     const up = range(t, hold1, hold1 + 0.35);
-    draw(1480, 720, down * (1 - up), lerp(1.4, 1, down) + up * 0.6, [0, 1, 2, 3].map((k) => hold0 + k * BEAT));
+    draw(fx, hold, down * (1 - up), lerp(1.4, 1, down) + up * 0.6, [0, 1, 2, 3].map((n) => hold0 + n * BEAT));
   }
   // Letting go pauses, so the finger stays down while the book plays on.
   const s0 = T.resume, s1 = T.climax;
   if (t >= s0 - 0.05 && t < s1 + 0.3) {
     const down = easeOutCubic(range(t, s0 - 0.05, s0 + 0.12));
     const vis = down * (1 - range(t, s1 - 0.05, s1 + 0.25));
-    const y = lerp(880, 640, slideAt(t));
+    const y = lerp(from, to, slideAt(t));
     const trail = vis * (1 - range(t, T.chapter - 0.1, T.chapter + 0.1));
-    for (let k = 1; k <= 6 && trail > 0; k++) {
-      const yk = lerp(880, 640, slideAt(t - k * 0.03));
+    for (let i = 1; i <= 6 && trail > 0; i++) {
+      const yi = lerp(from, to, slideAt(t - i * 0.03));
       ctx.fillStyle = `rgba(255,255,255,${0.05 * trail})`;
       ctx.beginPath();
-      ctx.arc(1480, yk, 30, 0, TAU);
+      ctx.arc(fx, yi, 30 * k, 0, TAU);
       ctx.fill();
     }
-    draw(1480, y, vis, lerp(1.4, 1, down), [s0]);
-    ctx.font = SG(600, 14);
-    ctx.letterSpacing = "4px";
+    draw(fx, y, vis, lerp(1.4, 1, down), [s0]);
+    ctx.font = SG(600, 14 * k);
+    ctx.letterSpacing = 4 * k + "px";
     ctx.textAlign = "left";
     ctx.fillStyle = `rgba(255,255,255,${0.55 * vis * (1 - range(t, T.chapter - 0.05, T.chapter + 0.35))})`;
-    ctx.fillText("↑  FASTER", 1540, y + 5);
+    ctx.fillText("↑  FASTER", fx + 60 * k, y + 5 * k);
     ctx.letterSpacing = "0px";
   }
 }
@@ -1138,45 +1196,56 @@ function drawSpeedHUD(t, tf) {
   const inU = range(t, T.rsvp + 0.4, T.rsvp + 1.0);
   const vis = inU * (1 - range(t, T.squeeze - 0.3, T.squeeze + 0.05));
   if (vis <= 0) return;
-  const y = 986 + (1 - easeOutCubic(inU)) * 50;
+  const s = LAYOUT.speed.scale;
+  const y = LAYOUT.speed.y + (1 - easeOutCubic(inU)) * 50 * s;
   const wpm = Math.round(wpmAt(tf) / 10) * 10;
-  const x = W / 2 - 250, w = 500, h = 70;
+  const x = W / 2 - 250 * s, w = 500 * s, h = 70 * s;
   ctx.save();
   ctx.globalAlpha = vis;
   ctx.fillStyle = "rgba(17,17,17,0.86)";
   ctx.strokeStyle = "rgba(255,255,255,0.06)";
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(x, y - h / 2, w, h, 22);
+  ctx.roundRect(x, y - h / 2, w, h, 22 * s);
   ctx.fill();
   ctx.stroke();
   ctx.textBaseline = "middle";
   ctx.textAlign = "right";
-  ctx.font = SG(600, 32);
+  ctx.font = SG(600, 32 * s);
   ctx.fillStyle = rgba(ACCENT, 1);
-  ctx.fillText(wpm.toLocaleString("en-US"), x + 128, y + 1);
+  ctx.fillText(wpm.toLocaleString("en-US"), x + 128 * s, y + 1 * s);
   ctx.textAlign = "left";
-  ctx.font = SG(400, 19);
+  ctx.font = SG(400, 19 * s);
   ctx.fillStyle = "rgba(160,160,160,1)";
-  ctx.fillText("wpm", x + 140, y + 2);
-  const tx0 = x + 212, tx1 = x + w - 36;
+  ctx.fillText("wpm", x + 140 * s, y + 2 * s);
+  const tx0 = x + 212 * s, tx1 = x + w - 36 * s;
   const u = (wpm - 100) / 900;
-  const kx = lerp(tx0 + 20, tx1 - 20, u);
+  const kx = lerp(tx0 + 20 * s, tx1 - 20 * s, u);
   ctx.fillStyle = "#2c2c2e";
   ctx.beginPath();
-  ctx.roundRect(tx0, y - 3, tx1 - tx0, 6, 3);
+  ctx.roundRect(tx0, y - 3 * s, tx1 - tx0, 6 * s, 3 * s);
   ctx.fill();
   ctx.fillStyle = rgba(ACCENT, 1);
   ctx.beginPath();
-  ctx.roundRect(tx0, y - 3, kx - tx0, 6, 3);
+  ctx.roundRect(tx0, y - 3 * s, kx - tx0, 6 * s, 3 * s);
   ctx.fill();
   ctx.fillStyle = "#fff";
   ctx.shadowColor = "rgba(0,0,0,0.5)";
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = 8 * s;
   ctx.beginPath();
-  ctx.roundRect(kx - 20, y - 13, 40, 26, 13);
+  ctx.roundRect(kx - 20 * s, y - 13 * s, 40 * s, 26 * s, 13 * s);
   ctx.fill();
   ctx.restore();
+}
+
+// The vertical frame is narrower than the longest words at the wide cut's sizes, so all
+// the words shrink together until every one fits with a margin, as the app keeps one size.
+let WORD_SCALE = 1;
+function fitWordScale() {
+  if (!TALL) return 1;
+  let reach = 0;
+  for (const e of SCHEDULE) if (e.kind === "word") reach = Math.max(reach, anchorReach(e.text, 168));
+  return Math.min(1, (W / 2 - 64) / reach);
 }
 
 function drawReading(t, tf) {
@@ -1230,7 +1299,7 @@ function drawReading(t, tf) {
   const giant = range(t, bar(14) - 0.1, bar(14) + 0.3);
   if (giant > 0 && inClimax) {
     ctx.save();
-    const s = lerp(1.35, 1.0, easeOutCubic(range(t, bar(14), T.cut))) * (1 + 0.03 * p5);
+    const s = lerp(1.35, 1.0, easeOutCubic(range(t, bar(14), T.cut))) * (1 + 0.03 * p5) * LAYOUT.giant;
     ctx.translate(W / 2, H / 2);
     ctx.rotate(-0.04 + 0.02 * Math.sin(t * 1.3));
     ctx.scale(s, s);
@@ -1270,7 +1339,7 @@ function drawReading(t, tf) {
       const cA = c === 0 ? 1 : range(t, T.climax, T.climax + 0.6);
       const phi = w.phi + c * 2.1;
       const rho = w.rho * (c ? 1.25 + c * 0.2 : 1);
-      const px = rho * Math.cos(phi) * 1.3, py = rho * Math.sin(phi) * 0.8;
+      const px = rho * Math.cos(phi) * LAYOUT.stream[0], py = rho * Math.sin(phi) * LAYOUT.stream[1];
       const p = project(scam, [px, py, z]);
       if (p.x < -600 || p.x > W + 600 || p.y < -400 || p.y > H + 400) continue;
       const a = I * cA * (1 - range(z, fBase + 3800, fBase + 6800)) * range(z, 130, 600);
@@ -1303,8 +1372,9 @@ function drawReading(t, tf) {
     const len = 250 + streamSpeed(x) * 0.09;
     for (const s of STREAKS) {
       const z = 120 + ((((s.off - D * 1.5) % 8900) + 8900) % 8900);
-      const pa = project(scam, [s.rho * Math.cos(s.phi) * 1.2, s.rho * Math.sin(s.phi) * 0.8, z]);
-      const pb = project(scam, [s.rho * Math.cos(s.phi) * 1.2, s.rho * Math.sin(s.phi) * 0.8, z + len]);
+      const [ax, ay] = LAYOUT.streaks;
+      const pa = project(scam, [s.rho * Math.cos(s.phi) * ax, s.rho * Math.sin(s.phi) * ay, z]);
+      const pb = project(scam, [s.rho * Math.cos(s.phi) * ax, s.rho * Math.sin(s.phi) * ay, z + len]);
       if (pa.x < -800 || pa.x > W + 800 || pa.y < -800 || pa.y > H + 800) continue;
       const a = WS * range(z, 120, 900) * (1 - range(z, 6000, 9000));
       addDrawable(z, 0, (c) => {
@@ -1333,11 +1403,11 @@ function drawReading(t, tf) {
 
   // The red axis. In the library it is the helix's spine in 3D.
   const lineGrow = easeOutExpo(range(t, T.impact, T.impact + 0.45));
-  drawGuide(t, inLibrary || inClimax ? cam : scam, 560 * lineGrow + 10, 1 + 0.6 * p5);
+  drawGuide(t, inLibrary || inClimax ? cam : scam, LAYOUT.guide * lineGrow + 10, 1 + 0.6 * p5);
 
   // Word, with a dark halo to keep it legible over the helix.
   const cur = entryAt(SCHEDULE, tf);
-  const size = inClimax ? 168 : inLibrary ? 150 : 156;
+  const size = (inClimax ? 168 : inLibrary ? 150 : 156) * WORD_SCALE;
   const halo = t >= T.library ? 1 : 0.6;
   const hg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, 560);
   hg.addColorStop(0, `rgba(5,5,5,${0.72 * halo})`);
@@ -1372,13 +1442,14 @@ function drawReading(t, tf) {
       ctx.fillText("to", ext.left - size * 0.42, H / 2 + size * 0.3);
       ctx.textAlign = "left";
       ctx.fillText("Slide", ext.right + size * 0.42, H / 2 + size * 0.3);
-      ctx.font = SG(600, 15);
-      ctx.letterSpacing = "6px";
+      const s = LAYOUT.hud.scale, y = LAYOUT.paused;
+      ctx.font = SG(600, 15 * s);
+      ctx.letterSpacing = 6 * s + "px";
       ctx.textAlign = "center";
       ctx.fillStyle = `rgba(244,236,225,${0.6 * ctxA})`;
-      ctx.fillText("PAUSED", W / 2 + 12, 150);
-      ctx.fillRect(W / 2 - 74, 138, 4, 16);
-      ctx.fillRect(W / 2 - 66, 138, 4, 16);
+      ctx.fillText("PAUSED", W / 2 + 12 * s, y);
+      ctx.fillRect(W / 2 - 74 * s, y - 12 * s, 4 * s, 16 * s);
+      ctx.fillRect(W / 2 - 66 * s, y - 12 * s, 4 * s, 16 * s);
       ctx.letterSpacing = "0px";
     }
   } else if (cur && cur.e.kind === "chapter") {
@@ -1386,9 +1457,10 @@ function drawReading(t, tf) {
     const out = smooth(range(t, end - 0.25, end));
     const label = easeOutCubic(range(t, start, start + 0.35));
     const title = easeOutCubic(range(t, start + 0.06, start + 0.46));
+    const k = WORD_SCALE;
     const lift = -10 * out;
-    drawSprite(ctx, textSprite(SG(600, 24), 9, "MOBY-DICK", rgba(RED, 0.9), "center"), W / 2 + 4.5, H / 2 - 110 + 12 * (1 - label) + lift, label * (1 - out));
-    drawSprite(ctx, textSprite(FR(600, 132), 0, cur.e.text, rgba(INK, 1), "center"), W / 2, H / 2 + 44 + 22 * (1 - title) + lift, title * (1 - out));
+    drawSprite(ctx, textSprite(SG(600, 24 * k), 9 * k, "MOBY-DICK", rgba(RED, 0.9), "center"), W / 2 + 4.5 * k, H / 2 + (-110 + 12 * (1 - label) + lift) * k, label * (1 - out));
+    drawSprite(ctx, textSprite(FR(600, 132 * k), 0, cur.e.text, rgba(INK, 1), "center"), W / 2, H / 2 + (44 + 22 * (1 - title) + lift) * k, title * (1 - out));
   }
 
   // Impact: flash, shockwaves, sparks.
@@ -1416,8 +1488,8 @@ function drawReading(t, tf) {
       ctx.strokeStyle = rgba(rnd(k, 93) < 0.5 ? WHITE : [255, 110, 90], a);
       ctx.lineWidth = 1 + rnd(k, 94) * 2;
       ctx.beginPath();
-      ctx.moveTo(W / 2 + Math.cos(ang) * r2, H / 2 + Math.sin(ang) * r2 * 0.8);
-      ctx.lineTo(W / 2 + Math.cos(ang) * r, H / 2 + Math.sin(ang) * r * 0.8);
+      ctx.moveTo(W / 2 + Math.cos(ang) * r2, H / 2 + Math.sin(ang) * r2 * LAYOUT.squash.burst);
+      ctx.lineTo(W / 2 + Math.cos(ang) * r, H / 2 + Math.sin(ang) * r * LAYOUT.squash.burst);
       ctx.stroke();
     }
     const fl = Math.exp(-ti * 14);
@@ -1437,7 +1509,7 @@ function drawReading(t, tf) {
       ctx.strokeStyle = rgba(strong ? [255, 120, 100] : [255, 255, 255], (strong ? 0.45 : 0.1) * (1 - u));
       ctx.lineWidth = (strong ? 6 : 2) * (1 - u) + 0.5;
       ctx.beginPath();
-      ctx.ellipse(W / 2, H / 2, 150 + 1300 * easeOutCubic(u), (150 + 1300 * easeOutCubic(u)) * 0.62, 0, 0, TAU);
+      ctx.ellipse(W / 2, H / 2, 150 + 1300 * easeOutCubic(u), (150 + 1300 * easeOutCubic(u)) * LAYOUT.squash.rings, 0, 0, TAU);
       ctx.stroke();
       if (!strong) return;
       const ts = t - k;
@@ -1451,8 +1523,9 @@ function drawReading(t, tf) {
         ctx.strokeStyle = rgba(rnd(id, 98) < 0.5 ? WHITE : RED, 0.9 * (1 - ts / life));
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(W / 2 + Math.cos(ang) * r, H / 2 + Math.sin(ang) * r * 0.75);
-        ctx.lineTo(W / 2 + Math.cos(ang) * (r + 30 + sp * 0.02), H / 2 + Math.sin(ang) * (r + 30 + sp * 0.02) * 0.75);
+        const sy = LAYOUT.squash.sparks;
+        ctx.moveTo(W / 2 + Math.cos(ang) * r, H / 2 + Math.sin(ang) * r * sy);
+        ctx.lineTo(W / 2 + Math.cos(ang) * (r + 30 + sp * 0.02), H / 2 + Math.sin(ang) * (r + 30 + sp * 0.02) * sy);
         ctx.stroke();
       }
     });
@@ -1527,7 +1600,7 @@ function drawFinale(t, tf) {
 
   const u0 = t - T.cut;
   const logoMove = easeInOutCubic(range(t, T.logo + 0.9, T.logo + 1.8));
-  const cy = lerp(H / 2, 468, logoMove);
+  const cy = lerp(H / 2, LAYOUT.finale.logo, logoMove);
   const ls = lerp(1, 0.86, logoMove);
   const lx = W / 2 - logoMetrics().center * ls * logoMove;
 
@@ -1558,7 +1631,7 @@ function drawFinale(t, tf) {
     lineA = lerp(1.6, 0.9, u0 / 0.4) * on;
   } else lineA = 0.9;
   const shrink = easeInOutCubic(range(t, T.logo, T.logo + 0.9));
-  const half = lerp(560, LOGO_SIZE * 0.66, shrink) * (shrink > 0 ? ls : 1);
+  const half = lerp(LAYOUT.guide, LOGO_SIZE * 0.66, shrink) * (shrink > 0 ? ls : 1);
   const lineY = shrink > 0 ? cy : H / 2;
   if (u0 < 0.12) {
     ctx.fillStyle = rgba([255, 210, 200], 1 - u0 / 0.12);
@@ -1628,7 +1701,8 @@ function drawFinale(t, tf) {
 
   // Tagline and call to action under the logo.
   if (t > T.logo + 1.0) {
-    const f = FR(500, 58);
+    const { tagline, stores, url, scale: k } = LAYOUT.finale;
+    const f = FR(500, 58 * k);
     const totalW = measure(f, "Read more. Move less.");
     let text = "";
     const pieces = [["Read ", INK, 0], ["more", INK, 1], [".", RED, 1], [" Move ", INK, 2], ["less", INK, 3], [".", RED, 3]];
@@ -1636,12 +1710,12 @@ function drawFinale(t, tf) {
       const x = W / 2 - totalW / 2 + measure(f, text);
       text += s;
       const u = range(t, T.logo + 1.15 + wi * 0.09, T.logo + 1.75 + wi * 0.09);
-      drawSprite(ctx, textSprite(f, 0, s, rgba(col, 1)), x, 668 + (1 - easeOutCubic(u)) * 24, u);
+      drawSprite(ctx, textSprite(f, 0, s, rgba(col, 1)), x, tagline + (1 - easeOutCubic(u)) * 24 * k, u);
     }
     const u2 = range(t, T.logo + 1.7, T.logo + 2.3);
-    drawSprite(ctx, textSprite(SG(400, 27), 1.5, "Free on iPhone, iPad, and Mac", "rgb(200,200,204)", "center"), W / 2, 748 + (1 - easeOutCubic(u2)) * 16, 0.8 * u2);
+    drawSprite(ctx, textSprite(SG(400, 27 * k), 1.5 * k, "Free on iPhone, iPad, and Mac", "rgb(200,200,204)", "center"), W / 2, stores + (1 - easeOutCubic(u2)) * 16 * k, 0.8 * u2);
     const u3 = range(t, T.logo + 2.0, T.logo + 2.6);
-    drawSprite(ctx, textSprite(JB(400, 21), 3, "strobefast.app", rgba(ACCENT, 1), "center"), W / 2, 802 + (1 - easeOutCubic(u3)) * 16, 0.95 * u3);
+    drawSprite(ctx, textSprite(JB(400, 21 * k), 3 * k, "strobefast.app", rgba(ACCENT, 1), "center"), W / 2, url + (1 - easeOutCubic(u3)) * 16 * k, 0.95 * u3);
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1739,4 +1813,5 @@ mapFixations();
 layoutHeadlines();
 prepareVortex();
 buildCovers();
+WORD_SCALE = fitWordScale();
 window.ready = true;

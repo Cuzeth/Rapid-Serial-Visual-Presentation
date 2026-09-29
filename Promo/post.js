@@ -96,7 +96,7 @@ void main() {
   vec2 st = vec2(uv.x, 1.0 - uv.y);
   vec2 d = st - 0.5;
   float r2 = dot(d, d);
-  vec2 off = d * (ca / res.x) * (0.4 + 2.2 * r2);
+  vec2 off = d * (ca / max(res.x, res.y)) * (0.4 + 2.2 * r2);
   vec3 c;
   c.r = texture(scene, uv + vec2(off.x, -off.y)).r;
   c.g = texture(scene, uv).g;
