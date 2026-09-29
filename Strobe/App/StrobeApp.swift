@@ -17,9 +17,14 @@ struct StrobeApp: App {
     static let sharedBootstrap = bootstrapModelContainer()
 
     private var bootstrapResult: BootstrapResult { Self.sharedBootstrap }
+    /// Adds articles and text shared from other apps to the library.
+    private let shareInboxImporter: ShareInboxImporter?
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        if let container = Self.sharedBootstrap.container {
+        let container = Self.sharedBootstrap.container
+        shareInboxImporter = container.map { ShareInboxImporter(container: $0) }
+        if let container {
             LibraryObserver.start(container: container)
             // Started here rather than from a view so iCloud sync also runs
             // when the system launches the app in the background.
@@ -45,6 +50,9 @@ struct StrobeApp: App {
         #if os(macOS)
         .defaultSize(width: 1000, height: 740)
         #endif
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            shareInboxImporter?.scenePhaseChanged(to: phase)
+        }
         .commands {
             LibraryCommands()
         }

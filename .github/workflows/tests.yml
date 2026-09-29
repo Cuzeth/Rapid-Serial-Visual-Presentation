@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "Strobe/**"
+      - "StrobeShare/**"
       - "StrobeTests/**"
       - "StrobeWidget/**"
       - "Strobe.xcodeproj/**"
@@ -14,6 +15,7 @@ on:
     branches: [main]
     paths:
       - "Strobe/**"
+      - "StrobeShare/**"
       - "StrobeTests/**"
       - "StrobeWidget/**"
       - "Strobe.xcodeproj/**"

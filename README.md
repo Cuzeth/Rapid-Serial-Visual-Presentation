@@ -76,6 +76,7 @@ On a Mac, or an iPad with a keyboard: <kbd>Space</kbd> reads and pauses, <kbd>â†
 
 Import EPUB, PDF, plain-text, and Markdown files from Files or with drag and drop, or paste in an article and see its word count and reading time before you start. Every book gets its own cover, the one you're reading waits at the top, and Strobe picks up at your exact word.
 
+- **Share from anywhere.** Share an article from Safari, a link, or selected text from any app to Strobe, and it's waiting in your library without the page's menus and ads.
 - **Chapters at a glance.** EPUB tables of contents and PDF bookmarks become chapters, each with its reading time at your speed.
 - **Clean text.** Page numbers, running headers, and footers are stripped on import.
 - **Not just English.** Chinese, Japanese, and Korean text is split into words automatically, and Arabic keeps its connected letterforms.
@@ -97,6 +98,7 @@ Strobe is free, with no subscription or in-app purchases. The source is availabl
 Strobe is SwiftUI and SwiftData with no third-party dependencies.
 
 - **Import:** EPUBs are unzipped and read from their package manifest, with chapters from nested tables of contents and a DRM check up front. PDFs bring their bookmarks along.
+- **Sharing:** a Share extension reads the article out of the Safari page you're on, or loads a shared link in an offscreen web view, and hands the text to the app through an App Group.
 - **Tokenizer:** rejoins words hyphenated across line breaks, splits words joined by em dashes, keeps `10:30 PM` and `44 B.C.` in one piece, and segments CJK text with `NLTokenizer`.
 - **Timing:** word length, punctuation, acronyms, compounds, and per-word complexity scores (computed once at import with the NaturalLanguage framework) all shape how long each word stays up.
 - **Tests:** 500+ Swift Testing cases, run on an iOS simulator and on macOS in CI.
@@ -105,7 +107,7 @@ Strobe is SwiftUI and SwiftData with no third-party dependencies.
 
 1. Open `Strobe.xcodeproj` in Xcode 27.
 2. Pick the **Strobe** scheme and an iPhone, iPad, or Mac to run on.
-3. To run on your own device or Mac, choose your team under **Signing & Capabilities**.
+3. To run on your own device or Mac, choose your team under **Signing & Capabilities** for the **Strobe** and **StrobeShare** targets. App Group IDs are unique across teams, so also replace `group.com.abdeen.strobe` in `SharedContainer.swift` and both `.entitlements` files with a group of your own.
 
 There are no packages to resolve and no API keys to add.
 
