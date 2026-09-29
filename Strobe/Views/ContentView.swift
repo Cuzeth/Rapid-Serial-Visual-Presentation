@@ -181,6 +181,14 @@ struct ContentView: View {
         } message: { doc in
             Text("\u{201C}\(doc.title)\u{201D} will be permanently removed from your library.")
         }
+        // A document in an open alert stays until the alert closes, even if
+        // it's deleted on another device meanwhile.
+        .onChange(of: documentPendingRename?.id) { old, new in
+            LibrarySync.shared.documentReferenceChanged(from: old, to: new)
+        }
+        .onChange(of: documentPendingDeletion?.id) { old, new in
+            LibrarySync.shared.documentReferenceChanged(from: old, to: new)
+        }
         .onAppear {
             compactLegacyWordStorageIfNeeded()
             if !hasSeenTutorial {

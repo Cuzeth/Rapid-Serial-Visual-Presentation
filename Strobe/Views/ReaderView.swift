@@ -54,6 +54,11 @@ struct ReaderView: View {
     @State private var isBackfillingComplexity = false
     @State private var enclosingMarks: EnclosingMarks?
     @State private var isRightToLeftDocument = false
+    /// The engine position last written to the document. Persisting leaves
+    /// the document's position alone while the reader hasn't moved from it,
+    /// so a newer position synced from another device while this reader
+    /// sat open isn't overwritten by a stale one.
+    @State private var savedEngineIndex: Int?
     @FocusState private var readerFocused: Bool
 
     private let startingWordIndex: Int?
@@ -109,6 +114,9 @@ struct ReaderView: View {
         let words = await document.loadReadingWordsAsync()
         let scores = await document.loadComplexityScoresAsync()
         let effectiveIndex = startingWordIndex ?? document.currentWordIndex
+        // The saved position, not the starting one: opening at a chapter
+        // counts as moving there.
+        savedEngineIndex = document.currentWordIndex
         engine.load(words: words, currentIndex: effectiveIndex, complexityScores: scores, chapters: document.chapters)
         isRightToLeftDocument = PassageView.isRTLDominant(words)
         isLoaded = true
@@ -262,6 +270,7 @@ struct ReaderView: View {
         .onAppear {
             readerFocused = true
         }
+        .marksDocumentOpen(document.id)
         // Re-assert keyboard focus whenever any overlay (passage view, chapter
         // picker, save-error alert) closes, so Space/arrow shortcuts keep
         // working on macOS. One derived flag covers all presentations — adding
@@ -343,7 +352,9 @@ struct ReaderView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $showPassage) {
+            // The cover hides the reader, which counts as closing it.
             PassageView(document: document, engine: engine)
+                .marksDocumentOpen(document.id)
         }
         #elseif os(macOS)
         .sheet(isPresented: $showPassage) {
@@ -770,11 +781,16 @@ struct ReaderView: View {
             cancelPlayIntent()
             engine.pause()
         }
+        let engineIndex = engine.currentIndex
         document.recordPosition(
-            currentIndex: engine.currentIndex,
-            wordsPerMinute: engine.wordsPerMinute,
+            currentIndex: engineIndex == savedEngineIndex ? document.currentWordIndex : engineIndex,
+            // `applyWPM` writes speed changes to the document as they're
+            // made; the document's value also keeps a speed synced from
+            // another device while this reader was open.
+            wordsPerMinute: document.wordsPerMinute,
             touchLastReadDate: touchLastReadDate
         )
+        savedEngineIndex = engineIndex
         // Counted here, where every exit path passes, so words read before
         // the app is backgrounded and closed still count toward a reading day.
         let playedWords = engine.takePlayedWordCount()

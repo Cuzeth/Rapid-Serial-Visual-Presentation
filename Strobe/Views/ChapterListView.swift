@@ -49,6 +49,7 @@ struct ChapterListView: View {
         .focusEffectDisabled()
         .focused($pageFocused)
         .onAppear { pageFocused = true }
+        .marksDocumentOpen(document.id)
         .onKeyPress(.escape) {
             dismiss()
             return .handled

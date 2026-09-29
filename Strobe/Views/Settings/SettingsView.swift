@@ -36,6 +36,7 @@ struct SettingsView: View {
             Form {
                 ReadingControlsSection()
                 ImportSettingsSection()
+                SyncSettingsSection()
                 AboutSection(showWelcome: $showWelcome)
             }
             .formStyle(.grouped)
@@ -69,6 +70,7 @@ struct SettingsView: View {
 
                 ReadingControlsSection()
                 ImportSettingsSection()
+                SyncSettingsSection()
                 AboutSection(showWelcome: $showWelcome)
             }
             .navigationTitle("Settings")

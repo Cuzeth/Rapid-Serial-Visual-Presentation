@@ -14,11 +14,20 @@ struct StrobeApp: App {
 
     private let bootstrapResult = Self.bootstrapModelContainer()
 
+    init() {
+        // Started here rather than from a view so iCloud sync also runs when
+        // the system launches the app in the background.
+        if let container = bootstrapResult.container {
+            LibrarySync.shared.start(container: container)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             if let container = bootstrapResult.container {
                 ContentView()
                     .modelContainer(container)
+                    .libraryCloudSync(container)
                     .preferredColorScheme(.dark)
                     .tint(StrobeTheme.accent)
                     #if os(macOS)
@@ -71,7 +80,15 @@ struct StrobeApp: App {
     }
 
     private static func makePersistentContainer(schema: Schema) throws -> ModelContainer {
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        // `.none`, never the default `.automatic`: with the app's iCloud
+        // entitlement, `.automatic` turns on SwiftData's own CloudKit
+        // mirroring, which this schema doesn't support (the store then fails
+        // to load). iCloud sync runs beside the store; see `LibrarySync`.
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none
+        )
         return try ModelContainer(for: schema, configurations: [modelConfiguration])
     }
 
