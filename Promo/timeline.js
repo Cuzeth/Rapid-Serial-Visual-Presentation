@@ -74,13 +74,13 @@ function buildSchedule() {
   line([["Up", 2], ["to", 2], ["1,000", 4], ["words", 2], ["a", 1], ["minute.", 5]]);
   // Bar 9.
   line([["Books.", 4], ["Papers.", 4], ["Articles.", 4], [null, 4]]);
-  // Bar 10 and the held "pause." through the freeze in bar 11.
-  line([["Hold", 2], ["to", 2], ["read.", 4], ["Let", 2], ["go", 2], ["to", 1], ["pause.", 3 + 8]]);
+  // Bar 10: the finger holds until "pause.", which lands on the freeze at bar 11.
+  line([["Hold", 2], ["to", 2], ["read.", 6], ["Let", 2], ["go", 2], ["to", 2], ["pause.", 8]]);
   line([["Slide", 2], ["for", 2], ["speed.", 4]]);
-  // Bar 12: chapter announcement, then the book at 500 wpm.
-  push("Loomings", 4, "chapter");
+  // Bar 12: chapter announcement, then the book's first sentence over the snare roll.
+  push("Loomings", 8, "chapter");
   let i = 0;
-  while (t < T.climax - 1e-6) push(MOBY_WORDS[i++], 1);
+  for (const n of [2, 2, 4]) push(MOBY_WORDS[i++], n);
   // Bars 13–15: thirty-second notes, 1,000 wpm, until the cut.
   while (t < T.cut - 1e-6) {
     const w = MOBY_WORDS[i++ % MOBY_WORDS.length];
@@ -100,6 +100,13 @@ export const TAGLINE = [
   { text: "less.", start: T.tagline + BEAT * 3, end: T.logo },
 ];
 
+/// How far the finger has dragged the speed slider, 0 to 1. The readout follows it.
+export function slideAt(t) {
+  const a = T.resume + 0.12, b = T.chapter - 0.1;
+  const u = Math.min(1, Math.max(0, (t - a) / (b - a)));
+  return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+}
+
 /// Words per minute shown on the speed readout.
 export function wpmAt(t) {
   if (t < bar(7)) return 250;
@@ -114,11 +121,7 @@ export function wpmAt(t) {
     return 1000 - 500 * u * u * (3 - 2 * u);
   }
   if (t < T.resume) return 500;
-  if (t < T.climax) {
-    const u = (t - T.resume) / (T.climax - T.resume);
-    return 500 + 500 * u * u * (3 - 2 * u);
-  }
-  return 1000;
+  return 500 + 500 * slideAt(t);
 }
 
 export function mulberry32(seed) {

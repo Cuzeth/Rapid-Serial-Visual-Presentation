@@ -373,12 +373,11 @@ for (const [w, m] of [["Books.", 45], ["Papers.", 48], ["Articles.", 52]]) {
   supersaw(e.start, 0.18, CHORDS.Am.notes.map((n) => n + 12), 0.35, 4000, 1500);
 }
 {
-  // Touch down and lift off for "Hold to read" and "Let go".
+  // Touch down on "Hold" and lift off on "pause.".
   const o = sine();
   voice(T.hold, 0.25, 0.4, (t) => o(140 - 60 * t) * Math.exp(-t * 18) * 0.35, [[B.fx, 1], [B.verbFx, 0.2]]);
-  const lift = SCHEDULE.find((x) => x.text === "Let");
   const o2 = sine();
-  voice(lift.start, 0.2, 0.4, (t) => o2(300 + 900 * t) * Math.exp(-t * 20) * 0.25, [[B.fx, 1], [B.verbFx, 0.3]]);
+  voice(T.pause, 0.2, 0.4, (t) => o2(300 + 900 * t) * Math.exp(-t * 20) * 0.25, [[B.fx, 1], [B.verbFx, 0.3]]);
 }
 // The paused beat: room tone, a held low note.
 {
@@ -610,7 +609,8 @@ for (let n = 0; n < N; n++) {
   R[n] = Math.tanh(R[n] * 1.2) * fade;
   peak = Math.max(peak, Math.abs(L[n]), Math.abs(R[n]));
 }
-const gain = 0.93 / peak;
+// AAC overshoots sample peaks by about a decibel; this keeps the muxed file under -1 dBTP.
+const gain = 0.8 / peak;
 const pcm = Buffer.alloc(44 + N * 4);
 pcm.write("RIFF", 0);
 pcm.writeUInt32LE(36 + N * 4, 4);

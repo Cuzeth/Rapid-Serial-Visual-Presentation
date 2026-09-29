@@ -1,6 +1,6 @@
 import {
   W, H, FPS, BEAT, BAR, S16, bar, T, SCHEDULE, TAGLINE, FIXATIONS, MOBY_OPENING,
-  wpmAt, kicks, mulberry32,
+  wpmAt, slideAt, kicks, mulberry32,
 } from "./timeline.js";
 import { createPost } from "./post.js";
 
@@ -128,6 +128,52 @@ function drawAnchored(c, word, cx, cy, size, o = {}) {
   c.fillStyle = o.anchorColor ?? rgba(RED, 1);
   c.fillText(anchor, x + wb, y);
   return { left: x, right: x + wb + wa + wr };
+}
+
+// Canvas text snaps its baseline to whole pixels, so text that drifts or scales by
+// fractions of a pixel a frame moves in visible steps. Text that moves slowly is
+// drawn from these pre-rendered, double-resolution images instead.
+const SPRITE_SCALE = 2;
+const sprites = new Map();
+
+/// `box` is [x0, y0, x1, y1] around the origin that `paint` draws relative to.
+function sprite(key, box, paint) {
+  let s = sprites.get(key);
+  if (!s) {
+    const [x0, y0, x1, y1] = box;
+    const c = makeCanvas(Math.ceil((x1 - x0) * SPRITE_SCALE), Math.ceil((y1 - y0) * SPRITE_SCALE));
+    const x = c.getContext("2d");
+    x.scale(SPRITE_SCALE, SPRITE_SCALE);
+    x.translate(-x0, -y0);
+    x.textBaseline = "alphabetic";
+    paint(x);
+    s = { c, x0, y0, w: x1 - x0, h: y1 - y0 };
+    sprites.set(key, s);
+  }
+  return s;
+}
+
+function drawSprite(c, s, x, y, alpha = 1) {
+  if (alpha <= 0) return;
+  c.globalAlpha = alpha;
+  c.imageSmoothingQuality = "high";
+  c.drawImage(s.c, x + s.x0, y + s.y0, s.w, s.h);
+  c.imageSmoothingQuality = "low";
+  c.globalAlpha = 1;
+}
+
+/// A line of text with its alignment point at the origin.
+function textSprite(font, ls, text, color, align = "left") {
+  const w = measure(font, text, ls);
+  const size = parseFloat(font.split(" ")[1]);
+  const x0 = align === "center" ? -w / 2 : 0;
+  return sprite(`${font}|${ls}|${color}|${align}|${text}`, [x0 - size * 0.5, -size * 1.1, x0 + w + size * 0.5, size * 0.45], (c) => {
+    c.font = font;
+    c.letterSpacing = ls + "px";
+    c.textAlign = align;
+    c.fillStyle = color;
+    c.fillText(text, 0, 0);
+  });
 }
 
 // ---------------------------------------------------------------- camera
@@ -954,9 +1000,10 @@ function drawShards(t, cam, blurOf) {
         const ang = (4 + rnd(k, 47) * 9) * ts;
         const U = rotateAxis(st.U, axis, ang);
         const V = rotateAxis(st.V, axis, ang);
-        const a = 1 - range(ts, 0.5 + rnd(k, 48) * 0.6, 1.8);
         const M = planeAffine(cam, p, U, V);
-        if (!M.ok || a <= 0) continue;
+        if (!M.ok) continue;
+        const a = (1 - range(ts, 0.5 + rnd(k, 48) * 0.6, 1.8)) * range(M.z, 180, 650);
+        if (a <= 0) continue;
         const front = M.a * M.d - M.b * M.c > 0;
         addDrawable(M.z, blurOf(M.z), (c) => {
           c.setTransform(M.a, M.b, M.c, M.d, M.e, M.f);
@@ -1057,30 +1104,31 @@ function drawTouch(t) {
     ctx.stroke();
     ctx.restore();
   };
-  const hold0 = T.hold, hold1 = T.hold + BEAT * 2;
+  const hold0 = T.hold, hold1 = T.pause;
   if (t >= hold0 - 0.05 && t < hold1 + 0.4) {
     const down = easeOutCubic(range(t, hold0 - 0.05, hold0 + 0.12));
     const up = range(t, hold1, hold1 + 0.35);
-    draw(1480, 720, down * (1 - up), lerp(1.4, 1, down) + up * 0.6, [hold0, hold0 + BEAT, hold0 + BEAT * 2]);
+    draw(1480, 720, down * (1 - up), lerp(1.4, 1, down) + up * 0.6, [0, 1, 2, 3].map((k) => hold0 + k * BEAT));
   }
-  const s0 = T.resume, s1 = T.resume + BEAT * 2;
-  if (t >= s0 - 0.05 && t < s1 + 0.4) {
+  // Letting go pauses, so the finger stays down while the book plays on.
+  const s0 = T.resume, s1 = T.climax;
+  if (t >= s0 - 0.05 && t < s1 + 0.3) {
     const down = easeOutCubic(range(t, s0 - 0.05, s0 + 0.12));
-    const up = range(t, s1, s1 + 0.3);
-    const m = easeInOutCubic(range(t, s0 + 0.12, s1 - 0.1));
-    const y = lerp(820, 560, m);
-    for (let k = 1; k <= 6; k++) {
-      const yk = lerp(820, 560, easeInOutCubic(range(t - k * 0.03, s0 + 0.12, s1 - 0.1)));
-      ctx.fillStyle = `rgba(255,255,255,${0.05 * (1 - up) * down})`;
+    const vis = down * (1 - range(t, s1 - 0.05, s1 + 0.25));
+    const y = lerp(880, 640, slideAt(t));
+    const trail = vis * (1 - range(t, T.chapter - 0.1, T.chapter + 0.1));
+    for (let k = 1; k <= 6 && trail > 0; k++) {
+      const yk = lerp(880, 640, slideAt(t - k * 0.03));
+      ctx.fillStyle = `rgba(255,255,255,${0.05 * trail})`;
       ctx.beginPath();
       ctx.arc(1480, yk, 30, 0, TAU);
       ctx.fill();
     }
-    draw(1480, y, down * (1 - up), lerp(1.4, 1, down) + up * 0.6, [s0]);
+    draw(1480, y, vis, lerp(1.4, 1, down), [s0]);
     ctx.font = SG(600, 14);
     ctx.letterSpacing = "4px";
     ctx.textAlign = "left";
-    ctx.fillStyle = `rgba(255,255,255,${0.55 * down * (1 - up)})`;
+    ctx.fillStyle = `rgba(255,255,255,${0.55 * vis * (1 - range(t, T.chapter - 0.05, T.chapter + 0.35))})`;
     ctx.fillText("↑  FASTER", 1540, y + 5);
     ctx.letterSpacing = "0px";
   }
@@ -1334,17 +1382,13 @@ function drawReading(t, tf) {
       ctx.letterSpacing = "0px";
     }
   } else if (cur && cur.e.kind === "chapter") {
-    const u = range(tf, cur.e.start, cur.e.start + 0.12);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.font = SG(600, 18);
-    ctx.letterSpacing = "7px";
-    ctx.fillStyle = rgba(RED, 0.9 * u);
-    ctx.fillText("CHAPTER 1", W / 2 + 4, H / 2 - 104);
-    ctx.letterSpacing = "0px";
-    ctx.font = FR(600, 132);
-    ctx.fillStyle = rgba(INK, u);
-    ctx.fillText(cur.e.text, W / 2, H / 2 + 44);
+    const { start, end } = cur.e;
+    const out = smooth(range(t, end - 0.25, end));
+    const label = easeOutCubic(range(t, start, start + 0.35));
+    const title = easeOutCubic(range(t, start + 0.06, start + 0.46));
+    const lift = -10 * out;
+    drawSprite(ctx, textSprite(SG(600, 18), 7, "CHAPTER 1", rgba(RED, 0.9), "center"), W / 2 + 4, H / 2 - 104 + 12 * (1 - label) + lift, label * (1 - out));
+    drawSprite(ctx, textSprite(FR(600, 132), 0, cur.e.text, rgba(INK, 1), "center"), W / 2, H / 2 + 44 + 22 * (1 - title) + lift, title * (1 - out));
   }
 
   // Impact: flash, shockwaves, sparks.
@@ -1463,23 +1507,16 @@ function drawLogo(c, t, cx, cy, s) {
   c.save();
   c.translate(cx, cy);
   c.scale(s, s);
-  c.textBaseline = "alphabetic";
-  c.textAlign = "left";
-  c.letterSpacing = "0px";
   letters.forEach((ch, i) => {
     const d = Math.abs(i - ri);
     if (d === 0) {
-      c.font = fB;
-      c.fillStyle = rgba(ACCENT, 1);
-      c.fillText(ch, xs[i], LOGO_SIZE * 0.26);
+      drawSprite(c, textSprite(fB, 0, ch, rgba(ACCENT, 1)), xs[i], LOGO_SIZE * 0.26);
       return;
     }
     const u = range(t, T.logo + (d - 1) * 0.06, T.logo + (d - 1) * 0.06 + 0.9);
     const e = easeOutExpo(u);
     const dir = i < ri ? -1 : 1;
-    c.font = fR;
-    c.fillStyle = `rgba(242,242,246,${clamp(u * 3)})`;
-    c.fillText(ch, xs[i] + dir * (1 - e) * (40 + 70 * d),LOGO_SIZE * 0.26);
+    drawSprite(c, textSprite(fR, 0, ch, "rgb(242,242,246)"), xs[i] + dir * (1 - e) * (40 + 70 * d), LOGO_SIZE * 0.26, clamp(u * 3));
   });
   c.restore();
 }
@@ -1531,7 +1568,9 @@ function drawFinale(t, tf) {
   // Tagline, one word at a time on the line.
   const tag = entryAt(TAGLINE, tf);
   if (tag && tf < T.logo) {
-    drawAnchored(ctx, tag.e.text, W / 2, H / 2, 156, { color: "#fff", anchorColor: rgba(RED, 1) });
+    const word = sprite("tagline|" + tag.e.text, [-460, -160, 460, 130], (c) =>
+      drawAnchored(c, tag.e.text, 0, 0, 156, { color: "#fff", anchorColor: rgba(RED, 1) }));
+    drawSprite(ctx, word, W / 2, H / 2);
   }
 
   // Logo with a light sweep.
@@ -1592,31 +1631,17 @@ function drawFinale(t, tf) {
     const f = FR(500, 58);
     const totalW = measure(f, "Read more. Move less.");
     let text = "";
-    ctx.font = f;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.letterSpacing = "0px";
     const pieces = [["Read ", INK, 0], ["more", INK, 1], [".", RED, 1], [" Move ", INK, 2], ["less", INK, 3], [".", RED, 3]];
     for (const [s, col, wi] of pieces) {
       const x = W / 2 - totalW / 2 + measure(f, text);
       text += s;
       const u = range(t, T.logo + 1.15 + wi * 0.09, T.logo + 1.75 + wi * 0.09);
-      const e = easeOutCubic(u);
-      ctx.fillStyle = rgba(col, u);
-      ctx.fillText(s, x, 668 + (1 - e) * 24);
+      drawSprite(ctx, textSprite(f, 0, s, rgba(col, 1)), x, 668 + (1 - easeOutCubic(u)) * 24, u);
     }
     const u2 = range(t, T.logo + 1.7, T.logo + 2.3);
-    ctx.font = SG(400, 27);
-    ctx.letterSpacing = "1.5px";
-    ctx.textAlign = "center";
-    ctx.fillStyle = `rgba(200,200,204,${0.8 * u2})`;
-    ctx.fillText("Free on iPhone, iPad, and Mac", W / 2, 748 + (1 - easeOutCubic(u2)) * 16);
+    drawSprite(ctx, textSprite(SG(400, 27), 1.5, "Free on iPhone, iPad, and Mac", "rgb(200,200,204)", "center"), W / 2, 748 + (1 - easeOutCubic(u2)) * 16, 0.8 * u2);
     const u3 = range(t, T.logo + 2.0, T.logo + 2.6);
-    ctx.font = JB(400, 21);
-    ctx.letterSpacing = "3px";
-    ctx.fillStyle = rgba(ACCENT, 0.95 * u3);
-    ctx.fillText("strobefast.app", W / 2, 802 + (1 - easeOutCubic(u3)) * 16);
-    ctx.letterSpacing = "0px";
+    drawSprite(ctx, textSprite(JB(400, 21), 3, "strobefast.app", rgba(ACCENT, 1), "center"), W / 2, 802 + (1 - easeOutCubic(u3)) * 16, 0.95 * u3);
   }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
