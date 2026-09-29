@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "Strobe/**"
+      - "StrobeShare/**"
       - "StrobeTests/**"
       - "Strobe.xcodeproj/**"
       - "PrivacyInfo.xcprivacy"
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - "Strobe/**"
+      - "StrobeShare/**"
       - "StrobeTests/**"
       - "Strobe.xcodeproj/**"
       - "PrivacyInfo.xcprivacy"

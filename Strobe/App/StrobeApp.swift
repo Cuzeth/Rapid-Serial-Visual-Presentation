@@ -12,7 +12,15 @@ struct StrobeApp: App {
     )
     private static let diagnosticsKey = "last_model_container_bootstrap_diagnostics"
 
-    private let bootstrapResult = Self.bootstrapModelContainer()
+    private let bootstrapResult: BootstrapResult
+    /// Adds articles and text shared from other apps to the library.
+    private let shareInboxImporter: ShareInboxImporter?
+    @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        bootstrapResult = Self.bootstrapModelContainer()
+        shareInboxImporter = bootstrapResult.container.map { ShareInboxImporter(container: $0) }
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -31,6 +39,9 @@ struct StrobeApp: App {
         #if os(macOS)
         .defaultSize(width: 1000, height: 740)
         #endif
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            shareInboxImporter?.scenePhaseChanged(to: phase)
+        }
         .commands {
             LibraryCommands()
         }
