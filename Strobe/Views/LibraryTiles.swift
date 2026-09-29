@@ -1,5 +1,16 @@
 import SwiftUI
 
+extension DocumentCover {
+    init(document: Document, showsText: Bool = true) {
+        self.init(
+            title: document.title,
+            kind: document.kind,
+            tone: CoverTone.tone(for: document.id),
+            showsText: showsText
+        )
+    }
+}
+
 /// A library grid item: the document's cover, which opens it, above its
 /// reading status and a menu of document actions.
 struct DocumentTile: View {

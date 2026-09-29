@@ -77,9 +77,7 @@ struct ContentView: View {
     /// repeat the only cover.
     private var continueReadingDocument: Document? {
         guard trimmedSearchText.isEmpty, documents.count > 1 else { return nil }
-        return documents
-            .filter { $0.lastReadDate != nil && $0.readingStatus.isInProgress }
-            .max { ($0.lastReadDate ?? .distantPast) < ($1.lastReadDate ?? .distantPast) }
+        return Document.mostRecentlyRead(in: documents)
     }
 
     var body: some View {
@@ -194,6 +192,17 @@ struct ContentView: View {
             if !hasSeenTutorial {
                 showWelcome = true
             }
+        }
+        .onOpenURL { url in
+            if let link = AppLink(url: url) {
+                AppRouter.shared.open(link)
+            }
+        }
+        // Links go to this window rather than opening another one.
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        // Initial, for a request made while the app was launching.
+        .onChange(of: AppRouter.shared.pendingLink, initial: true) {
+            openPendingLink()
         }
     }
 
@@ -366,6 +375,28 @@ struct ContentView: View {
             try modelContext.save()
         } catch {
             persistenceError = "\(what): \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Links
+
+    /// Carries out a request from outside the library: a widget tap, a
+    /// `strobe://` link, or a shortcut (see ``AppRouter``).
+    private func openPendingLink() {
+        guard let link = AppRouter.shared.takePendingLink() else { return }
+        switch link {
+        case .library:
+            navigationPath = NavigationPath()
+        case .reader(let documentID):
+            guard AppRouter.shared.openReaderDocumentID != documentID else { return }
+            let descriptor = FetchDescriptor<Document>(predicate: #Predicate<Document> { $0.id == documentID })
+            guard let document = try? modelContext.fetch(descriptor).first else {
+                // Deleted since the widget last updated.
+                navigationPath = NavigationPath()
+                return
+            }
+            showSettings = false
+            navigationPath = NavigationPath([ReaderRoute(document: document)])
         }
     }
 

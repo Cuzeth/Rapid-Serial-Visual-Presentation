@@ -269,6 +269,7 @@ struct ReaderView: View {
         }
         .onAppear {
             readerFocused = true
+            AppRouter.shared.readerDidAppear(documentID: document.id)
         }
         .marksDocumentOpen(document.id)
         // Re-assert keyboard focus whenever any overlay (passage view, chapter
@@ -280,6 +281,7 @@ struct ReaderView: View {
         }
         .onDisappear {
             persistState(pauseEngine: true, touchLastReadDate: true)
+            AppRouter.shared.readerDidDisappear(documentID: document.id)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .inactive || newPhase == .background {

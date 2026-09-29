@@ -12,12 +12,17 @@ struct StrobeApp: App {
     )
     private static let diagnosticsKey = "last_model_container_bootstrap_diagnostics"
 
-    private let bootstrapResult = Self.bootstrapModelContainer()
+    /// The library's container, made once per launch. App Intents share it:
+    /// they run in the app's process, sometimes before any window opens.
+    static let sharedBootstrap = bootstrapModelContainer()
+
+    private var bootstrapResult: BootstrapResult { Self.sharedBootstrap }
 
     init() {
-        // Started here rather than from a view so iCloud sync also runs when
-        // the system launches the app in the background.
-        if let container = bootstrapResult.container {
+        if let container = Self.sharedBootstrap.container {
+            LibraryObserver.start(container: container)
+            // Started here rather than from a view so iCloud sync also runs
+            // when the system launches the app in the background.
             LibrarySync.shared.start(container: container)
         }
     }
@@ -53,7 +58,7 @@ struct StrobeApp: App {
         #endif
     }
 
-    private struct BootstrapResult {
+    struct BootstrapResult {
         let container: ModelContainer?
         let diagnostics: String
     }
