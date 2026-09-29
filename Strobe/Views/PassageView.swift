@@ -518,12 +518,7 @@ struct PassageView: View {
     /// Empty/whitespace-only queries yield no matches. Returned indices are
     /// the first word of each match, ascending and distinct.
     nonisolated static func findMatches(query: String, in words: [String]) -> [Int] {
-        findMatches(query: query, inLowercasedWords: words.map { $0.lowercased() })
-    }
-
-    /// Variant of ``findMatches(query:in:)`` over pre-lowercased words.
-    nonisolated static func findMatches(query: String, inLowercasedWords words: [String]) -> [Int] {
-        findMatchRanges(query: query, inLowercasedWords: words).map(\.lowerBound)
+        findMatchRanges(query: query, inLowercasedWords: words.map { $0.lowercased() }).map(\.lowerBound)
     }
 
     /// The word range of every match of `query`, over pre-lowercased words so

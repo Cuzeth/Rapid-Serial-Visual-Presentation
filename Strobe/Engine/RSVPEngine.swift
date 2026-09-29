@@ -499,13 +499,6 @@ final class RSVPEngine {
         return CharacterSet.punctuationCharacters.contains(last)
     }
 
-    /// Returns `true` if the word ends with sentence-terminating punctuation,
-    /// looking past any trailing closing delimiters (quotes, parentheses, brackets).
-    /// Three or more periods are an ellipsis, not a sentence end.
-    nonisolated static func endsWithSentencePunctuation(_ word: String) -> Bool {
-        PunctuationMarks.marks(in: word).contains(.sentenceEnd)
-    }
-
     deinit {
         stopTimer()
     }

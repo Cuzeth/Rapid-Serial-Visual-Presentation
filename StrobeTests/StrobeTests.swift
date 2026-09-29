@@ -146,19 +146,6 @@ struct StrobeTests {
         }
     }
 
-    // MARK: - Sentence pause
-
-    @Test func sentencePauseDetectsPunctuationInsideDelimiters() {
-        #expect(RSVPEngine.endsWithSentencePunctuation("home.\""))
-        #expect(RSVPEngine.endsWithSentencePunctuation("laughed?\""))
-        #expect(RSVPEngine.endsWithSentencePunctuation("fun!)"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("pages.)"))
-        #expect(RSVPEngine.endsWithSentencePunctuation("done.\u{201D}"))  // "
-        #expect(RSVPEngine.endsWithSentencePunctuation("end.])"))
-        #expect(!RSVPEngine.endsWithSentencePunctuation("said,\""))
-        #expect(!RSVPEngine.endsWithSentencePunctuation("(word)"))
-    }
-
     // MARK: - RSVPEngine playback
 
     @Test func enginePlayAndPause() {
