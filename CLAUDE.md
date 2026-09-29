@@ -4,8 +4,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Test
 
-**Do NOT run `xcodebuild` commands.** The user builds and tests separately in Xcode.
-
 The project targets iOS 17.0+ / macOS 14.0+ and uses the `Strobe` scheme. CI runs on GitHub Actions on the `xcode-27` runner image with Xcode 27.0 selected, testing both an iOS simulator (any available iPhone, selected dynamically) and native macOS.
 
 ### Testing
