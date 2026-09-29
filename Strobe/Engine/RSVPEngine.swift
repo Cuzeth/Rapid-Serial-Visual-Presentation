@@ -42,6 +42,12 @@ final class RSVPEngine {
     /// shown with it, hides while this is true; pausing or seeking ends it.
     private(set) var isInSentenceBreak = false
 
+    /// Words playback has moved past since the count was last taken (see
+    /// ``takePlayedWordCount()``). Seeking, scrubbing, and the words a
+    /// chapter title stands in for don't count. Nothing displays it, so it
+    /// isn't observed.
+    @ObservationIgnored private var playedWordCount = 0
+
     /// The target reading speed. Changing this during playback reschedules the timer.
     var wordsPerMinute: Int {
         didSet { onPlaybackSettingChanged() }
@@ -263,6 +269,13 @@ final class RSVPEngine {
         seek(to: 0)
     }
 
+    /// Returns the words played since the last call, and starts the count
+    /// over.
+    func takePlayedWordCount() -> Int {
+        defer { playedWordCount = 0 }
+        return playedWordCount
+    }
+
     private func onPlaybackSettingChanged() {
         guard isPlaying, chapterAnnouncement == nil else { return }
         // During a blank the deadline belongs to the blank, not to the word
@@ -342,6 +355,7 @@ final class RSVPEngine {
                 return
             }
             currentIndex += 1
+            playedWordCount += 1
             if !announceChapterIfNeeded() { scheduleNextWord(anchor: previousDeadline) }
         } else {
             pause()

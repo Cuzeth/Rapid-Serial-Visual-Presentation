@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import StoreKit
 internal import UniformTypeIdentifiers
 
 /// The library: generated covers under the document the reader was last
@@ -8,9 +9,11 @@ internal import UniformTypeIdentifiers
 /// Also the navigation root. It registers the reader and chapter list
 /// destinations and owns importing (the file picker, drag and drop, and the
 /// File menu commands), plain-text entry, and legacy word storage migration.
+/// It asks for an App Store rating when ``ReviewPrompt`` says one is due.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.requestReview) private var requestReview
     @Query(sort: \Document.dateAdded, order: .reverse) private var documents: [Document]
 
     @AppStorage(ReaderSettings.Keys.defaultWPM) private var defaultWPM: Int = ReaderSettings.Defaults.defaultWPM
@@ -33,6 +36,7 @@ struct ContentView: View {
     @State private var renameText = ""
     @State private var searchText = ""
     @State private var isDropTargeted = false
+    @State private var navigationPath = NavigationPath()
 
     private var columns: [GridItem] {
         #if os(macOS)
@@ -79,7 +83,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             libraryContent
                 .navigationTitle("Library")
                 #if os(iOS)
@@ -100,6 +104,13 @@ struct ContentView: View {
                 .navigationDestination(for: ReaderRoute.self) { route in
                     ReaderView(document: route.document, startingWordIndex: route.startingWordIndex)
                 }
+        }
+        .onChange(of: navigationPath.count) { oldCount, newCount in
+            // Backing out of the reader or a book page is a natural pause,
+            // never the middle of reading.
+            if newCount < oldCount {
+                requestReviewIfDue(atDepth: newCount)
+            }
         }
         .focusedSceneValue(\.libraryActions, LibraryActions(
             importFile: { isImporting = true },
@@ -347,6 +358,25 @@ struct ContentView: View {
             try modelContext.save()
         } catch {
             persistenceError = "\(what): \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Review prompt
+
+    /// Asks for an App Store rating if one is due. Waits a moment first, so
+    /// the reader has closed and counted its words, and the prompt doesn't
+    /// land during the transition.
+    private func requestReviewIfDue(atDepth depth: Int) {
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            // The reader may have been opened again in the meantime.
+            guard navigationPath.count == depth else { return }
+            let version = ReviewPrompt.currentAppVersion
+            var prompt = ReviewPrompt.load()
+            guard prompt.isDue(at: .now, appVersion: version) else { return }
+            requestReview()
+            prompt.recordPrompt(at: .now, appVersion: version)
+            prompt.save()
         }
     }
 }

@@ -775,6 +775,12 @@ struct ReaderView: View {
             wordsPerMinute: engine.wordsPerMinute,
             touchLastReadDate: touchLastReadDate
         )
+        // Counted here, where every exit path passes, so words read before
+        // the app is backgrounded and closed still count toward a reading day.
+        let playedWords = engine.takePlayedWordCount()
+        if playedWords > 0 {
+            ReviewPrompt.update { $0.recordWordsRead(playedWords, at: .now) }
+        }
         do {
             try modelContext.save()
         } catch {

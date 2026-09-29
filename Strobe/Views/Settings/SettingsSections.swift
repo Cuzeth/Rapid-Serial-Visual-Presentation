@@ -336,20 +336,34 @@ struct AboutSection: View {
                 showWelcome = true
             }
             .tint(.primary)
-            Link(destination: URL(string: "https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation")!) {
-                HStack {
-                    Text("Source Code")
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .tint(.primary)
+            externalLink("Rate Strobe", url: Self.writeReviewURL)
+            externalLink("Source Code", url: URL(string: "https://github.com/Cuzeth/Rapid-Serial-Visual-Presentation")!)
         } footer: {
             Text(appVersionLabel)
         }
+    }
+
+    /// Opens the App Store's review form for Strobe.
+    private static let writeReviewURL: URL = {
+        #if os(macOS)
+        URL(string: "macappstore://apps.apple.com/app/id6759187873?action=write-review")!
+        #else
+        URL(string: "https://apps.apple.com/app/id6759187873?action=write-review")!
+        #endif
+    }()
+
+    private func externalLink(_ title: String, url: URL) -> some View {
+        Link(destination: url) {
+            HStack {
+                Text(title)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .tint(.primary)
     }
 
     private var appVersionLabel: String {
