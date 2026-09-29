@@ -49,7 +49,12 @@ export function tokenize(text) {
   return out;
 }
 
-export const MOBY_WORDS = tokenize(MOBY_OPENING);
+/// The chapter read from the announcement to the cut: "The Symphony".
+const CHAPTER = 132;
+const CHAPTER_OPENING =
+  "It was a clear steel-blue day. The firmaments of air and sea were hardly separable in that all-pervading azure; only, the pensive air was transparently pure and soft, with a woman’s look, and the robust and man-like sea heaved with long, strong, lingering swells, as Samson’s chest in his sleep. Hither, and thither, on high, glided the snow-white wings of small, unspeckled birds; these were the gentle thoughts of the feminine air; but to and fro in the deeps, far down in the bottomless blue, rushed mighty leviathans, sword-fish, and sharks; and these were the strong, troubled, murderous thinkings of the masculine sea.";
+
+const CHAPTER_WORDS = tokenize(CHAPTER_OPENING);
 
 /// The words shown at the fixation point, from the impact to the cut.
 /// Each entry: { text, start, end, kind } where kind is "word", "chapter" or "gap".
@@ -77,13 +82,14 @@ function buildSchedule() {
   // Bar 10: the finger holds until "pause.", which lands on the freeze at bar 11.
   line([["Hold", 2], ["to", 2], ["read.", 6], ["Let", 2], ["go", 2], ["to", 2], ["pause.", 8]]);
   line([["Slide", 2], ["for", 2], ["speed.", 4]]);
-  // Bar 12: chapter announcement, then the book's first sentence over the snare roll.
-  push("Loomings", 8, "chapter");
+  // Bar 12: chapter announcement, then the chapter's first sentence over the snare roll,
+  // with the compound and the sentence end held longer, as the app's timing does.
+  push(`Chapter ${CHAPTER}`, 8, "chapter");
   let i = 0;
-  for (const n of [2, 2, 4]) push(MOBY_WORDS[i++], n);
+  for (const n of [1, 1, 1, 1, 2, 2]) push(CHAPTER_WORDS[i++], n);
   // Bars 13–15: thirty-second notes, 1,000 wpm, until the cut.
   while (t < T.cut - 1e-6) {
-    const w = MOBY_WORDS[i++ % MOBY_WORDS.length];
+    const w = CHAPTER_WORDS[i++ % CHAPTER_WORDS.length];
     const d = S32;
     list.push({ text: w, start: t, end: t + d, kind: "word" });
     t += d;

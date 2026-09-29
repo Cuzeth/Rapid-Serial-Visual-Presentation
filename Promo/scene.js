@@ -1387,7 +1387,7 @@ function drawReading(t, tf) {
     const label = easeOutCubic(range(t, start, start + 0.35));
     const title = easeOutCubic(range(t, start + 0.06, start + 0.46));
     const lift = -10 * out;
-    drawSprite(ctx, textSprite(SG(600, 18), 7, "CHAPTER 1", rgba(RED, 0.9), "center"), W / 2 + 4, H / 2 - 104 + 12 * (1 - label) + lift, label * (1 - out));
+    drawSprite(ctx, textSprite(SG(600, 24), 9, "MOBY-DICK", rgba(RED, 0.9), "center"), W / 2 + 4.5, H / 2 - 110 + 12 * (1 - label) + lift, label * (1 - out));
     drawSprite(ctx, textSprite(FR(600, 132), 0, cur.e.text, rgba(INK, 1), "center"), W / 2, H / 2 + 44 + 22 * (1 - title) + lift, title * (1 - out));
   }
 
