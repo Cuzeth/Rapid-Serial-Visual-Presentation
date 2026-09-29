@@ -52,24 +52,32 @@ Pausing or seeking ends either phase.
 - **Context words:** the previous and next words sit inline on either side of the word, at its size, with no anchor letter: in the tone's faded color while paused, and at its `dimTextOpacity` (near 1.3:1, barely visible) while playing. They are overlays inside `WordView`, so the word never moves. A right-to-left document puts the previous word on the right.
 - **`EnclosingMarksView`:** a `fixationSurround` subview of `ReaderStageLayout` showing the opening marks of any quotation or parenthetical the word is inside, above it. It sizes itself to the room between the bars, shrinking or hiding rather than moving the word. `Engine/EnclosingMarks.swift` computes the spans once per document, off the main thread.
 
-**Library and app chrome** (`Views/`): `ContentView` is the navigation root and the library: a grid of generated covers (`DocumentCover`: the title in Fraunces on a `CoverTone` picked by hashing the document's UUID, so it survives relaunches) under `ContinueReadingCard`, the most recently read unfinished document (hidden while searching and in a one-document library). `ChapterListView` is the book page for documents with chapters: cover, Start Reading / Resume / Read Again, progress, and chapter rows with their length at the document's speed. Settings is a grouped `Form` sheet on iOS (Timing and While Reading are pushed pages) and a tabbed `Settings` scene on macOS, both built from the sections in `Views/Settings/`. First launch shows `WelcomeView` (`hasSeenTutorial`), whose header plays a sentence through `WordView`. Reading status, time left, and file kind come from `Models/Document+Library.swift`.
+**Library and app chrome** (`Views/`): `ContentView` is the navigation root and the library: a grid of generated covers (`DocumentCover`: the title in Fraunces on a `CoverTone` picked by hashing the document's UUID, so it survives relaunches) under `ContinueReadingCard`, the most recently read unfinished document (hidden while searching and in a one-document library). `ChapterListView` is the book page for documents with chapters: cover, Start Reading / Resume / Read Again, progress, and chapter rows with their length at the document's speed. Settings is a grouped `Form` sheet on iOS (Timing and While Reading are pushed pages) and a tabbed `Settings` scene on macOS, both built from the sections in `Views/Settings/`. First launch shows `WelcomeView` (`hasSeenTutorial`), whose header plays a sentence through `WordView`. Reading status, time left, and file kind come from `Models/ReadingStatus.swift`, `ReadingTime.swift`, and `DocumentKind.swift`. `Document+Library.swift` applies them to a document.
+
+**Outside the app** (`Intents/`, `StrobeWidget/`): both open documents through `strobe://` links (`App/AppLink.swift`: `strobe://read?document=<uuid>`, `strobe://library`) or requests to `AppRouter`, which `ContentView` carries out. A request for the document whose reader is already open leaves that reader alone. "Up next" (`Models/Document+UpNext.swift`) is the most recently read unfinished document, or else the newest unstarted one.
+- **Continue Reading widget** (`StrobeWidget/`, small and medium everywhere, Lock Screen families on iOS): the extension can't open the SwiftData store. It reads a `ContinueReadingSnapshot` of the up-next document from the App Group's defaults (`SharedContainer`, `group.com.abdeen.strobe`). `App/LibraryObserver.swift` rewrites the snapshot after every `ModelContext.didSave` and reloads the widget only when the snapshot changed. It also refreshes the document titles that App Shortcut phrases use.
+- **App Intents**: Continue Reading, Open Document (an `OpenIntent` on `DocumentEntity`), Get Reading Progress (speaks the progress and returns the percentage), and Speed Read Text (adds text through `TextImport` and opens it). `StrobeShortcuts` gives Siri phrases to all of them except Speed Read Text. Intents run in the app process and use `StrobeApp.sharedBootstrap`'s container and its `mainContext` (`IntentLibrary`), so their saves reach the library, the widget, and sync.
 
 **Persistence**: SwiftData `Document` model stores words externally as newline-delimited UTF-8 blob (`WordStorage`) and per-word complexity scores as raw Float binary (`ComplexityStorage`). In-memory caches (`cachedWords`, `cachedComplexity`) avoid repeated deserialization.
 
 ### Xcode Project
 Uses `PBXFileSystemSynchronizedRootGroup` — Xcode auto-mirrors the on-disk folder structure. Moving files on disk is sufficient; no `project.pbxproj` edits needed.
 
+Targets: `Strobe` (the app, which embeds the widget), `StrobeTests`, and `StrobeWidgetExtension` (the `StrobeWidget/` folder). The widget also compiles a few files from `Strobe/`, listed in the "Exceptions for "Strobe" folder in "StrobeWidgetExtension" target" set: `AppLink`, `ContinueReadingSnapshot`, `DocumentKind`, `ReadingStatus`, `ReadingTime`, `StrobeTheme`, `SharedContainer`, `DocumentCover`, and the Fraunces font. Keep those files free of app-only types such as `Document`. Add a file to that list when the widget needs it. The app and the widget each have an entitlements file for the App Group. The widget's `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` must match the app's.
+
 ## Folder Structure
 ```
 Strobe/
-├── App/          App entry point, SwiftData container bootstrap, File menu commands
+├── App/          App entry point, SwiftData container bootstrap, File menu commands, strobe:// links (AppLink, AppRouter), LibraryObserver
 ├── Engine/       RSVPEngine (playback), Tokenizer (word splitting), WordComplexityAnalyzer, per-word classifiers (PunctuationPause, CompoundWord, Acronym, SentenceBreak, ChapterHeading), EnclosingMarks
-├── Import/       DocumentImportPipeline, extractors, TextCleaner, ZIPExtractor
-├── Models/       SwiftData models (Document, Chapter, WordStorage, ComplexityStorage), library display helpers
+├── Import/       DocumentImportPipeline, extractors, TextCleaner, ZIPExtractor, TextImport
+├── Intents/      App Intents: DocumentEntity and its query, the reading intents, StrobeShortcuts
+├── Models/       SwiftData models (Document, Chapter, WordStorage, ComplexityStorage), library display helpers, ContinueReadingSnapshot
 ├── Views/        All SwiftUI views; Settings/ holds the settings sections
 ├── Theme/        StrobeTheme (colors, typography, hex parser)
 ├── Utilities/    HapticManager, ReaderFont, ReaderTextTone
 ├── Fonts/        Custom font files (Fraunces, Inter, JetBrainsMono, PT*, SpaceGrotesk)
+StrobeWidget/     Continue Reading widget extension: the widget, its views, Info.plist, entitlements, assets
 ```
 
 ## Conventions

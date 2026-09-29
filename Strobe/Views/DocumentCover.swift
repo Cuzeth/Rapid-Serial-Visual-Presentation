@@ -3,6 +3,9 @@ import SwiftUI
 /// A generated book cover: the document's title set in Fraunces on a deep
 /// tone chosen from its ID, a spine along the leading edge, and the file
 /// kind at the foot. Sized by the width it's given, at a 2:3 ratio.
+///
+/// The widget extension compiles this file too, so it takes plain values;
+/// the app's `init(document:)` is in LibraryTiles.swift.
 struct DocumentCover: View {
     let title: String
     let kind: DocumentKind
@@ -15,15 +18,6 @@ struct DocumentCover: View {
         self.kind = kind
         self.tone = tone
         self.showsText = showsText
-    }
-
-    init(document: Document, showsText: Bool = true) {
-        self.init(
-            title: document.title,
-            kind: document.kind,
-            tone: CoverTone.tone(for: document.id),
-            showsText: showsText
-        )
     }
 
     private static let cornerRadius: CGFloat = 4

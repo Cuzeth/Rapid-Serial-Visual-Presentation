@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7D1D6E00000000000000000D /* StrobeWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7D1D6E000000000000000001 /* StrobeWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E49D53FB2F6760E300AFC126 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E49D53FA2F6760E300AFC126 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -18,11 +19,33 @@
 			remoteGlobalIDString = E44F01FA2F4047FB00D04D31;
 			remoteInfo = Strobe;
 		};
+		7D1D6E00000000000000000E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E44F01F32F4047FB00D04D31 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7D1D6E000000000000000005;
+			remoteInfo = StrobeWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		7D1D6E00000000000000000C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7D1D6E00000000000000000D /* StrobeWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		E44F01FB2F4047FB00D04D31 /* Strobe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Strobe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StrobeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7D1D6E000000000000000001 /* StrobeWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = StrobeWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E49D53FA2F6760E300AFC126 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -31,8 +54,32 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Strobe.entitlements,
 			);
 			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
+		};
+		7D1D6E000000000000000004 /* Exceptions for "Strobe" folder in "StrobeWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				App/AppLink.swift,
+				Fonts/Fraunces-Variable.ttf,
+				Models/ContinueReadingSnapshot.swift,
+				Models/DocumentKind.swift,
+				Models/ReadingStatus.swift,
+				Models/ReadingTime.swift,
+				Theme/StrobeTheme.swift,
+				Utilities/SharedContainer.swift,
+				Views/DocumentCover.swift,
+			);
+			target = 7D1D6E000000000000000005 /* StrobeWidgetExtension */;
+		};
+		7D1D6E000000000000000003 /* Exceptions for "StrobeWidget" folder in "StrobeWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				StrobeWidget.entitlements,
+			);
+			target = 7D1D6E000000000000000005 /* StrobeWidgetExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -41,6 +88,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				E44F021E2F4047FC00D04D31 /* Exceptions for "Strobe" folder in "Strobe" target */,
+				7D1D6E000000000000000004 /* Exceptions for "Strobe" folder in "StrobeWidgetExtension" target */,
 			);
 			path = Strobe;
 			sourceTree = "<group>";
@@ -48,6 +96,14 @@
 		E44F020F2F4047FC00D04D31 /* StrobeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = StrobeTests;
+			sourceTree = "<group>";
+		};
+		7D1D6E000000000000000002 /* StrobeWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7D1D6E000000000000000003 /* Exceptions for "StrobeWidget" folder in "StrobeWidgetExtension" target */,
+			);
+			path = StrobeWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -67,6 +123,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7D1D6E000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -76,6 +139,7 @@
 				E49D53FA2F6760E300AFC126 /* PrivacyInfo.xcprivacy */,
 				E44F01FD2F4047FB00D04D31 /* Strobe */,
 				E44F020F2F4047FC00D04D31 /* StrobeTests */,
+				7D1D6E000000000000000002 /* StrobeWidget */,
 				E44F01FC2F4047FB00D04D31 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,6 +149,7 @@
 			children = (
 				E44F01FB2F4047FB00D04D31 /* Strobe.app */,
 				E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */,
+				7D1D6E000000000000000001 /* StrobeWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -99,10 +164,12 @@
 				E44F01F72F4047FB00D04D31 /* Sources */,
 				E44F01F82F4047FB00D04D31 /* Frameworks */,
 				E44F01F92F4047FB00D04D31 /* Resources */,
+				7D1D6E00000000000000000C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7D1D6E00000000000000000F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E44F01FD2F4047FB00D04D31 /* Strobe */,
@@ -137,6 +204,28 @@
 			productReference = E44F020C2F4047FC00D04D31 /* StrobeTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		7D1D6E000000000000000005 /* StrobeWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7D1D6E000000000000000009 /* Build configuration list for PBXNativeTarget "StrobeWidgetExtension" */;
+			buildPhases = (
+				7D1D6E000000000000000006 /* Sources */,
+				7D1D6E000000000000000007 /* Frameworks */,
+				7D1D6E000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				7D1D6E000000000000000002 /* StrobeWidget */,
+			);
+			name = StrobeWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = StrobeWidgetExtension;
+			productReference = 7D1D6E000000000000000001 /* StrobeWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -153,6 +242,9 @@
 					E44F020B2F4047FC00D04D31 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = E44F01FA2F4047FB00D04D31;
+					};
+					7D1D6E000000000000000005 = {
+						CreatedOnToolsVersion = 26.4;
 					};
 				};
 			};
@@ -172,6 +264,7 @@
 			targets = (
 				E44F01FA2F4047FB00D04D31 /* Strobe */,
 				E44F020B2F4047FC00D04D31 /* StrobeTests */,
+				7D1D6E000000000000000005 /* StrobeWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -186,6 +279,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E44F020A2F4047FC00D04D31 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7D1D6E000000000000000008 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -209,6 +309,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7D1D6E000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -216,6 +323,11 @@
 			isa = PBXTargetDependency;
 			target = E44F01FA2F4047FB00D04D31 /* Strobe */;
 			targetProxy = E44F020D2F4047FC00D04D31 /* PBXContainerItemProxy */;
+		};
+		7D1D6E00000000000000000F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7D1D6E000000000000000005 /* StrobeWidgetExtension */;
+			targetProxy = 7D1D6E00000000000000000E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -227,6 +339,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_ENTITLEMENTS = Strobe/Strobe.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -285,6 +398,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_ENTITLEMENTS = Strobe/Strobe.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -515,6 +629,102 @@
 			};
 			name = Release;
 		};
+		7D1D6E00000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = StrobeWidget/StrobeWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 38U4X64GHV;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StrobeWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Strobe;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abdeen.strobe.StrobeWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7D1D6E00000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = StrobeWidget/StrobeWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 38U4X64GHV;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = StrobeWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Strobe;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.abdeen.strobe.StrobeWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -541,6 +751,15 @@
 			buildConfigurations = (
 				E44F02252F4047FC00D04D31 /* Debug */,
 				E44F02262F4047FC00D04D31 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7D1D6E000000000000000009 /* Build configuration list for PBXNativeTarget "StrobeWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7D1D6E00000000000000000A /* Debug */,
+				7D1D6E00000000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -33,39 +33,11 @@ struct TextInputView: View {
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
             let count = await Task.detached(priority: .utility) {
-                Self.approximateWordCount(of: text)
+                ApproximateWordCount.of(text)
             }.value
             guard !Task.isCancelled else { return }
             approximateWordCount = count
         }
-    }
-
-    /// Approximate word count for display.
-    /// Counts CJK ideographs individually and whitespace-splits Latin text.
-    nonisolated private static func approximateWordCount(of text: String) -> Int {
-        var cjkCount = 0
-        var latinBuffer = ""
-        var latinWords = 0
-
-        for scalar in text.unicodeScalars {
-            let isCJK = CJKUtilities.isHanIdeograph(scalar)
-
-            if isCJK {
-                cjkCount += 1
-                if !latinBuffer.isEmpty {
-                    latinWords += latinBuffer.split(whereSeparator: \.isWhitespace).count
-                    latinBuffer.removeAll(keepingCapacity: true)
-                }
-            } else {
-                latinBuffer.unicodeScalars.append(scalar)
-            }
-        }
-
-        if !latinBuffer.isEmpty {
-            latinWords += latinBuffer.split(whereSeparator: \.isWhitespace).count
-        }
-
-        return cjkCount + latinWords
     }
 
     private var canSave: Bool {
@@ -256,40 +228,18 @@ struct TextInputView: View {
             // Tokenizing, complexity analysis (NLTagger), and storage-blob
             // encoding are expensive on long pasted texts — run them off the
             // main thread so the sheet stays responsive.
-            let (wordCount, wordsBlob, complexityBlob) = await Task.detached(priority: .userInitiated) {
-                () -> (Int, Data, Data?) in
-                let words = Tokenizer.tokenize(trimmedText)
-                guard !words.isEmpty else { return (0, Data(), nil) }
-                let scores = WordComplexityAnalyzer.analyzeComplexity(words)
-                return (
-                    words.count,
-                    WordStorage.encode(words),
-                    scores.isEmpty ? nil : ComplexityStorage.encode(scores)
-                )
+            let prepared = await Task.detached(priority: .userInitiated) {
+                TextImport.prepare(trimmedText)
             }.value
 
-            guard wordCount > 0 else {
+            guard let prepared else {
                 saveError = "No readable text found."
                 return
             }
 
-            let resolvedTitle: String
-            if trimmedTitle.isEmpty {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .medium
-                formatter.timeStyle = .short
-                resolvedTitle = "Text — \(formatter.string(from: Date()))"
-            } else {
-                resolvedTitle = trimmedTitle
-            }
-
-            let document = Document(
-                title: resolvedTitle,
-                fileName: resolvedTitle,
-                bookmarkData: Data(),
-                wordsBlob: wordsBlob,
-                wordCount: wordCount,
-                complexityBlob: complexityBlob,
+            let document = TextImport.makeDocument(
+                from: prepared,
+                title: trimmedTitle,
                 wordsPerMinute: defaultWPM
             )
             modelContext.insert(document)
