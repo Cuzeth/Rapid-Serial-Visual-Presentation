@@ -3,8 +3,21 @@ name: Tests
 on:
   push:
     branches: [main]
+    paths:
+      - "Strobe/**"
+      - "StrobeTests/**"
+      - "Strobe.xcodeproj/**"
+      - "PrivacyInfo.xcprivacy"
+      - ".github/workflows/tests.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "Strobe/**"
+      - "StrobeTests/**"
+      - "Strobe.xcodeproj/**"
+      - "PrivacyInfo.xcprivacy"
+      - ".github/workflows/tests.yml"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
