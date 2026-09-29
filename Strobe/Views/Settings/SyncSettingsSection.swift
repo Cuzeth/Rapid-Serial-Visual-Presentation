@@ -4,6 +4,10 @@ import SwiftUI
 struct SyncSettingsSection: View {
     @AppStorage(ReaderSettings.Keys.iCloudSyncEnabled) private var iCloudSyncEnabled = ReaderSettings.Defaults.iCloudSyncEnabled
     private let sync = LibrarySync.shared
+    #if DEBUG
+    @State private var isCreatingSchema = false
+    @State private var schemaResult: String?
+    #endif
 
     var body: some View {
         Section {
@@ -19,7 +23,37 @@ struct SyncSettingsSection: View {
         .onChange(of: iCloudSyncEnabled) {
             sync.updateEnabled()
         }
+
+        #if DEBUG
+        Section {
+            Button(isCreatingSchema ? "Creating iCloud Schema…" : "Create iCloud Schema") {
+                createSchema()
+            }
+            .tint(.primary)
+            .disabled(isCreatingSchema || !LibrarySync.isCloudKitAvailable)
+        } header: {
+            Text("Developer")
+        } footer: {
+            Text(schemaResult ?? "Debug builds only. Creates every iCloud record type and field in the Development environment, to deploy to Production before a TestFlight or App Store build.")
+        }
+        #endif
     }
+
+    #if DEBUG
+    private func createSchema() {
+        isCreatingSchema = true
+        schemaResult = nil
+        Task {
+            do {
+                try await sync.createDevelopmentSchema()
+                schemaResult = "Created. Deploy the schema to Production in the CloudKit Console."
+            } catch {
+                schemaResult = "Couldn't create the schema: \(error.localizedDescription)"
+            }
+            isCreatingSchema = false
+        }
+    }
+    #endif
 
     private var footer: String {
         switch sync.status {

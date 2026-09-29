@@ -522,6 +522,38 @@ struct CloudSyncTests {
         #expect(!ledger.isInICloud(unsent))
     }
 
+    // MARK: - Schema
+
+    private static func keys(of record: CKRecord) -> Set<String> {
+        Set(record.allKeys()).union(record.encryptedValues.allKeys())
+    }
+
+    @Test func schemaSeedSetsEveryField() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "CloudSyncTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let records = try CloudSchemaSeed.records(assetDirectory: directory)
+        let book = try #require(records.first { $0.recordType == CloudSyncSchema.RecordType.book })
+        let state = try #require(records.first { $0.recordType == CloudSyncSchema.RecordType.readingState })
+
+        #expect(Self.keys(of: book) == Set(CloudSyncSchema.BookField.all))
+        #expect(Self.keys(of: state) == Set(CloudSyncSchema.StateField.all))
+        #expect(BookRecordFields(record: book) != nil)
+        #expect(StampedReadingPosition(record: state) != nil)
+        // Never mistaken for library records.
+        #expect(records.allSatisfy { CloudRecordKey(recordID: $0.recordID) == nil })
+    }
+
+    @Test func syncWritesOnlyFieldsTheSchemaDeclares() {
+        let id = UUID()
+        let book = CKRecord(recordType: CloudSyncSchema.RecordType.book, recordID: CloudRecordKey(.book, id).recordID)
+        bookFields().write(to: book)
+        #expect(Self.keys(of: book).isSubset(of: CloudSyncSchema.BookField.all))
+
+        let state = CKRecord(recordType: CloudSyncSchema.RecordType.readingState, recordID: CloudRecordKey(.state, id).recordID)
+        StampedReadingPosition(position: position(3, read: t0), modifiedAt: t0).write(to: state)
+        #expect(Self.keys(of: state).isSubset(of: CloudSyncSchema.StateField.all))
+    }
+
     // MARK: - Ledger file
 
     @Test func ledgerRoundTripsThroughItsFile() throws {

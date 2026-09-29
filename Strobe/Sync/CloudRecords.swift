@@ -44,6 +44,13 @@ nonisolated enum CloudSyncSchema {
         /// `ComplexityStorage` data, as an asset. Absent for books imported
         /// before complexity scores existed.
         static let complexity = "complexity"
+
+        /// Every field. `CloudSchemaSeed` sets them all; a new field goes
+        /// here too.
+        static let all = [
+            format, title, fileName, dateAdded, wordCount, chapters, chaptersAsset,
+            contentHash, words, complexity,
+        ]
     }
 
     enum StateField {
@@ -52,8 +59,70 @@ nonisolated enum CloudSyncSchema {
         static let wordsPerMinute = "wordsPerMinute"
         static let lastReadDate = "lastReadDate"
         static let modifiedAt = "modifiedAt"
+
+        /// Every field. `CloudSchemaSeed` sets them all; a new field goes
+        /// here too.
+        static let all = [currentWordIndex, furthestWordIndex, wordsPerMinute, lastReadDate, modifiedAt]
     }
 }
+
+#if DEBUG
+/// One record of each type with every field set, written the way sync
+/// writes them. Saving them in the Development environment creates every
+/// record type and field with the type and encryption sync uses, ready to
+/// deploy to Production, which TestFlight and the App Store use. Production
+/// never adds fields on its own, and sync only writes some fields for some
+/// books (`chaptersAsset` only for huge chapter lists), so syncing real
+/// books can miss one.
+///
+/// They live in a zone of their own, never the library's.
+nonisolated enum CloudSchemaSeed {
+    static let zoneName = "SchemaSeed"
+
+    static var zoneID: CKRecordZone.ID {
+        CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
+    }
+
+    /// The records, with their asset files written into `assetDirectory`.
+    static func records(assetDirectory: URL) throws -> [CKRecord] {
+        try FileManager.default.createDirectory(at: assetDirectory, withIntermediateDirectories: true)
+        func asset(_ data: Data, named name: String) throws -> CKAsset {
+            let url = assetDirectory.appending(path: name)
+            try data.write(to: url, options: .atomic)
+            return CKAsset(fileURL: url)
+        }
+
+        let words = WordStorage.encode(["Strobe"])
+        let chapters = [Chapter(title: "Strobe", wordIndex: 0)]
+        let book = CKRecord(
+            recordType: CloudSyncSchema.RecordType.book,
+            recordID: CKRecord.ID(recordName: "seed-book", zoneID: zoneID)
+        )
+        BookRecordFields(
+            title: "Strobe",
+            fileName: "Strobe.txt",
+            dateAdded: .now,
+            wordCount: 1,
+            chapters: chapters,
+            contentHash: ContentFingerprint.of(words)
+        ).write(to: book)
+        book[CloudSyncSchema.BookField.words] = try asset(words, named: "words")
+        book[CloudSyncSchema.BookField.complexity] = try asset(ComplexityStorage.encode([0.5]), named: "complexity")
+        book[CloudSyncSchema.BookField.chaptersAsset] = try asset(JSONEncoder().encode(chapters), named: "chapters")
+
+        let state = CKRecord(
+            recordType: CloudSyncSchema.RecordType.readingState,
+            recordID: CKRecord.ID(recordName: "seed-state", zoneID: zoneID)
+        )
+        StampedReadingPosition(
+            position: ReadingPosition(currentWordIndex: 0, furthestWordIndex: 0, wordsPerMinute: 300, lastReadDate: .now),
+            modifiedAt: .now
+        ).write(to: state)
+
+        return [book, state]
+    }
+}
+#endif
 
 /// One of a document's two records. The book record holds the content and
 /// title, which rarely change; the reading state record holds the position,

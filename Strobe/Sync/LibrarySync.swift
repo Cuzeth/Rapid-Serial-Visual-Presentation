@@ -499,6 +499,38 @@ final class LibrarySync: CKSyncEngineDelegate {
         }
     }
 
+    #if DEBUG
+    // MARK: - Schema
+
+    /// Development builds only: saves `CloudSchemaSeed`'s records, which set
+    /// every field, in a zone of their own, then deletes the zone. CloudKit
+    /// keeps the record types and fields in the Development schema, ready to
+    /// deploy to Production in the CloudKit Console. Goes straight to the
+    /// database, never through the engine or the library's zone.
+    func createDevelopmentSchema() async throws {
+        let database = CKContainer(identifier: CloudSyncSchema.containerIdentifier).privateCloudDatabase
+        let zoneID = CloudSchemaSeed.zoneID
+        let directory = FileManager.default.temporaryDirectory.appending(path: "CloudSchemaSeed", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let zones = try await database.modifyRecordZones(saving: [CKRecordZone(zoneID: zoneID)], deleting: [])
+        for result in zones.saveResults.values { _ = try result.get() }
+        do {
+            let records = try await database.modifyRecords(
+                saving: CloudSchemaSeed.records(assetDirectory: directory),
+                deleting: [],
+                savePolicy: .allKeys
+            )
+            for result in records.saveResults.values { _ = try result.get() }
+        } catch {
+            _ = try? await database.modifyRecordZones(saving: [], deleting: [zoneID])
+            throw error
+        }
+        let deletion = try await database.modifyRecordZones(saving: [], deleting: [zoneID])
+        for result in deletion.deleteResults.values { try result.get() }
+    }
+    #endif
+
     // MARK: - CKSyncEngineDelegate
 
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
