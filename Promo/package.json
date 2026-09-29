@@ -1,0 +1,12 @@
+{
+  "name": "strobe-promo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audio": "bun audio.js",
+    "render": "bun render.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.12.0"
+  }
+}
